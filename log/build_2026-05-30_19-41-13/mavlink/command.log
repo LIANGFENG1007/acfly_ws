@@ -1,4 +1,0 @@
-Invoking command in '/home/nvidia/acfly_ws/build/mavlink': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/mavlink -- -j8 -l8
-Invoked command in '/home/nvidia/acfly_ws/build/mavlink' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/mavlink -- -j8 -l8
-Invoking command in '/home/nvidia/acfly_ws/build/mavlink': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/mavlink
-Invoked command in '/home/nvidia/acfly_ws/build/mavlink' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/mavlink

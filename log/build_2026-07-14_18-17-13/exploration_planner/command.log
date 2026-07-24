@@ -1,1 +1,0 @@
-Invoking command in '/home/nvidia/acfly_ws/build/exploration_planner': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake /home/nvidia/acfly_ws/src/exploration_planner -DPython3_EXECUTABLE=/usr/bin/python3 -DCMAKE_INSTALL_PREFIX=/home/nvidia/acfly_ws/install/exploration_planner
