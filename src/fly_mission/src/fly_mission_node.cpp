@@ -271,6 +271,13 @@ private:
                 check_pose_done_ = true;
             }
 
+            // 飞控+雷达都就绪 → 串口发一次 BEEP 提示（★只发一次★，本 case 每拍循环，
+            //   靠 beep_sent_ 防止等 OFFBOARD 期间狂发）。没插串口只告警不影响流程。
+            if (!beep_sent_) {
+                arduino_send("BEEP");
+                beep_sent_ = true;
+            }
+
             // 等飞手手动切到 OFFBOARD（此时 setpoint 占位流已经在发了）
             if (!drone_.is_offboard()) break;
             if (!check_offboard_done_) {
@@ -492,6 +499,7 @@ private:
     bool check_connected_done_ = false;
     bool check_pose_done_      = false;
     bool check_offboard_done_  = false;
+    bool beep_sent_            = false;   // BOOT_CHECK 里"连接+雷达就绪"后 BEEP 只发一次的标志
 
     // OFFBOARD/Armed 丢失去抖：用单帧异常会被 /mavros/state 低频流误判
     bool         lost_since_valid_ = false;
