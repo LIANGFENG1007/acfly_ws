@@ -12,8 +12,8 @@ namespace params {
 // ---------------------------------------------------------------------------
 // 速度上限（控制器输出 setpoint 的最大幅度）
 // ---------------------------------------------------------------------------  
-inline constexpr double MAX_SPEED_XY         = 0.3;    // 水平最大总速度 (m/s)      
-inline constexpr double MAX_SPEED_Z          = 1.0;    // 起飞/升降/降落 垂直最大速度 (m/s)
+inline constexpr double MAX_SPEED_XY         = 0.8;    // 水平最大总速度 (m/s)      
+inline constexpr double MAX_SPEED_Z          = 0.6;    // 起飞/升降/降落 垂直最大速度 (m/s)
 inline constexpr double MAX_SPEED_Z_LEVEL    = 0.05;   // 平飞时垂直微调最大速度 (m/s)，限制上下抖动
 inline constexpr double MAX_YAW_RATE         = 0.8;    // 最大转头角速度 (rad/s) 
 
@@ -23,7 +23,7 @@ inline constexpr double MAX_YAW_RATE         = 0.8;    // 最大转头角速度 
 // ---------------------------------------------------------------------------
 inline constexpr double KP_XY                = 0.8;    // 水平 P
 inline constexpr double KD_XY                = 0.25;   // 水平 D
-inline constexpr double KP_Z                 = 0.9;    // 垂直 P（调小，减少激进矫正）
+inline constexpr double KP_Z                 = 0.6;    // 垂直 P（调小，减少激进矫正）
 inline constexpr double KD_Z                 = 0.25;   // 垂直 D（加大阻尼，抑制上下抖动）
 inline constexpr double KP_YAW               = 0.6;    // yaw 误差 → yaw_rate
 
@@ -43,8 +43,8 @@ inline constexpr double CIRCLE_MAX_YAW_RATE  = 1.0;    // 环绕时 最大转头
 // ---------------------------------------------------------------------------
 // 到位判定（位置 / yaw 进入容差并持续稳定 N 秒）
 // ---------------------------------------------------------------------------
-inline constexpr double TOL_XY               = 0.1;                  // 水平容差 (m)
-inline constexpr double TOL_Z                = 0.1;                  // 垂直容差 (m)
+inline constexpr double TOL_XY               = 0.07;                  // 水平容差 (m)
+inline constexpr double TOL_Z                = 0.07;                  // 垂直容差 (m)
 inline constexpr double TOL_YAW              = 8.0 * M_PI / 180.0;    // yaw 容差 (rad)
 inline constexpr double SETTLE_DURATION      = 0.3;                   // xyz 稳定时长 (s)
 inline constexpr double SETTLE_DURATION_YAW  = 0.3;                   // yaw 稳定时长 (s)

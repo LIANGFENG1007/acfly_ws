@@ -312,7 +312,7 @@ private:
                 //   RUN_EXT_WAYPOINTS = 外部发的航点(/mission/waypoints；未收到悬停等，已收到免等直接飞)
                 //   DRILL_RING        = 钻圈(悬停采集环位姿→飞到环前1m对准→穿圈→降落)
                 //   CIRCLE_AROUND     = 绕杆(悬停采集杆位姿→飞到杆前1m对准→绕杆一圈→降落)  ★当前选中★
-                const MissionState next = MissionState::RUN_WAYPOINTS;    
+                const MissionState next = MissionState::RUN_EXT_WAYPOINTS;    
 
                 // 按所选目标各自初始化(互不干扰)：
                 if (next == MissionState::FOLLOW_LINE) {
