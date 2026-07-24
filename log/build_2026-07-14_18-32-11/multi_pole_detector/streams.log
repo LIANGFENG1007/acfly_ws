@@ -1,0 +1,44 @@
+[0.052s] Invoking command in '/home/nvidia/acfly_ws/build/multi_pole_detector': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake /home/nvidia/acfly_ws/src/finding_objects_ws/multi_pole_detector -DCMAKE_INSTALL_PREFIX=/home/nvidia/acfly_ws/install/multi_pole_detector
+[0.072s] -- Found ament_cmake: 1.3.14 (/opt/ros/humble/share/ament_cmake/cmake)
+[0.400s] -- Override CMake install command with custom implementation using symlinks instead of copying resources
+[0.426s] -- Found rclcpp: 16.0.19 (/opt/ros/humble/share/rclcpp/cmake)
+[0.481s] -- Found rosidl_generator_c: 3.1.9 (/opt/ros/humble/share/rosidl_generator_c/cmake)
+[0.488s] -- Found rosidl_adapter: 3.1.9 (/opt/ros/humble/share/rosidl_adapter/cmake)
+[0.499s] -- Found rosidl_generator_cpp: 3.1.9 (/opt/ros/humble/share/rosidl_generator_cpp/cmake)
+[0.522s] -- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c
+[0.552s] -- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp
+[0.610s] -- Found rmw_implementation_cmake: 6.1.2 (/opt/ros/humble/share/rmw_implementation_cmake/cmake)
+[0.613s] -- Found rmw_fastrtps_cpp: 6.2.10 (/opt/ros/humble/share/rmw_fastrtps_cpp/cmake)
+[0.904s] -- Using RMW implementation 'rmw_fastrtps_cpp' as default
+[1.030s] -- Found sensor_msgs: 4.9.1 (/opt/ros/humble/share/sensor_msgs/cmake)
+[1.087s] -- Found nav_msgs: 4.9.1 (/opt/ros/humble/share/nav_msgs/cmake)
+[1.114s] -- Found visualization_msgs: 4.9.1 (/opt/ros/humble/share/visualization_msgs/cmake)
+[1.613s] -- Configuring done
+[1.635s] -- Generating done
+[1.635s] -- Build files have been written to: /home/nvidia/acfly_ws/build/multi_pole_detector
+[1.640s] Invoked command in '/home/nvidia/acfly_ws/build/multi_pole_detector' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake /home/nvidia/acfly_ws/src/finding_objects_ws/multi_pole_detector -DCMAKE_INSTALL_PREFIX=/home/nvidia/acfly_ws/install/multi_pole_detector
+[1.641s] Invoking command in '/home/nvidia/acfly_ws/build/multi_pole_detector': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/multi_pole_detector -- -j8 -l8
+[1.646s] [35m[1mConsolidate compiler generated dependencies of target multi_pole_detector_node[0m
+[1.647s] [100%] Built target multi_pole_detector_node
+[1.651s] Invoked command in '/home/nvidia/acfly_ws/build/multi_pole_detector' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/multi_pole_detector -- -j8 -l8
+[1.652s] Invoking command in '/home/nvidia/acfly_ws/build/multi_pole_detector': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/multi_pole_detector
+[1.673s] -- Install configuration: ""
+[1.674s] -- Execute custom install script
+[1.674s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/multi_pole_detector/lib/multi_pole_detector/multi_pole_detector_node
+[1.674s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/rviz/multi_pole_detector.rviz
+[1.674s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/multi_pole_detector/share/ament_index/resource_index/package_run_dependencies/multi_pole_detector
+[1.674s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/multi_pole_detector/share/ament_index/resource_index/parent_prefix_path/multi_pole_detector
+[1.674s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/environment/ament_prefix_path.sh
+[1.675s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/environment/ament_prefix_path.dsv
+[1.675s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/environment/path.sh
+[1.675s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/environment/path.dsv
+[1.675s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/local_setup.bash
+[1.675s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/local_setup.sh
+[1.675s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/local_setup.zsh
+[1.675s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/local_setup.dsv
+[1.675s] -- Symlinking: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/package.dsv
+[1.690s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/multi_pole_detector/share/ament_index/resource_index/packages/multi_pole_detector
+[1.691s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/cmake/multi_pole_detectorConfig.cmake
+[1.691s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/cmake/multi_pole_detectorConfig-version.cmake
+[1.691s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/package.xml
+[1.698s] Invoked command in '/home/nvidia/acfly_ws/build/multi_pole_detector' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/multi_pole_detector

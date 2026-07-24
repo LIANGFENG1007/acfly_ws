@@ -1,0 +1,9 @@
+CMake Error at /home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/cmake/mavros_msgsConfig.cmake:41 (include):
+  include could not find requested file:
+
+    /home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/cmake/rosidl_cmake_aggregate_target-extras.cmake
+Call Stack (most recent call first):
+  CMakeLists.txt:12 (find_package)
+
+
+gmake: *** [Makefile:294: cmake_check_build_system] Error 1

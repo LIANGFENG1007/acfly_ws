@@ -1,0 +1,21 @@
+# 编译产物
+build/
+install/
+logs/
+
+# acfly_mavros 不上传(自带独立 .git、体积大)
+src/acfly_mavros/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+
+# 录包 / 大数据
+*.bag
+*.db3
+*.pcd
+
+# 系统杂项
+*.swp
+*~
+.DS_Store

@@ -1,0 +1,46 @@
+[0.001s] Invoking command in '/home/nvidia/acfly_ws/build/libmavconn': CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble PKG_CONFIG_PATH=/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig /usr/bin/cmake --build /home/nvidia/acfly_ws/build/libmavconn -- -j8 -l8
+[0.002s] [ 33%] Built target gtest
+[0.002s] [ 33%] Built target gtest_main
+[0.002s] [ 83%] Built target mavconn
+[0.042s] [100%] Built target test_mavconn
+[0.062s] Invoked command in '/home/nvidia/acfly_ws/build/libmavconn' returned '0': CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble PKG_CONFIG_PATH=/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig /usr/bin/cmake --build /home/nvidia/acfly_ws/build/libmavconn -- -j8 -l8
+[0.066s] Invoking command in '/home/nvidia/acfly_ws/build/libmavconn': CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble PKG_CONFIG_PATH=/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig /usr/bin/cmake --install /home/nvidia/acfly_ws/build/libmavconn
+[0.079s] -- Install configuration: ""
+[0.080s] -- Execute custom install script
+[0.080s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/lib/libmavconn.so
+[0.081s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/include/mavconn/console_bridge_compat.hpp
+[0.081s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/include/mavconn/interface.hpp
+[0.081s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/include/mavconn/mavlink_dialect.hpp
+[0.082s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/include/mavconn/mavlink_dialect.hpp.em
+[0.082s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/include/mavconn/msgbuffer.hpp
+[0.082s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/include/mavconn/serial.hpp
+[0.082s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/include/mavconn/tcp.hpp
+[0.083s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/include/mavconn/thread_utils.hpp
+[0.083s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/include/mavconn/udp.hpp
+[0.083s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/cmake/Modules/CheckGeographicLibDatasets.cmake
+[0.084s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/cmake/Modules/FindASIO.cmake
+[0.084s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/cmake/Modules/em_expand.cmake
+[0.084s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/environment/library_path.sh
+[0.085s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/environment/library_path.dsv
+[0.085s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/share/ament_index/resource_index/package_run_dependencies/libmavconn
+[0.085s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/share/ament_index/resource_index/parent_prefix_path/libmavconn
+[0.085s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/environment/ament_prefix_path.sh
+[0.086s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/environment/ament_prefix_path.dsv
+[0.086s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/environment/path.sh
+[0.086s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/environment/path.dsv
+[0.087s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/local_setup.bash
+[0.087s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/local_setup.sh
+[0.087s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/local_setup.zsh
+[0.088s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/local_setup.dsv
+[0.088s] -- Symlinking: /home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/package.dsv
+[0.105s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/share/ament_index/resource_index/packages/libmavconn
+[0.105s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/cmake/libmavconn-extras.cmake
+[0.106s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/cmake/ament_cmake_export_dependencies-extras.cmake
+[0.106s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/cmake/ament_cmake_export_include_directories-extras.cmake
+[0.106s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/cmake/ament_cmake_export_libraries-extras.cmake
+[0.106s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/cmake/libmavconnConfig.cmake
+[0.106s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/cmake/libmavconnConfig-version.cmake
+[0.106s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/package.xml
+[0.107s] -- Up-to-date: /home/nvidia/acfly_ws/install/libmavconn/include/mavconn
+[0.107s] -- Up-to-date: /home/nvidia/acfly_ws/install/libmavconn/include/mavconn/mavlink_dialect.hpp
+[0.113s] Invoked command in '/home/nvidia/acfly_ws/build/libmavconn' returned '0': CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble PKG_CONFIG_PATH=/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig /usr/bin/cmake --install /home/nvidia/acfly_ws/build/libmavconn

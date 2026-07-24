@@ -1,0 +1,37 @@
+[  9%] Built target servo_state_publisher
+[  9%] Built target mavros_extras
+[35m[1mConsolidate compiler generated dependencies of target mavros_extras_plugins[0m
+[100%] Built target mavros_extras_plugins
+-- Install configuration: ""
+-- Execute custom install script
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras//mavros_plugins.xml
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/lib/mavros_extras/servo_state_publisher
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/include/mavros_extras/servo_state_publisher.hpp
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/launch/px4flow.launch
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/launch/px4flow_config.yaml
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/launch/px4flow_pluginlists.yaml
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/launch/servo_state_publisher.yaml
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/environment/library_path.sh
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/environment/library_path.dsv
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/ament_index/resource_index/package_run_dependencies/mavros_extras
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/ament_index/resource_index/parent_prefix_path/mavros_extras
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/environment/ament_prefix_path.sh
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/environment/ament_prefix_path.dsv
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/environment/path.sh
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/environment/path.dsv
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/local_setup.bash
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/local_setup.sh
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/local_setup.zsh
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/local_setup.dsv
+-- Symlinking: /home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/package.dsv
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/ament_index/resource_index/packages/mavros_extras
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/ament_index/resource_index/mavros__pluginlib__plugin/mavros_extras
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/ament_index/resource_index/rclcpp_components/mavros_extras
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/cmake/ament_cmake_export_include_directories-extras.cmake
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/cmake/ament_cmake_export_libraries-extras.cmake
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/cmake/ament_cmake_export_dependencies-extras.cmake
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/cmake/mavros_extrasConfig.cmake
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/cmake/mavros_extrasConfig-version.cmake
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/package.xml
+-- Up-to-date: /home/nvidia/acfly_ws/install/mavros_extras/lib/libmavros_extras.so
+-- Up-to-date: /home/nvidia/acfly_ws/install/mavros_extras/lib/libmavros_extras_plugins.so

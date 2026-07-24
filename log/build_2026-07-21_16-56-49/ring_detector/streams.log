@@ -1,0 +1,65 @@
+[0.022s] Invoking command in '/home/nvidia/acfly_ws/build/ring_detector': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake /home/nvidia/acfly_ws/src/finding_objects_ws/ring_detector -DPython3_EXECUTABLE=/usr/bin/python3 -DCMAKE_INSTALL_PREFIX=/home/nvidia/acfly_ws/install/ring_detector
+[0.142s] -- The C compiler identification is GNU 11.4.0
+[0.239s] -- The CXX compiler identification is GNU 11.4.0
+[0.261s] -- Detecting C compiler ABI info
+[0.406s] -- Detecting C compiler ABI info - done
+[0.416s] -- Check for working C compiler: /usr/bin/cc - skipped
+[0.417s] -- Detecting C compile features
+[0.417s] -- Detecting C compile features - done
+[0.422s] -- Detecting CXX compiler ABI info
+[0.579s] -- Detecting CXX compiler ABI info - done
+[0.583s] -- Check for working CXX compiler: /usr/bin/c++ - skipped
+[0.583s] -- Detecting CXX compile features
+[0.584s] -- Detecting CXX compile features - done
+[0.591s] -- Found ament_cmake: 1.3.14 (/opt/ros/humble/share/ament_cmake/cmake)
+[0.862s] -- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter 
+[1.089s] -- Found rclcpp: 16.0.19 (/opt/ros/humble/share/rclcpp/cmake)
+[1.198s] -- Found rosidl_generator_c: 3.1.9 (/opt/ros/humble/share/rosidl_generator_c/cmake)
+[1.210s] -- Found rosidl_adapter: 3.1.9 (/opt/ros/humble/share/rosidl_adapter/cmake)
+[1.231s] -- Found rosidl_generator_cpp: 3.1.9 (/opt/ros/humble/share/rosidl_generator_cpp/cmake)
+[1.259s] -- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c
+[1.295s] -- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp
+[1.399s] -- Found rmw_implementation_cmake: 6.1.2 (/opt/ros/humble/share/rmw_implementation_cmake/cmake)
+[1.409s] -- Found rmw_fastrtps_cpp: 6.2.10 (/opt/ros/humble/share/rmw_fastrtps_cpp/cmake)
+[1.596s] -- Found OpenSSL: /usr/lib/aarch64-linux-gnu/libcrypto.so (found version "3.0.2")  
+[1.643s] -- Found FastRTPS: /opt/ros/humble/include  
+[1.715s] -- Using RMW implementation 'rmw_fastrtps_cpp' as default
+[1.740s] -- Looking for pthread.h
+[1.872s] -- Looking for pthread.h - found
+[1.872s] -- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+[2.010s] -- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+[2.013s] -- Found Threads: TRUE  
+[2.182s] -- Found sensor_msgs: 4.9.1 (/opt/ros/humble/share/sensor_msgs/cmake)
+[2.253s] -- Found nav_msgs: 4.9.1 (/opt/ros/humble/share/nav_msgs/cmake)
+[2.291s] -- Found visualization_msgs: 4.9.1 (/opt/ros/humble/share/visualization_msgs/cmake)
+[2.478s] -- Configuring done
+[2.501s] -- Generating done
+[2.508s] -- Build files have been written to: /home/nvidia/acfly_ws/build/ring_detector
+[2.538s] Invoked command in '/home/nvidia/acfly_ws/build/ring_detector' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake /home/nvidia/acfly_ws/src/finding_objects_ws/ring_detector -DPython3_EXECUTABLE=/usr/bin/python3 -DCMAKE_INSTALL_PREFIX=/home/nvidia/acfly_ws/install/ring_detector
+[2.540s] Invoking command in '/home/nvidia/acfly_ws/build/ring_detector': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/ring_detector -- -j8 -l8
+[2.629s] [ 50%] Building CXX object CMakeFiles/ring_detector_node.dir/src/ring_detector_node.cpp.o
+[39.696s] [100%] Linking CXX executable ring_detector_node
+[41.382s] [100%] Built target ring_detector_node
+[41.407s] Invoked command in '/home/nvidia/acfly_ws/build/ring_detector' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/ring_detector -- -j8 -l8
+[41.411s] Invoking command in '/home/nvidia/acfly_ws/build/ring_detector': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/ring_detector
+[41.429s] -- Install configuration: ""
+[41.429s] -- Installing: /home/nvidia/acfly_ws/install/ring_detector/lib/ring_detector/ring_detector_node
+[41.444s] -- Set runtime path of "/home/nvidia/acfly_ws/install/ring_detector/lib/ring_detector/ring_detector_node" to ""
+[41.445s] -- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/rviz
+[41.445s] -- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/rviz/ring_detector.rviz
+[41.445s] -- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ament_index/resource_index/package_run_dependencies/ring_detector
+[41.445s] -- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ament_index/resource_index/parent_prefix_path/ring_detector
+[41.446s] -- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/environment/ament_prefix_path.sh
+[41.446s] -- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/environment/ament_prefix_path.dsv
+[41.446s] -- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/environment/path.sh
+[41.446s] -- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/environment/path.dsv
+[41.447s] -- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/local_setup.bash
+[41.447s] -- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/local_setup.sh
+[41.447s] -- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/local_setup.zsh
+[41.447s] -- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/local_setup.dsv
+[41.448s] -- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/package.dsv
+[41.448s] -- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ament_index/resource_index/packages/ring_detector
+[41.448s] -- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/cmake/ring_detectorConfig.cmake
+[41.448s] -- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/cmake/ring_detectorConfig-version.cmake
+[41.448s] -- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/package.xml
+[41.452s] Invoked command in '/home/nvidia/acfly_ws/build/ring_detector' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/ring_detector

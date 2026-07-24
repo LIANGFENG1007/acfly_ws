@@ -1,0 +1,235 @@
+[0.038s] Invoking command in '/home/nvidia/acfly_ws/build/mavros': CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/acfly_ws/install/mavros_extras:/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/fly_mission_gps:/home/nvidia/acfly_ws/install/fly_mission:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble LD_LIBRARY_PATH=/home/nvidia/acfly_ws/install/libmavconn/lib:/home/nvidia/acfly_ws/install/mavros_msgs/lib:/usr/local/lib:/usr/local/lib:/home/nvidia/acfly_ws/install/mavros_extras/lib:/home/nvidia/acfly_ws/install/mavros/lib:/home/nvidia/ws_orbbec/install/orbbec_camera/lib:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs/lib:/home/nvidia/ws_livox/install/livox_ros_driver2/lib:/home/nvidia/ws_point/install/ac_link/lib:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/aarch64-linux-gnu:/opt/ros/humble/lib /usr/bin/cmake --build /home/nvidia/acfly_ws/build/mavros -- -j8 -l8
+[0.085s] -- Found ament_cmake: 1.3.14 (/opt/ros/humble/share/ament_cmake/cmake)
+[0.308s] -- Override CMake install command with custom implementation using symlinks instead of copying resources
+[0.320s] -- Found rclcpp: 16.0.19 (/opt/ros/humble/share/rclcpp/cmake)
+[0.363s] -- Found rosidl_generator_c: 3.1.9 (/opt/ros/humble/share/rosidl_generator_c/cmake)
+[0.367s] -- Found rosidl_adapter: 3.1.9 (/opt/ros/humble/share/rosidl_adapter/cmake)
+[0.376s] -- Found rosidl_generator_cpp: 3.1.9 (/opt/ros/humble/share/rosidl_generator_cpp/cmake)
+[0.391s] -- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c
+[0.410s] -- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp
+[0.458s] -- Found rmw_implementation_cmake: 6.1.2 (/opt/ros/humble/share/rmw_implementation_cmake/cmake)
+[0.460s] -- Found rmw_fastrtps_cpp: 6.2.10 (/opt/ros/humble/share/rmw_fastrtps_cpp/cmake)
+[0.625s] -- Using RMW implementation 'rmw_fastrtps_cpp' as default
+[0.702s] -- Found rclcpp_components: 16.0.19 (/opt/ros/humble/share/rclcpp_components/cmake)
+[0.729s] -- Found pluginlib: 5.1.4 (/opt/ros/humble/share/pluginlib/cmake)
+[0.750s] -- Found message_filters: 4.3.18 (/opt/ros/humble/share/message_filters/cmake)
+[0.758s] -- Found libmavconn: 2.12.0 (/home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/cmake)
+[0.761s] -- Found eigen3_cmake_module: 0.1.1 (/opt/ros/humble/share/eigen3_cmake_module/cmake)
+[0.766s] -- Found angles: 1.15.0 (/opt/ros/humble/share/angles/cmake)
+[0.768s] -- Found eigen_stl_containers: 1.1.0 (/opt/ros/humble/share/eigen_stl_containers/cmake)
+[0.771s] -- Found tf2_eigen: 0.25.20 (/opt/ros/humble/share/tf2_eigen/cmake)
+[0.883s] -- Found diagnostic_msgs: 4.9.1 (/opt/ros/humble/share/diagnostic_msgs/cmake)
+[0.901s] -- Found diagnostic_updater: 4.0.7 (/opt/ros/humble/share/diagnostic_updater/cmake)
+[0.908s] -- Found geographic_msgs: 1.0.6 (/opt/ros/humble/share/geographic_msgs/cmake)
+[0.936s] -- Found mavros_msgs: 2.12.0 (/home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/cmake)
+[0.992s] -- Found nav_msgs: 4.9.1 (/opt/ros/humble/share/nav_msgs/cmake)
+[1.016s] -- Found std_srvs: 4.9.1 (/opt/ros/humble/share/std_srvs/cmake)
+[1.029s] -- Found trajectory_msgs: 4.9.1 (/opt/ros/humble/share/trajectory_msgs/cmake)
+[1.055s] -- Geoid model datasets found in: /usr/share/GeographicLib/geoid
+[1.055s] -- Gravity Field model datasets found in: /usr/share/GeographicLib/gravity
+[1.055s] -- Magnetic Field model datasets found in: /usr/share/GeographicLib/magnetic
+[1.183s] -- Found ament_cmake_gtest: 1.3.14 (/opt/ros/humble/share/ament_cmake_gtest/cmake)
+[1.183s] -- Found ament_cmake_gmock: 1.3.14 (/opt/ros/humble/share/ament_cmake_gmock/cmake)
+[1.184s] -- Found ament_cmake_pytest: 1.3.14 (/opt/ros/humble/share/ament_cmake_pytest/cmake)
+[1.185s] -- Found ament_lint_auto: 0.12.15 (/opt/ros/humble/share/ament_lint_auto/cmake)
+[1.356s] -- Found gtest sources under '/opt/ros/humble/src/gtest_vendor': C++ tests using 'Google Test' will be built
+[1.374s] -- Found gmock sources under '/opt/ros/humble/src/gmock_vendor': C++ tests using 'Google Mock' will be built
+[2.077s] -- Added test 'cppcheck' to perform static code analysis on C / C++ code
+[2.078s] -- Configured cppcheck include dirs: $<BUILD_INTERFACE:/home/nvidia/acfly_ws/src/acfly_mavros/mavros/mavros/include>
+[2.078s] -- Configured cppcheck exclude dirs and/or files: ./test/*.cpp
+[2.088s] -- Added test 'cpplint' to check C / C++ code against the Google style
+[2.088s] -- Configured cpplint exclude dirs and/or files: 
+[2.089s] -- Added test 'flake8' to check Python code syntax and style conventions
+[2.091s] -- Added test 'lint_cmake' to check CMake code style
+[2.092s] -- Added test 'pep257' to check Python code against some of the docstring style conventions in PEP 257
+[2.093s] -- Added test 'xmllint' to check XML markup files
+[2.098s] -- Configuring done
+[2.224s] -- Generating done
+[2.263s] -- Build files have been written to: /home/nvidia/acfly_ws/build/mavros
+[2.331s] [35m[1mConsolidate compiler generated dependencies of target gtest[0m
+[2.332s] [35m[1mConsolidate compiler generated dependencies of target gmock_main[0m
+[2.332s] [35m[1mConsolidate compiler generated dependencies of target gtest_main[0m
+[2.332s] [35m[1mConsolidate compiler generated dependencies of target gmock[0m
+[2.360s] [  1%] [32mBuilding CXX object gtest/CMakeFiles/gtest_main.dir/src/gtest_main.cc.o[0m
+[2.365s] [  3%] [32mBuilding CXX object gtest/CMakeFiles/gtest.dir/src/gtest-all.cc.o[0m
+[2.368s] [  3%] Built target ament_cmake_python_symlink_mavros_setup
+[2.373s] [35m[1mConsolidate compiler generated dependencies of target mavros[0m
+[2.375s] [  6%] [32mBuilding CXX object gmock/CMakeFiles/gmock.dir/opt/ros/humble/src/gtest_vendor/src/gtest-all.cc.o[0m
+[2.376s] [  6%] [32mBuilding CXX object gmock/CMakeFiles/gmock.dir/src/gmock-all.cc.o[0m
+[2.385s] [  6%] Built target ament_cmake_python_symlink_mavros
+[2.402s] [  8%] [32mBuilding CXX object gmock/CMakeFiles/gmock_main.dir/src/gmock_main.cc.o[0m
+[2.599s] [  9%] [32mBuilding CXX object CMakeFiles/mavros.dir/src/lib/enum_sensor_orientation.cpp.o[0m
+[2.631s] [ 11%] [32mBuilding CXX object CMakeFiles/mavros.dir/src/lib/enum_to_string.cpp.o[0m
+[3.029s] running egg_info
+[3.032s] writing mavros.egg-info/PKG-INFO
+[3.033s] writing dependency_links to mavros.egg-info/dependency_links.txt
+[3.034s] writing entry points to mavros.egg-info/entry_points.txt
+[3.035s] writing top-level names to mavros.egg-info/top_level.txt
+[3.041s] reading manifest file 'mavros.egg-info/SOURCES.txt'
+[3.044s] writing manifest file 'mavros.egg-info/SOURCES.txt'
+[3.197s] [ 11%] Built target ament_cmake_python_build_mavros_egg
+[3.258s] [ 12%] [32mBuilding CXX object CMakeFiles/mavros.dir/src/lib/ftf_frame_conversions.cpp.o[0m
+[5.606s] [ 14%] [32m[1mLinking CXX static library libgtest_main.a[0m
+[5.817s] [ 14%] Built target gtest_main
+[5.888s] [ 16%] [32mBuilding CXX object CMakeFiles/mavros.dir/src/lib/ftf_quaternion_utils.cpp.o[0m
+[6.093s] [ 17%] [32m[1mLinking CXX static library libgmock_main.a[0m
+[6.307s] [ 17%] Built target gmock_main
+[6.367s] [ 19%] [32mBuilding CXX object CMakeFiles/mavros.dir/src/lib/mavros_router.cpp.o[0m
+[7.810s] [ 20%] [32mBuilding CXX object CMakeFiles/mavros.dir/src/lib/mavros_uas.cpp.o[0m
+[12.049s] [ 22%] [32m[1mLinking CXX static library libgtest.a[0m
+[12.297s] [ 22%] Built target gtest
+[12.317s] [ 24%] [32mBuilding CXX object CMakeFiles/mavros.dir/src/lib/plugin.cpp.o[0m
+[12.321s] [ 25%] [32mBuilding CXX object CMakeFiles/mavros.dir/src/lib/uas_ap.cpp.o[0m
+[12.531s] [ 27%] [32m[1mLinking CXX static library libgmock.a[0m
+[12.814s] [ 27%] Built target gmock
+[12.835s] [ 29%] [32mBuilding CXX object CMakeFiles/mavros.dir/src/lib/uas_data.cpp.o[0m
+[20.341s] [ 30%] [32mBuilding CXX object CMakeFiles/mavros.dir/src/lib/uas_executor.cpp.o[0m
+[20.481s] [ 32%] [32mBuilding CXX object CMakeFiles/mavros.dir/src/lib/uas_stringify.cpp.o[0m
+[23.213s] [ 33%] [32mBuilding CXX object CMakeFiles/mavros.dir/src/lib/uas_tf.cpp.o[0m
+[32.960s] [ 35%] [32mBuilding CXX object CMakeFiles/mavros.dir/src/lib/uas_timesync.cpp.o[0m
+[51.077s] [ 37%] [32m[1mLinking CXX shared library libmavros.so[0m
+[54.126s] [ 37%] Built target mavros
+[54.149s] [35m[1mConsolidate compiler generated dependencies of target libmavros-frame-conversions-test[0m
+[54.149s] [35m[1mConsolidate compiler generated dependencies of target libmavros-quaternion-utils-test[0m
+[54.149s] [35m[1mConsolidate compiler generated dependencies of target mavros_node[0m
+[54.150s] [35m[1mConsolidate compiler generated dependencies of target mavros-router-test[0m
+[54.150s] [35m[1mConsolidate compiler generated dependencies of target libmavros-sensor-orientation-test[0m
+[54.150s] [35m[1mConsolidate compiler generated dependencies of target mavros-uas-test[0m
+[54.198s] [ 40%] [32mBuilding CXX object CMakeFiles/libmavros-frame-conversions-test.dir/test/test_frame_conversions.cpp.o[0m
+[54.198s] [ 40%] [32mBuilding CXX object CMakeFiles/libmavros-quaternion-utils-test.dir/test/test_quaternion_utils.cpp.o[0m
+[54.215s] [ 43%] [32mBuilding CXX object CMakeFiles/mavros-router-test.dir/test/test_router.cpp.o[0m
+[54.215s] [ 45%] [32mBuilding CXX object CMakeFiles/mavros_node.dir/src/mavros_node.cpp.o[0m
+[54.215s] [ 45%] [32mBuilding CXX object CMakeFiles/libmavros-sensor-orientation-test.dir/test/test_sensor_orientation.cpp.o[0m
+[54.220s] [ 46%] [32mBuilding CXX object CMakeFiles/mavros-uas-test.dir/test/test_uas.cpp.o[0m
+[54.233s] [35m[1mConsolidate compiler generated dependencies of target mavros_plugins[0m
+[54.548s] [ 48%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/actuator_control.cpp.o[0m
+[54.555s] [ 50%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/altitude.cpp.o[0m
+[68.257s] [ 51%] [32m[1mLinking CXX executable libmavros-quaternion-utils-test[0m
+[68.762s] [ 53%] [32m[1mLinking CXX executable libmavros-frame-conversions-test[0m
+[70.872s] [ 53%] Built target libmavros-quaternion-utils-test
+[70.895s] [ 54%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/command.cpp.o[0m
+[70.956s] [ 54%] Built target libmavros-frame-conversions-test
+[70.981s] [ 56%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/dummy.cpp.o[0m
+[76.123s] [ 58%] [32m[1mLinking CXX executable libmavros-sensor-orientation-test[0m
+[78.396s] [ 58%] Built target libmavros-sensor-orientation-test
+[78.417s] [ 59%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/ftp.cpp.o[0m
+[78.850s] [ 61%] [32m[1mLinking CXX executable mavros_node[0m
+[79.734s] [ 62%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/geofence.cpp.o[0m
+[80.798s] [ 62%] Built target mavros_node
+[80.819s] [ 64%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/global_position.cpp.o[0m
+[86.078s] [ 66%] [32m[1mLinking CXX executable mavros-router-test[0m
+[86.818s] [ 67%] [32m[1mLinking CXX executable mavros-uas-test[0m
+[88.907s] [ 67%] Built target mavros-router-test
+[88.935s] [ 69%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/home_position.cpp.o[0m
+[89.403s] [ 70%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/imu.cpp.o[0m
+[89.670s] [ 70%] Built target mavros-uas-test
+[89.693s] [ 72%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/local_position.cpp.o[0m
+[93.612s] [ 74%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/manual_control.cpp.o[0m
+[106.845s] [ 75%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/mission_protocol_base.cpp.o[0m
+[112.218s] [ 77%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/nav_controller_output.cpp.o[0m
+[121.462s] [ 79%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/param.cpp.o[0m
+[122.953s] [ 80%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/rallypoint.cpp.o[0m
+[123.181s] [ 82%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/rc_io.cpp.o[0m
+[129.616s] [ 83%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/setpoint_accel.cpp.o[0m
+[131.342s] [ 85%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/setpoint_attitude.cpp.o[0m
+[135.196s] [ 87%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/setpoint_position.cpp.o[0m
+[137.562s] [ 88%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/setpoint_raw.cpp.o[0m
+[138.167s] [ 90%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/setpoint_trajectory.cpp.o[0m
+[154.561s] [ 91%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/setpoint_velocity.cpp.o[0m
+[162.635s] [ 93%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/sys_status.cpp.o[0m
+[162.747s] [ 95%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/sys_time.cpp.o[0m
+[166.014s] [ 96%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/waypoint.cpp.o[0m
+[181.052s] [ 98%] [32mBuilding CXX object CMakeFiles/mavros_plugins.dir/src/plugins/wind_estimation.cpp.o[0m
+[212.608s] [100%] [32m[1mLinking CXX shared library libmavros_plugins.so[0m
+[237.096s] [100%] Built target mavros_plugins
+[237.129s] Invoked command in '/home/nvidia/acfly_ws/build/mavros' returned '0': CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/acfly_ws/install/mavros_extras:/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/fly_mission_gps:/home/nvidia/acfly_ws/install/fly_mission:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble LD_LIBRARY_PATH=/home/nvidia/acfly_ws/install/libmavconn/lib:/home/nvidia/acfly_ws/install/mavros_msgs/lib:/usr/local/lib:/usr/local/lib:/home/nvidia/acfly_ws/install/mavros_extras/lib:/home/nvidia/acfly_ws/install/mavros/lib:/home/nvidia/ws_orbbec/install/orbbec_camera/lib:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs/lib:/home/nvidia/ws_livox/install/livox_ros_driver2/lib:/home/nvidia/ws_point/install/ac_link/lib:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/aarch64-linux-gnu:/opt/ros/humble/lib /usr/bin/cmake --build /home/nvidia/acfly_ws/build/mavros -- -j8 -l8
+[237.135s] Invoking command in '/home/nvidia/acfly_ws/build/mavros': CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/acfly_ws/install/mavros_extras:/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/fly_mission_gps:/home/nvidia/acfly_ws/install/fly_mission:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble LD_LIBRARY_PATH=/home/nvidia/acfly_ws/install/libmavconn/lib:/home/nvidia/acfly_ws/install/mavros_msgs/lib:/usr/local/lib:/usr/local/lib:/home/nvidia/acfly_ws/install/mavros_extras/lib:/home/nvidia/acfly_ws/install/mavros/lib:/home/nvidia/ws_orbbec/install/orbbec_camera/lib:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs/lib:/home/nvidia/ws_livox/install/livox_ros_driver2/lib:/home/nvidia/ws_point/install/ac_link/lib:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/aarch64-linux-gnu:/opt/ros/humble/lib /usr/bin/cmake --install /home/nvidia/acfly_ws/build/mavros
+[237.152s] -- Install configuration: ""
+[237.153s] -- Execute custom install script
+[237.154s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros//mavros_plugins.xml
+[237.154s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/environment/pythonpath.sh
+[237.154s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/environment/pythonpath.dsv
+[237.155s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros-2.12.0-py3.10.egg-info/PKG-INFO
+[237.156s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros-2.12.0-py3.10.egg-info/SOURCES.txt
+[237.156s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros-2.12.0-py3.10.egg-info/dependency_links.txt
+[237.156s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros-2.12.0-py3.10.egg-info/entry_points.txt
+[237.156s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros-2.12.0-py3.10.egg-info/top_level.txt
+[237.158s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/__init__.py
+[237.158s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/base.py
+[237.159s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/cmd/__init__.py
+[237.159s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/cmd/__main__.py
+[237.159s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/cmd/checkid.py
+[237.159s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/cmd/cmd.py
+[237.160s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/cmd/ftp.py
+[237.160s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/cmd/mission.py
+[237.160s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/cmd/param.py
+[237.160s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/cmd/safety.py
+[237.161s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/cmd/system.py
+[237.161s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/cmd/utils.py
+[237.161s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/command.py
+[237.161s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/ftp.py
+[237.161s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/global_position.py
+[237.162s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/local_position.py
+[237.162s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/mavlink.py
+[237.162s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/mission.py
+[237.162s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/nuttx_crc32.py
+[237.162s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/param.py
+[237.163s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/setpoint.py
+[237.163s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/system.py
+[237.163s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/utils.py
+[237.164s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/lib/mavros/mav
+[237.164s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/lib/mavros/install_geographiclib_datasets.sh
+[237.165s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/include/mavros/frame_tf.hpp
+[237.165s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/include/mavros/mavros_plugin_register_macro.hpp
+[237.166s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/include/mavros/mavros_router.hpp
+[237.166s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/include/mavros/mavros_uas.hpp
+[237.166s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/include/mavros/mission_protocol_base.hpp
+[237.166s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/include/mavros/plugin.hpp
+[237.166s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/include/mavros/plugin_filter.hpp
+[237.167s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/include/mavros/px4_custom_mode.hpp
+[237.167s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/include/mavros/qos.hpp
+[237.167s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/include/mavros/setpoint_mixin.hpp
+[237.167s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/include/mavros/uas_executor.hpp
+[237.167s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/include/mavros/utils.hpp
+[237.168s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/launch/acfly.launch.py
+[237.169s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/launch/acfly_config.yaml
+[237.169s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/launch/apm.launch
+[237.169s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/launch/apm_config.yaml
+[237.169s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/launch/apm_pluginlists.yaml
+[237.170s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/launch/multi_uas.launch
+[237.170s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/launch/node.launch
+[237.170s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/launch/px4.launch
+[237.170s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/launch/px4_config.yaml
+[237.170s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/launch/px4_pluginlists.yaml
+[237.171s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/launch/test_compose.launch.py
+[237.171s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/environment/library_path.sh
+[237.171s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/environment/library_path.dsv
+[237.172s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/ament_index/resource_index/package_run_dependencies/mavros
+[237.173s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/ament_index/resource_index/parent_prefix_path/mavros
+[237.173s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/environment/ament_prefix_path.sh
+[237.174s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/environment/ament_prefix_path.dsv
+[237.174s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/environment/path.sh
+[237.174s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/environment/path.dsv
+[237.175s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/local_setup.bash
+[237.175s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/local_setup.sh
+[237.175s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/local_setup.zsh
+[237.176s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/local_setup.dsv
+[237.176s] -- Symlinking: /home/nvidia/acfly_ws/install/mavros/share/mavros/package.dsv
+[237.197s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/ament_index/resource_index/packages/mavros
+[237.197s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/ament_index/resource_index/rclcpp_components/mavros
+[237.197s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/ament_index/resource_index/mavros__pluginlib__plugin/mavros
+[237.198s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/cmake/ament_cmake_export_include_directories-extras.cmake
+[237.198s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/cmake/ament_cmake_export_libraries-extras.cmake
+[237.198s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/cmake/ament_cmake_export_dependencies-extras.cmake
+[237.199s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/cmake/mavrosConfig.cmake
+[237.199s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/cmake/mavrosConfig-version.cmake
+[237.199s] -- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/package.xml
+[237.266s] Listing '/home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros'...
+[237.266s] Listing '/home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/cmd'...
+[237.278s] -- Installing: /home/nvidia/acfly_ws/install/mavros/lib/libmavros.so
+[237.346s] -- Set runtime path of "/home/nvidia/acfly_ws/install/mavros/lib/libmavros.so" to ""
+[237.347s] -- Installing: /home/nvidia/acfly_ws/install/mavros/lib/mavros/mavros_node
+[237.357s] -- Set runtime path of "/home/nvidia/acfly_ws/install/mavros/lib/mavros/mavros_node" to ""
+[237.358s] -- Installing: /home/nvidia/acfly_ws/install/mavros/lib/libmavros_plugins.so
+[237.607s] -- Set runtime path of "/home/nvidia/acfly_ws/install/mavros/lib/libmavros_plugins.so" to ""
+[237.616s] Invoked command in '/home/nvidia/acfly_ws/build/mavros' returned '0': CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/acfly_ws/install/mavros_extras:/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/fly_mission_gps:/home/nvidia/acfly_ws/install/fly_mission:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble LD_LIBRARY_PATH=/home/nvidia/acfly_ws/install/libmavconn/lib:/home/nvidia/acfly_ws/install/mavros_msgs/lib:/usr/local/lib:/usr/local/lib:/home/nvidia/acfly_ws/install/mavros_extras/lib:/home/nvidia/acfly_ws/install/mavros/lib:/home/nvidia/ws_orbbec/install/orbbec_camera/lib:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs/lib:/home/nvidia/ws_livox/install/livox_ros_driver2/lib:/home/nvidia/ws_point/install/ac_link/lib:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/aarch64-linux-gnu:/opt/ros/humble/lib /usr/bin/cmake --install /home/nvidia/acfly_ws/build/mavros

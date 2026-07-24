@@ -1,0 +1,113 @@
+[  3%] Built target gtest_main
+[  6%] Built target gtest
+[  6%] Built target ament_cmake_python_symlink_mavros
+[  9%] Built target gmock_main
+[ 14%] Built target gmock
+[ 14%] Built target ament_cmake_python_symlink_mavros_setup
+[35m[1mConsolidate compiler generated dependencies of target mavros[0m
+[ 37%] Built target mavros
+[35m[1mConsolidate compiler generated dependencies of target libmavros-sensor-orientation-test[0m
+[35m[1mConsolidate compiler generated dependencies of target mavros-uas-test[0m
+[35m[1mConsolidate compiler generated dependencies of target mavros_node[0m
+[35m[1mConsolidate compiler generated dependencies of target mavros-router-test[0m
+[ 40%] Built target libmavros-frame-conversions-test
+[ 43%] Built target libmavros-quaternion-utils-test
+[ 46%] Built target libmavros-sensor-orientation-test
+[ 54%] Built target mavros-uas-test
+[ 54%] Built target mavros_node
+[ 56%] Built target mavros-router-test
+[35m[1mConsolidate compiler generated dependencies of target mavros_plugins[0m
+running egg_info
+writing mavros.egg-info/PKG-INFO
+writing dependency_links to mavros.egg-info/dependency_links.txt
+writing entry points to mavros.egg-info/entry_points.txt
+writing top-level names to mavros.egg-info/top_level.txt
+reading manifest file 'mavros.egg-info/SOURCES.txt'
+writing manifest file 'mavros.egg-info/SOURCES.txt'
+[ 56%] Built target ament_cmake_python_build_mavros_egg
+[100%] Built target mavros_plugins
+-- Install configuration: ""
+-- Execute custom install script
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros//mavros_plugins.xml
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/environment/pythonpath.sh
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/environment/pythonpath.dsv
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros-2.12.0-py3.10.egg-info/PKG-INFO
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros-2.12.0-py3.10.egg-info/SOURCES.txt
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros-2.12.0-py3.10.egg-info/dependency_links.txt
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros-2.12.0-py3.10.egg-info/entry_points.txt
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros-2.12.0-py3.10.egg-info/top_level.txt
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/__init__.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/base.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/cmd/__init__.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/cmd/__main__.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/cmd/checkid.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/cmd/cmd.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/cmd/ftp.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/cmd/mission.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/cmd/param.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/cmd/safety.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/cmd/system.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/cmd/utils.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/command.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/ftp.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/global_position.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/local_position.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/mavlink.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/mission.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/nuttx_crc32.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/param.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/setpoint.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/system.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/utils.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/lib/mavros/mav
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/lib/mavros/install_geographiclib_datasets.sh
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/include/mavros/frame_tf.hpp
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/include/mavros/mavros_plugin_register_macro.hpp
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/include/mavros/mavros_router.hpp
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/include/mavros/mavros_uas.hpp
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/include/mavros/mission_protocol_base.hpp
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/include/mavros/plugin.hpp
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/include/mavros/plugin_filter.hpp
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/include/mavros/px4_custom_mode.hpp
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/include/mavros/qos.hpp
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/include/mavros/setpoint_mixin.hpp
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/include/mavros/uas_executor.hpp
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/include/mavros/utils.hpp
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/launch/acfly.launch.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/launch/acfly_config.yaml
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/launch/apm.launch
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/launch/apm_config.yaml
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/launch/apm_pluginlists.yaml
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/launch/multi_uas.launch
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/launch/node.launch
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/launch/px4.launch
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/launch/px4_config.yaml
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/launch/px4_pluginlists.yaml
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/launch/test_compose.launch.py
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/environment/library_path.sh
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/environment/library_path.dsv
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/ament_index/resource_index/package_run_dependencies/mavros
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/ament_index/resource_index/parent_prefix_path/mavros
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/environment/ament_prefix_path.sh
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/environment/ament_prefix_path.dsv
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/environment/path.sh
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/environment/path.dsv
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/local_setup.bash
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/local_setup.sh
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/local_setup.zsh
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/local_setup.dsv
+-- Symlinking: /home/nvidia/acfly_ws/install/mavros/share/mavros/package.dsv
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/ament_index/resource_index/packages/mavros
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/ament_index/resource_index/mavros__pluginlib__plugin/mavros
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/ament_index/resource_index/rclcpp_components/mavros
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/cmake/ament_cmake_export_include_directories-extras.cmake
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/cmake/ament_cmake_export_libraries-extras.cmake
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/cmake/ament_cmake_export_dependencies-extras.cmake
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/cmake/mavrosConfig.cmake
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/cmake/mavrosConfig-version.cmake
+-- Up-to-date symlink: /home/nvidia/acfly_ws/install/mavros/share/mavros/package.xml
+Listing '/home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros'...
+Listing '/home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages/mavros/cmd'...
+-- Up-to-date: /home/nvidia/acfly_ws/install/mavros/lib/libmavros.so
+-- Up-to-date: /home/nvidia/acfly_ws/install/mavros/lib/mavros/mavros_node
+-- Up-to-date: /home/nvidia/acfly_ws/install/mavros/lib/libmavros_plugins.so

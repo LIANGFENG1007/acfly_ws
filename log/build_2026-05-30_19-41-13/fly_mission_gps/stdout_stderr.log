@@ -1,0 +1,22 @@
+[35m[1mConsolidate compiler generated dependencies of target fly_mission_gps_node[0m
+[100%] Built target fly_mission_gps_node
+-- Install configuration: ""
+-- Execute custom install script
+-- Symlinking: /home/nvidia/acfly_ws/install/fly_mission_gps/lib/fly_mission_gps/fly_mission_gps_node
+-- Symlinking: /home/nvidia/acfly_ws/install/fly_mission_gps/include//fly_mission_gps/drone_controller.hpp
+-- Symlinking: /home/nvidia/acfly_ws/install/fly_mission_gps/include//fly_mission_gps/params.hpp
+-- Symlinking: /home/nvidia/acfly_ws/install/fly_mission_gps/share/ament_index/resource_index/package_run_dependencies/fly_mission_gps
+-- Symlinking: /home/nvidia/acfly_ws/install/fly_mission_gps/share/ament_index/resource_index/parent_prefix_path/fly_mission_gps
+-- Symlinking: /home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/environment/ament_prefix_path.sh
+-- Symlinking: /home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/environment/ament_prefix_path.dsv
+-- Symlinking: /home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/environment/path.sh
+-- Symlinking: /home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/environment/path.dsv
+-- Symlinking: /home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/local_setup.bash
+-- Symlinking: /home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/local_setup.sh
+-- Symlinking: /home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/local_setup.zsh
+-- Symlinking: /home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/local_setup.dsv
+-- Symlinking: /home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/package.dsv
+-- Symlinking: /home/nvidia/acfly_ws/install/fly_mission_gps/share/ament_index/resource_index/packages/fly_mission_gps
+-- Symlinking: /home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/cmake/fly_mission_gpsConfig.cmake
+-- Symlinking: /home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/cmake/fly_mission_gpsConfig-version.cmake
+-- Symlinking: /home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/package.xml

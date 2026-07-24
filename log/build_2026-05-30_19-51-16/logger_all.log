@@ -1,0 +1,598 @@
+[0.209s] [34mcolcon[0m [1;30mDEBUG[0m [32mCommand line arguments: ['/usr/bin/colcon', 'build', '--symlink-install'][0m
+[0.209s] [34mcolcon[0m [1;30mDEBUG[0m [32mParsed command line arguments: Namespace(log_base=None, log_level=None, verb_name='build', build_base='build', install_base='install', merge_install=False, symlink_install=True, test_result_base=None, continue_on_error=False, executor='parallel', parallel_workers=8, event_handlers=None, ignore_user_meta=False, metas=['./colcon.meta'], base_paths=['.'], packages_ignore=None, packages_ignore_regex=None, paths=None, packages_up_to=None, packages_up_to_regex=None, packages_above=None, packages_above_and_dependencies=None, packages_above_depth=None, packages_select_by_dep=None, packages_skip_by_dep=None, packages_skip_up_to=None, packages_select_build_failed=False, packages_skip_build_finished=False, packages_select_test_failures=False, packages_skip_test_passed=False, packages_select=None, packages_skip=None, packages_select_regex=None, packages_skip_regex=None, packages_start=None, packages_end=None, allow_overriding=[], cmake_args=None, cmake_target=None, cmake_target_skip_unavailable=False, cmake_clean_cache=False, cmake_clean_first=False, cmake_force_configure=False, ament_cmake_args=None, catkin_cmake_args=None, catkin_skip_building_tests=False, verb_parser=<colcon_defaults.argument_parser.defaults.DefaultArgumentsDecorator object at 0xffff97cc7310>, verb_extension=<colcon_core.verb.build.BuildVerb object at 0xffff97cc6d10>, main=<bound method BuildVerb.main of <colcon_core.verb.build.BuildVerb object at 0xffff97cc6d10>>)[0m
+[0.486s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(colcon_meta) check parameters
+[0.487s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(recursive) check parameters
+[0.487s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(ignore) check parameters
+[0.487s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(path) check parameters
+[0.487s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(colcon_meta) discover
+[0.487s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(recursive) discover
+[0.487s] [34mcolcon.colcon_core.package_discovery[0m [1;30mINFO[0m Crawling recursively for packages in '/home/nvidia/acfly_ws'
+[0.487s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extensions ['ignore', 'ignore_ament_install']
+[0.488s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extension 'ignore'
+[0.488s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extension 'ignore_ament_install'
+[0.488s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extensions ['colcon_pkg']
+[0.488s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extension 'colcon_pkg'
+[0.488s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extensions ['colcon_meta']
+[0.488s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extension 'colcon_meta'
+[0.488s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extensions ['ros']
+[0.488s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extension 'ros'
+[0.507s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extensions ['cmake', 'python']
+[0.508s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extension 'cmake'
+[0.508s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extension 'python'
+[0.508s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extensions ['python_setup_py']
+[0.508s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extension 'python_setup_py'
+[0.508s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(build) by extensions ['ignore', 'ignore_ament_install']
+[0.508s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(build) by extension 'ignore'
+[0.508s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(build) ignored
+[0.509s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(install) by extensions ['ignore', 'ignore_ament_install']
+[0.509s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(install) by extension 'ignore'
+[0.509s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(install) ignored
+[0.509s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(log) by extensions ['ignore', 'ignore_ament_install']
+[0.509s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(log) by extension 'ignore'
+[0.509s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(log) ignored
+[0.509s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extensions ['ignore', 'ignore_ament_install']
+[0.510s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extension 'ignore'
+[0.510s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extension 'ignore_ament_install'
+[0.510s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extensions ['colcon_pkg']
+[0.510s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extension 'colcon_pkg'
+[0.510s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extensions ['colcon_meta']
+[0.510s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extension 'colcon_meta'
+[0.510s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extensions ['ros']
+[0.510s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extension 'ros'
+[0.510s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extensions ['cmake', 'python']
+[0.510s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extension 'cmake'
+[0.510s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extension 'python'
+[0.510s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extensions ['python_setup_py']
+[0.511s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extension 'python_setup_py'
+[0.511s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros) by extensions ['ignore', 'ignore_ament_install']
+[0.511s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros) by extension 'ignore'
+[0.511s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros) by extension 'ignore_ament_install'
+[0.511s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros) by extensions ['colcon_pkg']
+[0.511s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros) by extension 'colcon_pkg'
+[0.511s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros) by extensions ['colcon_meta']
+[0.511s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros) by extension 'colcon_meta'
+[0.511s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros) by extensions ['ros']
+[0.511s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros) by extension 'ros'
+[0.511s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros) by extensions ['cmake', 'python']
+[0.512s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros) by extension 'cmake'
+[0.512s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros) by extension 'python'
+[0.512s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros) by extensions ['python_setup_py']
+[0.512s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros) by extension 'python_setup_py'
+[0.512s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavlink-gbp-release) by extensions ['ignore', 'ignore_ament_install']
+[0.512s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavlink-gbp-release) by extension 'ignore'
+[0.512s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavlink-gbp-release) by extension 'ignore_ament_install'
+[0.512s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavlink-gbp-release) by extensions ['colcon_pkg']
+[0.512s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavlink-gbp-release) by extension 'colcon_pkg'
+[0.512s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavlink-gbp-release) by extensions ['colcon_meta']
+[0.512s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavlink-gbp-release) by extension 'colcon_meta'
+[0.513s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavlink-gbp-release) by extensions ['ros']
+[0.513s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavlink-gbp-release) by extension 'ros'
+[0.550s] [34mcolcon.colcon_core.package_identification[0m [1;30mDEBUG[0m [32mPackage 'src/acfly_mavros/mavlink-gbp-release' with type 'ros.cmake' and name 'mavlink'[0m
+[0.550s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros) by extensions ['ignore', 'ignore_ament_install']
+[0.551s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros) by extension 'ignore'
+[0.551s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros) by extension 'ignore_ament_install'
+[0.551s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros) by extensions ['colcon_pkg']
+[0.551s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros) by extension 'colcon_pkg'
+[0.551s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros) by extensions ['colcon_meta']
+[0.551s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros) by extension 'colcon_meta'
+[0.551s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros) by extensions ['ros']
+[0.551s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros) by extension 'ros'
+[0.552s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros) by extensions ['cmake', 'python']
+[0.552s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros) by extension 'cmake'
+[0.552s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros) by extension 'python'
+[0.552s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros) by extensions ['python_setup_py']
+[0.552s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros) by extension 'python_setup_py'
+[0.552s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/libmavconn) by extensions ['ignore', 'ignore_ament_install']
+[0.552s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/libmavconn) by extension 'ignore'
+[0.552s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/libmavconn) by extension 'ignore_ament_install'
+[0.552s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/libmavconn) by extensions ['colcon_pkg']
+[0.552s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/libmavconn) by extension 'colcon_pkg'
+[0.553s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/libmavconn) by extensions ['colcon_meta']
+[0.553s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/libmavconn) by extension 'colcon_meta'
+[0.553s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/libmavconn) by extensions ['ros']
+[0.553s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/libmavconn) by extension 'ros'
+[0.554s] [34mcolcon.colcon_core.package_identification[0m [1;30mDEBUG[0m [32mPackage 'src/acfly_mavros/mavros/libmavconn' with type 'ros.ament_cmake' and name 'libmavconn'[0m
+[0.555s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros) by extensions ['ignore', 'ignore_ament_install']
+[0.555s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros) by extension 'ignore'
+[0.555s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros) by extension 'ignore_ament_install'
+[0.555s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros) by extensions ['colcon_pkg']
+[0.555s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros) by extension 'colcon_pkg'
+[0.555s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros) by extensions ['colcon_meta']
+[0.555s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros) by extension 'colcon_meta'
+[0.555s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros) by extensions ['ros']
+[0.555s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros) by extension 'ros'
+[0.560s] [34mcolcon.colcon_core.package_identification[0m [1;30mDEBUG[0m [32mPackage 'src/acfly_mavros/mavros/mavros' with type 'ros.ament_cmake' and name 'mavros'[0m
+[0.560s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros_extras) by extensions ['ignore', 'ignore_ament_install']
+[0.560s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros_extras) by extension 'ignore'
+[0.560s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros_extras) by extension 'ignore_ament_install'
+[0.560s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros_extras) by extensions ['colcon_pkg']
+[0.560s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros_extras) by extension 'colcon_pkg'
+[0.560s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros_extras) by extensions ['colcon_meta']
+[0.560s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros_extras) by extension 'colcon_meta'
+[0.561s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros_extras) by extensions ['ros']
+[0.561s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros_extras) by extension 'ros'
+[0.565s] [34mcolcon.colcon_core.package_identification[0m [1;30mDEBUG[0m [32mPackage 'src/acfly_mavros/mavros/mavros_extras' with type 'ros.ament_cmake' and name 'mavros_extras'[0m
+[0.565s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros_msgs) by extensions ['ignore', 'ignore_ament_install']
+[0.566s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros_msgs) by extension 'ignore'
+[0.566s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros_msgs) by extension 'ignore_ament_install'
+[0.566s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros_msgs) by extensions ['colcon_pkg']
+[0.566s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros_msgs) by extension 'colcon_pkg'
+[0.566s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros_msgs) by extensions ['colcon_meta']
+[0.566s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros_msgs) by extension 'colcon_meta'
+[0.566s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros_msgs) by extensions ['ros']
+[0.566s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/mavros_msgs) by extension 'ros'
+[0.568s] [34mcolcon.colcon_core.package_identification[0m [1;30mDEBUG[0m [32mPackage 'src/acfly_mavros/mavros/mavros_msgs' with type 'ros.ament_cmake' and name 'mavros_msgs'[0m
+[0.568s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/test_mavros) by extensions ['ignore', 'ignore_ament_install']
+[0.568s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/test_mavros) by extension 'ignore'
+[0.568s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/test_mavros) ignored
+[0.568s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/tools) by extensions ['ignore', 'ignore_ament_install']
+[0.568s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/tools) by extension 'ignore'
+[0.569s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/tools) by extension 'ignore_ament_install'
+[0.569s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/tools) by extensions ['colcon_pkg']
+[0.569s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/tools) by extension 'colcon_pkg'
+[0.569s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/tools) by extensions ['colcon_meta']
+[0.569s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/tools) by extension 'colcon_meta'
+[0.569s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/tools) by extensions ['ros']
+[0.569s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/tools) by extension 'ros'
+[0.569s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/tools) by extensions ['cmake', 'python']
+[0.569s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/tools) by extension 'cmake'
+[0.569s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/tools) by extension 'python'
+[0.569s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/tools) by extensions ['python_setup_py']
+[0.569s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros/mavros/tools) by extension 'python_setup_py'
+[0.570s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission) by extensions ['ignore', 'ignore_ament_install']
+[0.570s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission) by extension 'ignore'
+[0.570s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission) by extension 'ignore_ament_install'
+[0.570s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission) by extensions ['colcon_pkg']
+[0.570s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission) by extension 'colcon_pkg'
+[0.570s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission) by extensions ['colcon_meta']
+[0.570s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission) by extension 'colcon_meta'
+[0.570s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission) by extensions ['ros']
+[0.570s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission) by extension 'ros'
+[0.572s] [34mcolcon.colcon_core.package_identification[0m [1;30mDEBUG[0m [32mPackage 'src/fly_mission' with type 'ros.ament_cmake' and name 'fly_mission'[0m
+[0.572s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission_gps) by extensions ['ignore', 'ignore_ament_install']
+[0.572s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission_gps) by extension 'ignore'
+[0.572s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission_gps) by extension 'ignore_ament_install'
+[0.572s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission_gps) by extensions ['colcon_pkg']
+[0.572s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission_gps) by extension 'colcon_pkg'
+[0.572s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission_gps) by extensions ['colcon_meta']
+[0.572s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission_gps) by extension 'colcon_meta'
+[0.572s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission_gps) by extensions ['ros']
+[0.573s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission_gps) by extension 'ros'
+[0.574s] [34mcolcon.colcon_core.package_identification[0m [1;30mDEBUG[0m [32mPackage 'src/fly_mission_gps' with type 'ros.ament_cmake' and name 'fly_mission_gps'[0m
+[0.574s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(recursive) using defaults
+[0.574s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(ignore) discover
+[0.574s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(ignore) using defaults
+[0.574s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(path) discover
+[0.574s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(path) using defaults
+[0.606s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(prefix_path) check parameters
+[0.606s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(prefix_path) discover
+[0.609s] [34mcolcon.colcon_installed_package_information.package_discovery[0m [1;30mDEBUG[0m [32mFound 4 installed packages in /home/nvidia/ws_point/install[0m
+[0.610s] [34mcolcon.colcon_installed_package_information.package_discovery[0m [1;30mDEBUG[0m [32mFound 1 installed packages in /home/nvidia/ws_livox/install[0m
+[0.611s] [34mcolcon.colcon_installed_package_information.package_discovery[0m [1;30mDEBUG[0m [32mFound 4 installed packages in /home/nvidia/ws_orbbec/install[0m
+[0.613s] [34mcolcon.colcon_installed_package_information.package_discovery[0m [1;30mDEBUG[0m [32mFound 284 installed packages in /opt/ros/humble[0m
+[0.617s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(prefix_path) using defaults
+[0.678s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavlink' build argument 'cmake_args' from command line to 'None'
+[0.678s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavlink' build argument 'cmake_target' from command line to 'None'
+[0.678s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavlink' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.678s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavlink' build argument 'cmake_clean_cache' from command line to 'False'
+[0.678s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavlink' build argument 'cmake_clean_first' from command line to 'False'
+[0.678s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavlink' build argument 'cmake_force_configure' from command line to 'False'
+[0.678s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavlink' build argument 'ament_cmake_args' from command line to 'None'
+[0.678s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavlink' build argument 'catkin_cmake_args' from command line to 'None'
+[0.678s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavlink' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.678s] [34mcolcon.colcon_core.verb[0m [1;30mDEBUG[0m [32mBuilding package 'mavlink' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/nvidia/acfly_ws/build/mavlink', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/nvidia/acfly_ws/install/mavlink', 'merge_install': False, 'path': '/home/nvidia/acfly_ws/src/acfly_mavros/mavlink-gbp-release', 'symlink_install': True, 'test_result_base': None}[0m
+[0.679s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros_msgs' build argument 'cmake_args' from command line to 'None'
+[0.679s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros_msgs' build argument 'cmake_target' from command line to 'None'
+[0.679s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros_msgs' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.679s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros_msgs' build argument 'cmake_clean_cache' from command line to 'False'
+[0.679s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros_msgs' build argument 'cmake_clean_first' from command line to 'False'
+[0.679s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros_msgs' build argument 'cmake_force_configure' from command line to 'False'
+[0.679s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros_msgs' build argument 'ament_cmake_args' from command line to 'None'
+[0.679s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros_msgs' build argument 'catkin_cmake_args' from command line to 'None'
+[0.680s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros_msgs' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.680s] [34mcolcon.colcon_core.verb[0m [1;30mDEBUG[0m [32mBuilding package 'mavros_msgs' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/nvidia/acfly_ws/build/mavros_msgs', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/nvidia/acfly_ws/install/mavros_msgs', 'merge_install': False, 'path': '/home/nvidia/acfly_ws/src/acfly_mavros/mavros/mavros_msgs', 'symlink_install': True, 'test_result_base': None}[0m
+[0.680s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission' build argument 'cmake_args' from command line to 'None'
+[0.680s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission' build argument 'cmake_target' from command line to 'None'
+[0.680s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.680s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission' build argument 'cmake_clean_cache' from command line to 'False'
+[0.680s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission' build argument 'cmake_clean_first' from command line to 'False'
+[0.680s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission' build argument 'cmake_force_configure' from command line to 'False'
+[0.680s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission' build argument 'ament_cmake_args' from command line to 'None'
+[0.680s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission' build argument 'catkin_cmake_args' from command line to 'None'
+[0.681s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.681s] [34mcolcon.colcon_core.verb[0m [1;30mDEBUG[0m [32mBuilding package 'fly_mission' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/nvidia/acfly_ws/build/fly_mission', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/nvidia/acfly_ws/install/fly_mission', 'merge_install': False, 'path': '/home/nvidia/acfly_ws/src/fly_mission', 'symlink_install': True, 'test_result_base': None}[0m
+[0.681s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission_gps' build argument 'cmake_args' from command line to 'None'
+[0.681s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission_gps' build argument 'cmake_target' from command line to 'None'
+[0.681s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission_gps' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.681s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission_gps' build argument 'cmake_clean_cache' from command line to 'False'
+[0.681s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission_gps' build argument 'cmake_clean_first' from command line to 'False'
+[0.681s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission_gps' build argument 'cmake_force_configure' from command line to 'False'
+[0.681s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission_gps' build argument 'ament_cmake_args' from command line to 'None'
+[0.681s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission_gps' build argument 'catkin_cmake_args' from command line to 'None'
+[0.681s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission_gps' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.682s] [34mcolcon.colcon_core.verb[0m [1;30mDEBUG[0m [32mBuilding package 'fly_mission_gps' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/nvidia/acfly_ws/build/fly_mission_gps', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/nvidia/acfly_ws/install/fly_mission_gps', 'merge_install': False, 'path': '/home/nvidia/acfly_ws/src/fly_mission_gps', 'symlink_install': True, 'test_result_base': None}[0m
+[0.682s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'libmavconn' build argument 'cmake_args' from command line to 'None'
+[0.682s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'libmavconn' build argument 'cmake_target' from command line to 'None'
+[0.682s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'libmavconn' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.682s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'libmavconn' build argument 'cmake_clean_cache' from command line to 'False'
+[0.682s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'libmavconn' build argument 'cmake_clean_first' from command line to 'False'
+[0.682s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'libmavconn' build argument 'cmake_force_configure' from command line to 'False'
+[0.682s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'libmavconn' build argument 'ament_cmake_args' from command line to 'None'
+[0.682s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'libmavconn' build argument 'catkin_cmake_args' from command line to 'None'
+[0.683s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'libmavconn' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.683s] [34mcolcon.colcon_core.verb[0m [1;30mDEBUG[0m [32mBuilding package 'libmavconn' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/nvidia/acfly_ws/build/libmavconn', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/nvidia/acfly_ws/install/libmavconn', 'merge_install': False, 'path': '/home/nvidia/acfly_ws/src/acfly_mavros/mavros/libmavconn', 'symlink_install': True, 'test_result_base': None}[0m
+[0.683s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros' build argument 'cmake_args' from command line to 'None'
+[0.683s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros' build argument 'cmake_target' from command line to 'None'
+[0.683s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.683s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros' build argument 'cmake_clean_cache' from command line to 'False'
+[0.683s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros' build argument 'cmake_clean_first' from command line to 'False'
+[0.683s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros' build argument 'cmake_force_configure' from command line to 'False'
+[0.683s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros' build argument 'ament_cmake_args' from command line to 'None'
+[0.683s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros' build argument 'catkin_cmake_args' from command line to 'None'
+[0.683s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.684s] [34mcolcon.colcon_core.verb[0m [1;30mDEBUG[0m [32mBuilding package 'mavros' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/nvidia/acfly_ws/build/mavros', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/nvidia/acfly_ws/install/mavros', 'merge_install': False, 'path': '/home/nvidia/acfly_ws/src/acfly_mavros/mavros/mavros', 'symlink_install': True, 'test_result_base': None}[0m
+[0.684s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros_extras' build argument 'cmake_args' from command line to 'None'
+[0.684s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros_extras' build argument 'cmake_target' from command line to 'None'
+[0.684s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros_extras' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.684s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros_extras' build argument 'cmake_clean_cache' from command line to 'False'
+[0.684s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros_extras' build argument 'cmake_clean_first' from command line to 'False'
+[0.684s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros_extras' build argument 'cmake_force_configure' from command line to 'False'
+[0.684s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros_extras' build argument 'ament_cmake_args' from command line to 'None'
+[0.684s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros_extras' build argument 'catkin_cmake_args' from command line to 'None'
+[0.684s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'mavros_extras' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.684s] [34mcolcon.colcon_core.verb[0m [1;30mDEBUG[0m [32mBuilding package 'mavros_extras' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/nvidia/acfly_ws/build/mavros_extras', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/nvidia/acfly_ws/install/mavros_extras', 'merge_install': False, 'path': '/home/nvidia/acfly_ws/src/acfly_mavros/mavros/mavros_extras', 'symlink_install': True, 'test_result_base': None}[0m
+[0.685s] [34mcolcon.colcon_core.executor[0m [1;30mINFO[0m Executing jobs using 'parallel' executor
+[0.687s] [34mcolcon.colcon_parallel_executor.executor.parallel[0m [1;30mDEBUG[0m [32mrun_until_complete[0m
+[0.688s] [34mcolcon.colcon_ros.task.ament_cmake.build[0m [1;30mINFO[0m Building ROS package in '/home/nvidia/acfly_ws/src/acfly_mavros/mavros/mavros_msgs' with build type 'ament_cmake'
+[0.688s] [34mcolcon.colcon_cmake.task.cmake.build[0m [1;30mINFO[0m Building CMake package in '/home/nvidia/acfly_ws/src/acfly_mavros/mavros/mavros_msgs'
+[0.692s] [34mcolcon.colcon_core.plugin_system[0m [1;30mINFO[0m Skipping extension 'colcon_core.shell.bat': Not used on non-Windows systems
+[0.692s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.693s] [34mcolcon.colcon_core.shell[0m [1;30mDEBUG[0m [32mSkip shell extension 'dsv' for command environment[0m
+[0.700s] [34mcolcon.colcon_ros.task.cmake.build[0m [1;30mINFO[0m Building ROS package in '/home/nvidia/acfly_ws/src/acfly_mavros/mavlink-gbp-release' with build type 'cmake'
+[0.700s] [34mcolcon.colcon_cmake.task.cmake.build[0m [1;30mINFO[0m Building CMake package in '/home/nvidia/acfly_ws/src/acfly_mavros/mavlink-gbp-release'
+[0.701s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.701s] [34mcolcon.colcon_core.shell[0m [1;30mDEBUG[0m [32mSkip shell extension 'dsv' for command environment[0m
+[0.717s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoking command in '/home/nvidia/acfly_ws/build/mavros_msgs': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/mavros_msgs -- -j8 -l8[0m
+[0.724s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoking command in '/home/nvidia/acfly_ws/build/mavlink': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/mavlink -- -j8 -l8[0m
+[1.049s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoked command in '/home/nvidia/acfly_ws/build/mavlink' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/mavlink -- -j8 -l8[0m
+[1.073s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoking command in '/home/nvidia/acfly_ws/build/mavlink': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/mavlink[0m
+[1.182s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('mavlink', 'pkg_config_path')
+[1.183s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/hook/pkg_config_path.ps1'
+[1.184s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/hook/pkg_config_path.dsv'
+[1.185s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/hook/pkg_config_path.sh'
+[1.206s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('mavlink', 'pkg_config_path_multiarch')
+[1.207s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/hook/pkg_config_path_multiarch.ps1'
+[1.209s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/hook/pkg_config_path_multiarch.dsv'
+[1.210s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/hook/pkg_config_path_multiarch.sh'
+[1.212s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_environment_scripts_only(mavlink)
+[1.220s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavlink' for CMake module files
+[1.222s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavlink' for CMake config files
+[1.224s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('mavlink', 'cmake_prefix_path')
+[1.224s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/hook/cmake_prefix_path.ps1'
+[1.226s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/hook/cmake_prefix_path.dsv'
+[1.227s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/hook/cmake_prefix_path.sh'
+[1.229s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavlink/lib'
+[1.230s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavlink/bin'
+[1.230s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig/mavlink.pc'
+[1.230s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('mavlink', 'pkg_config')
+[1.231s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/hook/pkg_config.ps1'
+[1.232s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/hook/pkg_config.dsv'
+[1.233s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/hook/pkg_config.sh'
+[1.235s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavlink/lib/python3.10/site-packages'
+[1.236s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavlink/bin'
+[1.237s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/package.ps1'
+[1.239s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package descriptor '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/package.dsv'
+[1.241s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/package.sh'
+[1.244s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/package.bash'
+[1.247s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/package.zsh'
+[1.248s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/mavlink/share/colcon-core/packages/mavlink)
+[1.249s] [34mcolcon.colcon_ros.task.ament_cmake.build[0m [1;30mINFO[0m Building ROS package in '/home/nvidia/acfly_ws/src/acfly_mavros/mavros/libmavconn' with build type 'ament_cmake'
+[1.250s] [34mcolcon.colcon_cmake.task.cmake.build[0m [1;30mINFO[0m Building CMake package in '/home/nvidia/acfly_ws/src/acfly_mavros/mavros/libmavconn'
+[1.250s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[1.250s] [34mcolcon.colcon_core.shell[0m [1;30mDEBUG[0m [32mSkip shell extension 'dsv' for command environment[0m
+[1.427s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoked command in '/home/nvidia/acfly_ws/build/mavlink' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/mavlink[0m
+[1.430s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoking command in '/home/nvidia/acfly_ws/build/libmavconn': CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble PKG_CONFIG_PATH=/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig /usr/bin/cmake --build /home/nvidia/acfly_ws/build/libmavconn -- -j8 -l8[0m
+[1.477s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoked command in '/home/nvidia/acfly_ws/build/libmavconn' returned '0': CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble PKG_CONFIG_PATH=/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig /usr/bin/cmake --build /home/nvidia/acfly_ws/build/libmavconn -- -j8 -l8[0m
+[1.480s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoking command in '/home/nvidia/acfly_ws/build/libmavconn': CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble PKG_CONFIG_PATH=/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig /usr/bin/cmake --install /home/nvidia/acfly_ws/build/libmavconn[0m
+[1.522s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_environment_scripts_only(libmavconn)
+[1.523s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/libmavconn' for CMake module files
+[1.523s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoked command in '/home/nvidia/acfly_ws/build/libmavconn' returned '0': CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble PKG_CONFIG_PATH=/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig /usr/bin/cmake --install /home/nvidia/acfly_ws/build/libmavconn[0m
+[1.524s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/libmavconn' for CMake config files
+[1.525s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('libmavconn', 'cmake_prefix_path')
+[1.525s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/hook/cmake_prefix_path.ps1'
+[1.526s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/hook/cmake_prefix_path.dsv'
+[1.527s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/hook/cmake_prefix_path.sh'
+[1.528s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/libmavconn/lib'
+[1.528s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('libmavconn', 'ld_library_path_lib')
+[1.528s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/hook/ld_library_path_lib.ps1'
+[1.529s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/hook/ld_library_path_lib.dsv'
+[1.530s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/hook/ld_library_path_lib.sh'
+[1.530s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/libmavconn/bin'
+[1.530s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/libmavconn/lib/pkgconfig/libmavconn.pc'
+[1.531s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/libmavconn/lib/python3.10/site-packages'
+[1.531s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/libmavconn/bin'
+[1.532s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/package.ps1'
+[1.533s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package descriptor '/home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/package.dsv'
+[1.533s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/package.sh'
+[1.534s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/package.bash'
+[1.535s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/package.zsh'
+[1.535s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/libmavconn/share/colcon-core/packages/libmavconn)
+[1.536s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_environment_scripts_only(libmavconn)
+[1.536s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/libmavconn' for CMake module files
+[1.537s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/libmavconn' for CMake config files
+[1.538s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('libmavconn', 'cmake_prefix_path')
+[1.538s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/hook/cmake_prefix_path.ps1'
+[1.539s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/hook/cmake_prefix_path.dsv'
+[1.539s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/hook/cmake_prefix_path.sh'
+[1.540s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/libmavconn/lib'
+[1.540s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('libmavconn', 'ld_library_path_lib')
+[1.541s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/hook/ld_library_path_lib.ps1'
+[1.541s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/hook/ld_library_path_lib.dsv'
+[1.542s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/hook/ld_library_path_lib.sh'
+[1.542s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/libmavconn/bin'
+[1.543s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/libmavconn/lib/pkgconfig/libmavconn.pc'
+[1.543s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/libmavconn/lib/python3.10/site-packages'
+[1.543s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/libmavconn/bin'
+[1.544s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/package.ps1'
+[1.545s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package descriptor '/home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/package.dsv'
+[1.546s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/package.sh'
+[1.546s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/package.bash'
+[1.547s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/libmavconn/share/libmavconn/package.zsh'
+[1.548s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/libmavconn/share/colcon-core/packages/libmavconn)
+[1.582s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoked command in '/home/nvidia/acfly_ws/build/mavros_msgs' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/mavros_msgs -- -j8 -l8[0m
+[1.584s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoking command in '/home/nvidia/acfly_ws/build/mavros_msgs': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/mavros_msgs[0m
+[2.106s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_environment_scripts_only(mavros_msgs)
+[2.107s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_msgs' for CMake module files
+[2.108s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoked command in '/home/nvidia/acfly_ws/build/mavros_msgs' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/mavros_msgs[0m
+[2.109s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_msgs' for CMake config files
+[2.113s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('mavros_msgs', 'cmake_prefix_path')
+[2.113s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/hook/cmake_prefix_path.ps1'
+[2.114s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/hook/cmake_prefix_path.dsv'
+[2.115s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/hook/cmake_prefix_path.sh'
+[2.116s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_msgs/lib'
+[2.116s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('mavros_msgs', 'ld_library_path_lib')
+[2.116s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/hook/ld_library_path_lib.ps1'
+[2.117s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/hook/ld_library_path_lib.dsv'
+[2.117s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/hook/ld_library_path_lib.sh'
+[2.118s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_msgs/bin'
+[2.118s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_msgs/lib/pkgconfig/mavros_msgs.pc'
+[2.118s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_msgs/lib/python3.10/site-packages'
+[2.119s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_msgs/bin'
+[2.119s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/package.ps1'
+[2.120s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package descriptor '/home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/package.dsv'
+[2.121s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/package.sh'
+[2.122s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/package.bash'
+[2.122s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/package.zsh'
+[2.123s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/mavros_msgs/share/colcon-core/packages/mavros_msgs)
+[2.124s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_environment_scripts_only(mavros_msgs)
+[2.124s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_msgs' for CMake module files
+[2.125s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_msgs' for CMake config files
+[2.129s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('mavros_msgs', 'cmake_prefix_path')
+[2.129s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/hook/cmake_prefix_path.ps1'
+[2.130s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/hook/cmake_prefix_path.dsv'
+[2.130s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/hook/cmake_prefix_path.sh'
+[2.131s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_msgs/lib'
+[2.131s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('mavros_msgs', 'ld_library_path_lib')
+[2.132s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/hook/ld_library_path_lib.ps1'
+[2.132s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/hook/ld_library_path_lib.dsv'
+[2.133s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/hook/ld_library_path_lib.sh'
+[2.133s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_msgs/bin'
+[2.133s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_msgs/lib/pkgconfig/mavros_msgs.pc'
+[2.134s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_msgs/lib/python3.10/site-packages'
+[2.134s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_msgs/bin'
+[2.135s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/package.ps1'
+[2.136s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package descriptor '/home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/package.dsv'
+[2.136s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/package.sh'
+[2.137s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/package.bash'
+[2.138s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavros_msgs/share/mavros_msgs/package.zsh'
+[2.138s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/mavros_msgs/share/colcon-core/packages/mavros_msgs)
+[2.139s] [34mcolcon.colcon_ros.task.ament_cmake.build[0m [1;30mINFO[0m Building ROS package in '/home/nvidia/acfly_ws/src/acfly_mavros/mavros/mavros' with build type 'ament_cmake'
+[2.139s] [34mcolcon.colcon_cmake.task.cmake.build[0m [1;30mINFO[0m Building CMake package in '/home/nvidia/acfly_ws/src/acfly_mavros/mavros/mavros'
+[2.140s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[2.140s] [34mcolcon.colcon_core.shell[0m [1;30mDEBUG[0m [32mSkip shell extension 'dsv' for command environment[0m
+[2.148s] [34mcolcon.colcon_ros.task.ament_cmake.build[0m [1;30mINFO[0m Building ROS package in '/home/nvidia/acfly_ws/src/fly_mission' with build type 'ament_cmake'
+[2.148s] [34mcolcon.colcon_cmake.task.cmake.build[0m [1;30mINFO[0m Building CMake package in '/home/nvidia/acfly_ws/src/fly_mission'
+[2.148s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[2.148s] [34mcolcon.colcon_core.shell[0m [1;30mDEBUG[0m [32mSkip shell extension 'dsv' for command environment[0m
+[2.155s] [34mcolcon.colcon_ros.task.ament_cmake.build[0m [1;30mINFO[0m Building ROS package in '/home/nvidia/acfly_ws/src/fly_mission_gps' with build type 'ament_cmake'
+[2.156s] [34mcolcon.colcon_cmake.task.cmake.build[0m [1;30mINFO[0m Building CMake package in '/home/nvidia/acfly_ws/src/fly_mission_gps'
+[2.156s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[2.156s] [34mcolcon.colcon_core.shell[0m [1;30mDEBUG[0m [32mSkip shell extension 'dsv' for command environment[0m
+[2.169s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoking command in '/home/nvidia/acfly_ws/build/mavros': AMENT_PREFIX_PATH=/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavros_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble LD_LIBRARY_PATH=/home/nvidia/acfly_ws/install/libmavconn/lib:/home/nvidia/acfly_ws/install/mavros_msgs/lib:${LD_LIBRARY_PATH} PKG_CONFIG_PATH=/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig PYTHONPATH=/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/cmake --build /home/nvidia/acfly_ws/build/mavros -- -j8 -l8[0m
+[2.174s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoking command in '/home/nvidia/acfly_ws/build/fly_mission': AMENT_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavros_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble LD_LIBRARY_PATH=/home/nvidia/acfly_ws/install/mavros_msgs/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/cmake --build /home/nvidia/acfly_ws/build/fly_mission -- -j8 -l8[0m
+[2.178s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoking command in '/home/nvidia/acfly_ws/build/fly_mission_gps': AMENT_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavros_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble LD_LIBRARY_PATH=/home/nvidia/acfly_ws/install/mavros_msgs/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/cmake --build /home/nvidia/acfly_ws/build/fly_mission_gps -- -j8 -l8[0m
+[2.300s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoked command in '/home/nvidia/acfly_ws/build/fly_mission_gps' returned '0': AMENT_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavros_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble LD_LIBRARY_PATH=/home/nvidia/acfly_ws/install/mavros_msgs/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/cmake --build /home/nvidia/acfly_ws/build/fly_mission_gps -- -j8 -l8[0m
+[2.303s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoking command in '/home/nvidia/acfly_ws/build/fly_mission_gps': AMENT_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavros_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble LD_LIBRARY_PATH=/home/nvidia/acfly_ws/install/mavros_msgs/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/cmake --install /home/nvidia/acfly_ws/build/fly_mission_gps[0m
+[2.318s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoked command in '/home/nvidia/acfly_ws/build/fly_mission' returned '0': AMENT_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavros_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble LD_LIBRARY_PATH=/home/nvidia/acfly_ws/install/mavros_msgs/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/cmake --build /home/nvidia/acfly_ws/build/fly_mission -- -j8 -l8[0m
+[2.320s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoking command in '/home/nvidia/acfly_ws/build/fly_mission': AMENT_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavros_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble LD_LIBRARY_PATH=/home/nvidia/acfly_ws/install/mavros_msgs/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/cmake --install /home/nvidia/acfly_ws/build/fly_mission[0m
+[2.342s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_environment_scripts_only(fly_mission_gps)
+[2.343s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission_gps' for CMake module files
+[2.343s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoked command in '/home/nvidia/acfly_ws/build/fly_mission_gps' returned '0': AMENT_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavros_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble LD_LIBRARY_PATH=/home/nvidia/acfly_ws/install/mavros_msgs/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/cmake --install /home/nvidia/acfly_ws/build/fly_mission_gps[0m
+[2.344s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission_gps' for CMake config files
+[2.345s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('fly_mission_gps', 'cmake_prefix_path')
+[2.345s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/hook/cmake_prefix_path.ps1'
+[2.347s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/hook/cmake_prefix_path.dsv'
+[2.347s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/hook/cmake_prefix_path.sh'
+[2.348s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission_gps/lib'
+[2.348s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission_gps/bin'
+[2.349s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission_gps/lib/pkgconfig/fly_mission_gps.pc'
+[2.349s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission_gps/lib/python3.10/site-packages'
+[2.349s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission_gps/bin'
+[2.350s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/package.ps1'
+[2.352s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package descriptor '/home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/package.dsv'
+[2.353s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/package.sh'
+[2.354s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/package.bash'
+[2.354s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/package.zsh'
+[2.355s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/fly_mission_gps/share/colcon-core/packages/fly_mission_gps)
+[2.356s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_environment_scripts_only(fly_mission_gps)
+[2.356s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission_gps' for CMake module files
+[2.357s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission_gps' for CMake config files
+[2.358s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('fly_mission_gps', 'cmake_prefix_path')
+[2.358s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/hook/cmake_prefix_path.ps1'
+[2.359s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/hook/cmake_prefix_path.dsv'
+[2.362s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/hook/cmake_prefix_path.sh'
+[2.363s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission_gps/lib'
+[2.363s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission_gps/bin'
+[2.364s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission_gps/lib/pkgconfig/fly_mission_gps.pc'
+[2.364s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission_gps/lib/python3.10/site-packages'
+[2.364s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission_gps/bin'
+[2.365s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/package.ps1'
+[2.366s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package descriptor '/home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/package.dsv'
+[2.367s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/package.sh'
+[2.368s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/package.bash'
+[2.369s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/fly_mission_gps/share/fly_mission_gps/package.zsh'
+[2.369s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/fly_mission_gps/share/colcon-core/packages/fly_mission_gps)
+[2.371s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_environment_scripts_only(fly_mission)
+[2.372s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission' for CMake module files
+[2.373s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoked command in '/home/nvidia/acfly_ws/build/fly_mission' returned '0': AMENT_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavros_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble LD_LIBRARY_PATH=/home/nvidia/acfly_ws/install/mavros_msgs/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/cmake --install /home/nvidia/acfly_ws/build/fly_mission[0m
+[2.373s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission' for CMake config files
+[2.373s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('fly_mission', 'cmake_prefix_path')
+[2.374s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/hook/cmake_prefix_path.ps1'
+[2.375s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/hook/cmake_prefix_path.dsv'
+[2.376s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/hook/cmake_prefix_path.sh'
+[2.377s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission/lib'
+[2.377s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission/bin'
+[2.377s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission/lib/pkgconfig/fly_mission.pc'
+[2.378s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission/lib/python3.10/site-packages'
+[2.378s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission/bin'
+[2.379s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/package.ps1'
+[2.380s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package descriptor '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/package.dsv'
+[2.381s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/package.sh'
+[2.381s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/package.bash'
+[2.382s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/package.zsh'
+[2.383s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/fly_mission/share/colcon-core/packages/fly_mission)
+[2.384s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_environment_scripts_only(fly_mission)
+[2.385s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission' for CMake module files
+[2.386s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission' for CMake config files
+[2.386s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('fly_mission', 'cmake_prefix_path')
+[2.387s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/hook/cmake_prefix_path.ps1'
+[2.388s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/hook/cmake_prefix_path.dsv'
+[2.388s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/hook/cmake_prefix_path.sh'
+[2.390s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission/lib'
+[2.390s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission/bin'
+[2.390s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission/lib/pkgconfig/fly_mission.pc'
+[2.391s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission/lib/python3.10/site-packages'
+[2.391s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission/bin'
+[2.392s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/package.ps1'
+[2.393s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package descriptor '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/package.dsv'
+[2.394s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/package.sh'
+[2.395s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/package.bash'
+[2.396s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/package.zsh'
+[2.397s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/fly_mission/share/colcon-core/packages/fly_mission)
+[2.874s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoked command in '/home/nvidia/acfly_ws/build/mavros' returned '0': AMENT_PREFIX_PATH=/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavros_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble LD_LIBRARY_PATH=/home/nvidia/acfly_ws/install/libmavconn/lib:/home/nvidia/acfly_ws/install/mavros_msgs/lib:${LD_LIBRARY_PATH} PKG_CONFIG_PATH=/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig PYTHONPATH=/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/cmake --build /home/nvidia/acfly_ws/build/mavros -- -j8 -l8[0m
+[2.878s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoking command in '/home/nvidia/acfly_ws/build/mavros': AMENT_PREFIX_PATH=/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavros_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble LD_LIBRARY_PATH=/home/nvidia/acfly_ws/install/libmavconn/lib:/home/nvidia/acfly_ws/install/mavros_msgs/lib:${LD_LIBRARY_PATH} PKG_CONFIG_PATH=/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig PYTHONPATH=/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/cmake --install /home/nvidia/acfly_ws/build/mavros[0m
+[3.015s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_environment_scripts_only(mavros)
+[3.016s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros' for CMake module files
+[3.018s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoked command in '/home/nvidia/acfly_ws/build/mavros' returned '0': AMENT_PREFIX_PATH=/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavros_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble LD_LIBRARY_PATH=/home/nvidia/acfly_ws/install/libmavconn/lib:/home/nvidia/acfly_ws/install/mavros_msgs/lib:${LD_LIBRARY_PATH} PKG_CONFIG_PATH=/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig PYTHONPATH=/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/cmake --install /home/nvidia/acfly_ws/build/mavros[0m
+[3.020s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros' for CMake config files
+[3.021s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('mavros', 'cmake_prefix_path')
+[3.022s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavros/share/mavros/hook/cmake_prefix_path.ps1'
+[3.024s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/mavros/share/mavros/hook/cmake_prefix_path.dsv'
+[3.025s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavros/share/mavros/hook/cmake_prefix_path.sh'
+[3.026s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros/lib'
+[3.026s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('mavros', 'ld_library_path_lib')
+[3.026s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavros/share/mavros/hook/ld_library_path_lib.ps1'
+[3.027s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/mavros/share/mavros/hook/ld_library_path_lib.dsv'
+[3.028s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavros/share/mavros/hook/ld_library_path_lib.sh'
+[3.030s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros/bin'
+[3.030s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros/lib/pkgconfig/mavros.pc'
+[3.031s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros/lib/python3.10/site-packages'
+[3.032s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros/bin'
+[3.033s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavros/share/mavros/package.ps1'
+[3.035s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package descriptor '/home/nvidia/acfly_ws/install/mavros/share/mavros/package.dsv'
+[3.037s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavros/share/mavros/package.sh'
+[3.038s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavros/share/mavros/package.bash'
+[3.039s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavros/share/mavros/package.zsh'
+[3.040s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/mavros/share/colcon-core/packages/mavros)
+[3.041s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_environment_scripts_only(mavros)
+[3.041s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros' for CMake module files
+[3.042s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros' for CMake config files
+[3.044s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('mavros', 'cmake_prefix_path')
+[3.044s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavros/share/mavros/hook/cmake_prefix_path.ps1'
+[3.046s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/mavros/share/mavros/hook/cmake_prefix_path.dsv'
+[3.047s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavros/share/mavros/hook/cmake_prefix_path.sh'
+[3.048s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros/lib'
+[3.049s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('mavros', 'ld_library_path_lib')
+[3.049s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavros/share/mavros/hook/ld_library_path_lib.ps1'
+[3.050s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/mavros/share/mavros/hook/ld_library_path_lib.dsv'
+[3.050s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavros/share/mavros/hook/ld_library_path_lib.sh'
+[3.051s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros/bin'
+[3.051s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros/lib/pkgconfig/mavros.pc'
+[3.052s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros/lib/python3.10/site-packages'
+[3.053s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros/bin'
+[3.054s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavros/share/mavros/package.ps1'
+[3.056s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package descriptor '/home/nvidia/acfly_ws/install/mavros/share/mavros/package.dsv'
+[3.058s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavros/share/mavros/package.sh'
+[3.060s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavros/share/mavros/package.bash'
+[3.061s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavros/share/mavros/package.zsh'
+[3.062s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/mavros/share/colcon-core/packages/mavros)
+[3.063s] [34mcolcon.colcon_ros.task.ament_cmake.build[0m [1;30mINFO[0m Building ROS package in '/home/nvidia/acfly_ws/src/acfly_mavros/mavros/mavros_extras' with build type 'ament_cmake'
+[3.063s] [34mcolcon.colcon_cmake.task.cmake.build[0m [1;30mINFO[0m Building CMake package in '/home/nvidia/acfly_ws/src/acfly_mavros/mavros/mavros_extras'
+[3.064s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[3.064s] [34mcolcon.colcon_core.shell[0m [1;30mDEBUG[0m [32mSkip shell extension 'dsv' for command environment[0m
+[3.103s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoking command in '/home/nvidia/acfly_ws/build/mavros_extras': AMENT_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavros_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble LD_LIBRARY_PATH=/home/nvidia/acfly_ws/install/mavros/lib:/home/nvidia/acfly_ws/install/libmavconn/lib:/home/nvidia/acfly_ws/install/mavros_msgs/lib:${LD_LIBRARY_PATH} PKG_CONFIG_PATH=/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig PYTHONPATH=/home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages:/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/cmake --build /home/nvidia/acfly_ws/build/mavros_extras -- -j8 -l8[0m
+[3.712s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoked command in '/home/nvidia/acfly_ws/build/mavros_extras' returned '0': AMENT_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavros_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble LD_LIBRARY_PATH=/home/nvidia/acfly_ws/install/mavros/lib:/home/nvidia/acfly_ws/install/libmavconn/lib:/home/nvidia/acfly_ws/install/mavros_msgs/lib:${LD_LIBRARY_PATH} PKG_CONFIG_PATH=/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig PYTHONPATH=/home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages:/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/cmake --build /home/nvidia/acfly_ws/build/mavros_extras -- -j8 -l8[0m
+[3.715s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoking command in '/home/nvidia/acfly_ws/build/mavros_extras': AMENT_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavros_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble LD_LIBRARY_PATH=/home/nvidia/acfly_ws/install/mavros/lib:/home/nvidia/acfly_ws/install/libmavconn/lib:/home/nvidia/acfly_ws/install/mavros_msgs/lib:${LD_LIBRARY_PATH} PKG_CONFIG_PATH=/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig PYTHONPATH=/home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages:/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/cmake --install /home/nvidia/acfly_ws/build/mavros_extras[0m
+[3.758s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_environment_scripts_only(mavros_extras)
+[3.759s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_extras' for CMake module files
+[3.761s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoked command in '/home/nvidia/acfly_ws/build/mavros_extras' returned '0': AMENT_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavros_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble LD_LIBRARY_PATH=/home/nvidia/acfly_ws/install/mavros/lib:/home/nvidia/acfly_ws/install/libmavconn/lib:/home/nvidia/acfly_ws/install/mavros_msgs/lib:${LD_LIBRARY_PATH} PKG_CONFIG_PATH=/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig PYTHONPATH=/home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages:/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/cmake --install /home/nvidia/acfly_ws/build/mavros_extras[0m
+[3.762s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_extras' for CMake config files
+[3.764s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('mavros_extras', 'cmake_prefix_path')
+[3.764s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/hook/cmake_prefix_path.ps1'
+[3.766s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/hook/cmake_prefix_path.dsv'
+[3.768s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/hook/cmake_prefix_path.sh'
+[3.769s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_extras/lib'
+[3.769s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('mavros_extras', 'ld_library_path_lib')
+[3.769s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/hook/ld_library_path_lib.ps1'
+[3.770s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/hook/ld_library_path_lib.dsv'
+[3.771s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/hook/ld_library_path_lib.sh'
+[3.773s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_extras/bin'
+[3.773s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_extras/lib/pkgconfig/mavros_extras.pc'
+[3.774s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_extras/lib/python3.10/site-packages'
+[3.775s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_extras/bin'
+[3.776s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/package.ps1'
+[3.778s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package descriptor '/home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/package.dsv'
+[3.780s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/package.sh'
+[3.781s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/package.bash'
+[3.781s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/package.zsh'
+[3.782s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/mavros_extras/share/colcon-core/packages/mavros_extras)
+[3.783s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_environment_scripts_only(mavros_extras)
+[3.783s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_extras' for CMake module files
+[3.784s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_extras' for CMake config files
+[3.784s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('mavros_extras', 'cmake_prefix_path')
+[3.785s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/hook/cmake_prefix_path.ps1'
+[3.786s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/hook/cmake_prefix_path.dsv'
+[3.787s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/hook/cmake_prefix_path.sh'
+[3.790s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_extras/lib'
+[3.790s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('mavros_extras', 'ld_library_path_lib')
+[3.791s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/hook/ld_library_path_lib.ps1'
+[3.792s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/hook/ld_library_path_lib.dsv'
+[3.792s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/hook/ld_library_path_lib.sh'
+[3.793s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_extras/bin'
+[3.793s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_extras/lib/pkgconfig/mavros_extras.pc'
+[3.793s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_extras/lib/python3.10/site-packages'
+[3.794s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/mavros_extras/bin'
+[3.795s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/package.ps1'
+[3.797s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package descriptor '/home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/package.dsv'
+[3.799s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/package.sh'
+[3.800s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/package.bash'
+[3.801s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/mavros_extras/share/mavros_extras/package.zsh'
+[3.803s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/mavros_extras/share/colcon-core/packages/mavros_extras)
+[3.803s] [34mcolcon.colcon_parallel_executor.executor.parallel[0m [1;30mDEBUG[0m [32mclosing loop[0m
+[3.804s] [34mcolcon.colcon_parallel_executor.executor.parallel[0m [1;30mDEBUG[0m [32mloop closed[0m
+[3.805s] [34mcolcon.colcon_parallel_executor.executor.parallel[0m [1;30mDEBUG[0m [32mrun_until_complete finished with '0'[0m
+[3.805s] [34mcolcon.colcon_core.event_reactor[0m [1;30mDEBUG[0m [32mjoining thread[0m
+[3.820s] [34mcolcon.colcon_core.plugin_system[0m [1;30mINFO[0m Skipping extension 'colcon_notification.desktop_notification.terminal_notifier': Not used on non-Darwin systems
+[3.820s] [34mcolcon.colcon_core.plugin_system[0m [1;30mINFO[0m Skipping extension 'colcon_notification.desktop_notification.win32': Not used on non-Windows systems
+[3.820s] [34mcolcon.colcon_notification.desktop_notification[0m [1;30mINFO[0m Sending desktop notification using 'notify2'
+[3.847s] [34mcolcon.colcon_core.event_reactor[0m [1;30mDEBUG[0m [32mjoined thread[0m
+[3.849s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating prefix script '/home/nvidia/acfly_ws/install/local_setup.ps1'
+[3.852s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating prefix util module '/home/nvidia/acfly_ws/install/_local_setup_util_ps1.py'
+[3.856s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating prefix chain script '/home/nvidia/acfly_ws/install/setup.ps1'
+[3.861s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating prefix script '/home/nvidia/acfly_ws/install/local_setup.sh'
+[3.862s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating prefix util module '/home/nvidia/acfly_ws/install/_local_setup_util_sh.py'
+[3.863s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating prefix chain script '/home/nvidia/acfly_ws/install/setup.sh'
+[3.867s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating prefix script '/home/nvidia/acfly_ws/install/local_setup.bash'
+[3.869s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating prefix chain script '/home/nvidia/acfly_ws/install/setup.bash'
+[3.872s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating prefix script '/home/nvidia/acfly_ws/install/local_setup.zsh'
+[3.874s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating prefix chain script '/home/nvidia/acfly_ws/install/setup.zsh'

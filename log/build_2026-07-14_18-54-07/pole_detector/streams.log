@@ -1,0 +1,91 @@
+[0.032s] Invoking command in '/home/nvidia/acfly_ws/build/pole_detector': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake /home/nvidia/acfly_ws/src/finding_objects_ws/pole_detector -DPython3_EXECUTABLE=/usr/bin/python3 -DCMAKE_INSTALL_PREFIX=/home/nvidia/acfly_ws/install/pole_detector
+[0.165s] -- The C compiler identification is GNU 11.4.0
+[0.270s] -- The CXX compiler identification is GNU 11.4.0
+[0.288s] -- Detecting C compiler ABI info
+[0.422s] -- Detecting C compiler ABI info - done
+[0.440s] -- Check for working C compiler: /usr/bin/cc - skipped
+[0.441s] -- Detecting C compile features
+[0.442s] -- Detecting C compile features - done
+[0.452s] -- Detecting CXX compiler ABI info
+[0.610s] -- Detecting CXX compiler ABI info - done
+[0.611s] -- Check for working CXX compiler: /usr/bin/c++ - skipped
+[0.611s] -- Detecting CXX compile features
+[0.611s] -- Detecting CXX compile features - done
+[0.617s] -- Found ament_cmake: 1.3.14 (/opt/ros/humble/share/ament_cmake/cmake)
+[0.885s] -- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter 
+[1.093s] -- Found rclcpp: 16.0.19 (/opt/ros/humble/share/rclcpp/cmake)
+[1.177s] -- Found rosidl_generator_c: 3.1.9 (/opt/ros/humble/share/rosidl_generator_c/cmake)
+[1.190s] -- Found rosidl_adapter: 3.1.9 (/opt/ros/humble/share/rosidl_adapter/cmake)
+[1.208s] -- Found rosidl_generator_cpp: 3.1.9 (/opt/ros/humble/share/rosidl_generator_cpp/cmake)
+[1.235s] -- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c
+[1.269s] -- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp
+[1.365s] -- Found rmw_implementation_cmake: 6.1.2 (/opt/ros/humble/share/rmw_implementation_cmake/cmake)
+[1.372s] -- Found rmw_fastrtps_cpp: 6.2.10 (/opt/ros/humble/share/rmw_fastrtps_cpp/cmake)
+[1.554s] -- Found OpenSSL: /usr/lib/aarch64-linux-gnu/libcrypto.so (found version "3.0.2")  
+[1.604s] -- Found FastRTPS: /opt/ros/humble/include  
+[1.678s] -- Using RMW implementation 'rmw_fastrtps_cpp' as default
+[1.697s] -- Looking for pthread.h
+[1.833s] -- Looking for pthread.h - found
+[1.834s] -- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+[1.969s] -- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+[1.971s] -- Found Threads: TRUE  
+[2.083s] -- Found sensor_msgs: 4.9.1 (/opt/ros/humble/share/sensor_msgs/cmake)
+[2.134s] -- Found nav_msgs: 4.9.1 (/opt/ros/humble/share/nav_msgs/cmake)
+[2.162s] -- Found visualization_msgs: 4.9.1 (/opt/ros/humble/share/visualization_msgs/cmake)
+[2.344s] -- Configuring done
+[2.368s] -- Generating done
+[2.378s] -- Build files have been written to: /home/nvidia/acfly_ws/build/pole_detector
+[2.415s] Invoked command in '/home/nvidia/acfly_ws/build/pole_detector' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake /home/nvidia/acfly_ws/src/finding_objects_ws/pole_detector -DPython3_EXECUTABLE=/usr/bin/python3 -DCMAKE_INSTALL_PREFIX=/home/nvidia/acfly_ws/install/pole_detector
+[2.416s] Invoking command in '/home/nvidia/acfly_ws/build/pole_detector': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/pole_detector -- -j8 -l8
+[2.506s] [ 50%] Building CXX object CMakeFiles/pole_detector_node.dir/src/pole_detector_node.cpp.o
+[13.985s] In file included from /usr/include/eigen3/Eigen/Core:214,
+[13.985s]                  from /usr/include/eigen3/Eigen/Dense:1,
+[13.986s]                  from /home/nvidia/acfly_ws/src/finding_objects_ws/pole_detector/src/pole_detector_node.cpp:41:
+[13.986s] /usr/include/eigen3/Eigen/src/Core/arch/NEON/PacketMath.h: In function ‘Packet Eigen::internal::pload(const typename Eigen::internal::unpacket_traits<T>::type*) [with Packet = Eigen::internal::eigen_packet_wrapper<int, 2>; typename Eigen::internal::unpacket_traits<T>::type = signed char]’:
+[13.986s] /usr/include/eigen3/Eigen/src/Core/arch/NEON/PacketMath.h:1671:9: warning: ‘void* memcpy(void*, const void*, size_t)’ copying an object of non-trivial type ‘Eigen::internal::Packet4c’ {aka ‘struct Eigen::internal::eigen_packet_wrapper<int, 2>’} from an array of ‘const int8_t’ {aka ‘const signed char’} [-Wclass-memaccess]
+[13.986s]  1671 |   memcpy(&res, from, sizeof(Packet4c));
+[13.986s]       |   ~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[13.986s] In file included from /usr/include/eigen3/Eigen/Core:172,
+[13.986s]                  from /usr/include/eigen3/Eigen/Dense:1,
+[13.986s]                  from /home/nvidia/acfly_ws/src/finding_objects_ws/pole_detector/src/pole_detector_node.cpp:41:
+[13.986s] /usr/include/eigen3/Eigen/src/Core/GenericPacketMath.h:159:8: note: ‘Eigen::internal::Packet4c’ {aka ‘struct Eigen::internal::eigen_packet_wrapper<int, 2>’} declared here
+[13.986s]   159 | struct eigen_packet_wrapper
+[13.987s]       |        ^~~~~~~~~~~~~~~~~~~~
+[13.988s] In file included from /usr/include/eigen3/Eigen/Core:214,
+[13.988s]                  from /usr/include/eigen3/Eigen/Dense:1,
+[13.988s]                  from /home/nvidia/acfly_ws/src/finding_objects_ws/pole_detector/src/pole_detector_node.cpp:41:
+[13.988s] /usr/include/eigen3/Eigen/src/Core/arch/NEON/PacketMath.h: In function ‘Packet Eigen::internal::ploadu(const typename Eigen::internal::unpacket_traits<T>::type*) [with Packet = Eigen::internal::eigen_packet_wrapper<int, 2>; typename Eigen::internal::unpacket_traits<T>::type = signed char]’:
+[13.988s] /usr/include/eigen3/Eigen/src/Core/arch/NEON/PacketMath.h:1716:9: warning: ‘void* memcpy(void*, const void*, size_t)’ copying an object of non-trivial type ‘Eigen::internal::Packet4c’ {aka ‘struct Eigen::internal::eigen_packet_wrapper<int, 2>’} from an array of ‘const int8_t’ {aka ‘const signed char’} [-Wclass-memaccess]
+[13.989s]  1716 |   memcpy(&res, from, sizeof(Packet4c));
+[13.989s]       |   ~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[13.989s] In file included from /usr/include/eigen3/Eigen/Core:172,
+[13.989s]                  from /usr/include/eigen3/Eigen/Dense:1,
+[13.989s]                  from /home/nvidia/acfly_ws/src/finding_objects_ws/pole_detector/src/pole_detector_node.cpp:41:
+[13.989s] /usr/include/eigen3/Eigen/src/Core/GenericPacketMath.h:159:8: note: ‘Eigen::internal::Packet4c’ {aka ‘struct Eigen::internal::eigen_packet_wrapper<int, 2>’} declared here
+[13.989s]   159 | struct eigen_packet_wrapper
+[13.989s]       |        ^~~~~~~~~~~~~~~~~~~~
+[43.171s] [100%] Linking CXX executable pole_detector_node
+[44.720s] [100%] Built target pole_detector_node
+[44.741s] Invoked command in '/home/nvidia/acfly_ws/build/pole_detector' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/pole_detector -- -j8 -l8
+[44.743s] Invoking command in '/home/nvidia/acfly_ws/build/pole_detector': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/pole_detector
+[44.758s] -- Install configuration: ""
+[44.758s] -- Installing: /home/nvidia/acfly_ws/install/pole_detector/lib/pole_detector/pole_detector_node
+[44.772s] -- Set runtime path of "/home/nvidia/acfly_ws/install/pole_detector/lib/pole_detector/pole_detector_node" to ""
+[44.772s] -- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/rviz
+[44.773s] -- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/rviz/pole_detector.rviz
+[44.773s] -- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/ament_index/resource_index/package_run_dependencies/pole_detector
+[44.773s] -- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/ament_index/resource_index/parent_prefix_path/pole_detector
+[44.773s] -- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/environment/ament_prefix_path.sh
+[44.773s] -- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/environment/ament_prefix_path.dsv
+[44.774s] -- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/environment/path.sh
+[44.774s] -- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/environment/path.dsv
+[44.774s] -- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/local_setup.bash
+[44.774s] -- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/local_setup.sh
+[44.774s] -- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/local_setup.zsh
+[44.774s] -- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/local_setup.dsv
+[44.775s] -- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/package.dsv
+[44.775s] -- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/ament_index/resource_index/packages/pole_detector
+[44.775s] -- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/cmake/pole_detectorConfig.cmake
+[44.775s] -- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/cmake/pole_detectorConfig-version.cmake
+[44.775s] -- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/package.xml
+[44.780s] Invoked command in '/home/nvidia/acfly_ws/build/pole_detector' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/pole_detector

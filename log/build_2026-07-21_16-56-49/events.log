@@ -1,0 +1,630 @@
+[0.000000] (-) TimerEvent: {}
+[0.000207] (-) JobUnselected: {'identifier': 'exploration_planner'}
+[0.000448] (-) JobUnselected: {'identifier': 'fly_mission'}
+[0.000891] (multi_pole_detector) JobQueued: {'identifier': 'multi_pole_detector', 'dependencies': OrderedDict()}
+[0.001108] (pole_detector) JobQueued: {'identifier': 'pole_detector', 'dependencies': OrderedDict()}
+[0.001331] (ring_detector) JobQueued: {'identifier': 'ring_detector', 'dependencies': OrderedDict()}
+[0.001416] (multi_pole_detector) JobStarted: {'identifier': 'multi_pole_detector'}
+[0.014710] (pole_detector) JobStarted: {'identifier': 'pole_detector'}
+[0.024212] (ring_detector) JobStarted: {'identifier': 'ring_detector'}
+[0.035764] (multi_pole_detector) JobProgress: {'identifier': 'multi_pole_detector', 'progress': 'cmake'}
+[0.036666] (multi_pole_detector) Command: {'cmd': ['/usr/bin/cmake', '/home/nvidia/acfly_ws/src/finding_objects_ws/multi_pole_detector', '-DPython3_EXECUTABLE=/usr/bin/python3', '-DCMAKE_INSTALL_PREFIX=/home/nvidia/acfly_ws/install/multi_pole_detector'], 'cwd': '/home/nvidia/acfly_ws/build/multi_pole_detector', 'env': OrderedDict([('LESSOPEN', '| /usr/bin/lesspipe %s'), ('VSCODE_CWD', '/home/nvidia'), ('VSCODE_ESM_ENTRYPOINT', 'vs/workbench/api/node/extensionHostProcess'), ('AI_AGENT', 'claude-code_2-1-216_agent'), ('LANGUAGE', 'zh_CN:zh:en_US:en'), ('USER', 'nvidia'), ('SSH_CLIENT', '192.168.12.101 43844 22'), ('CLAUDE_CODE_ENTRYPOINT', 'claude-vscode'), ('LC_TIME', 'zh_CN.UTF-8'), ('VSCODE_NLS_CONFIG', '{"userLocale":"zh-cn","osLocale":"zh-cn","resolvedLanguage":"zh-cn","defaultMessagesFile":"/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/nls.messages.json","languagePack":{"translationsConfigFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/tcf.json","messagesFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/4fe60c8b1cdac1c4c174f2fb180d0d758272d713/nls.messages.json","corruptMarkerFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/corrupted.info"},"locale":"zh-cn","availableLanguages":{"*":"zh-cn"},"_languagePackId":"7d3970334613eea704823c76d6198ba3.zh-cn","_languagePackSupport":true,"_translationsConfigFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/tcf.json","_cacheRoot":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn","_resolvedLanguagePackCoreLocation":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/4fe60c8b1cdac1c4c174f2fb180d0d758272d713","_corruptedFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/corrupted.info"}'), ('GIT_EDITOR', 'true'), ('VSCODE_HANDLES_UNCAUGHT_ERRORS', 'true'), ('XDG_SESSION_TYPE', 'tty'), ('CLAUDE_AGENT_SDK_VERSION', '0.3.216'), ('SHLVL', '2'), ('LD_LIBRARY_PATH', '/usr/local/lib:/home/nvidia/acfly_ws/install/mavros_extras/lib:/home/nvidia/acfly_ws/install/mavros/lib:/home/nvidia/acfly_ws/install/mavros_msgs/lib:/home/nvidia/acfly_ws/install/libmavconn/lib:/home/nvidia/ws_orbbec/install/orbbec_camera/lib:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs/lib:/home/nvidia/ws_livox/install/livox_ros_driver2/lib:/home/nvidia/ws_point/install/ac_link/lib:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/aarch64-linux-gnu:/opt/ros/humble/lib'), ('BROWSER', '/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/bin/helpers/browser.sh'), ('MOTD_SHOWN', 'pam'), ('HOME', '/home/nvidia'), ('CONDA_SHLVL', '0'), ('OLDPWD', '/home/nvidia'), ('VSCODE_RECONNECTION_GRACE_TIME', '10800000'), ('VSCODE_IPC_HOOK_CLI', '/run/user/1000/vscode-ipc-44c9265a-0351-4407-b8c8-091342c10b3c.sock'), ('JETSON_L4T', '36.4.7'), ('ROS_PYTHON_VERSION', '3'), ('JETSON_MODEL', 'NVIDIA Jetson Orin NX Engineering Reference Developer Kit Super'), ('CLAUDE_CODE_CHILD_SESSION', '1'), ('LC_MONETARY', 'zh_CN.UTF-8'), ('COPILOT_OTEL_FILE_EXPORTER_PATH', '/dev/null'), ('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/1000/bus'), ('_CE_M', ''), ('_CONDA_ROOT', '/home/nvidia/miniforge3'), ('COLCON_PREFIX_PATH', '/home/nvidia/acfly_ws/install:/home/nvidia/ws_point/install:/home/nvidia/ws_livox/install:/home/nvidia/ws_orbbec/install'), ('API_TIMEOUT_MS', '600000'), ('APPLICATION_INSIGHTS_NO_STATSBEAT', 'true'), ('ROS_DISTRO', 'humble'), ('LOGNAME', 'nvidia'), ('JETSON_MODULE', 'NVIDIA Jetson Orin NX (16GB ram)'), ('JETSON_SERIAL_NUMBER', '1421325032037'), ('VSCODE_HANDLES_SIGPIPE', 'true'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('PKG_CONFIG_PATH', '/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig'), ('XDG_SESSION_CLASS', 'user'), ('ANTHROPIC_BASE_URL', 'https://node-cf.sssaicodeapi.com/api'), ('XDG_SESSION_ID', '3'), ('VSCODE_CLI_REQUIRE_TOKEN', '52ef4887-3900-480f-8956-94178156c297'), ('_CE_CONDA', ''), ('ROS_LOCALHOST_ONLY', '0'), ('MCP_CONNECTION_NONBLOCKING', 'true'), ('PATH', '/home/nvidia/.local/bin:/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/bin/remote-cli:/home/nvidia/.local/bin:/home/nvidia/miniforge3/condabin:/opt/ros/humble/bin:/home/nvidia/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin'), ('VSCODE_AGENT_FOLDER', '/home/nvidia/.vscode-server'), ('PAPERSIZE', 'a4'), ('COREPACK_ENABLE_AUTO_PIN', '0'), ('LC_ADDRESS', 'zh_CN.UTF-8'), ('XDG_RUNTIME_DIR', '/run/user/1000'), ('CLAUDE_EFFORT', 'high'), ('MAMBA_ROOT_PREFIX', '/home/nvidia/miniforge3'), ('CLAUDE_PID', '8550'), ('NoDefaultCurrentDirectoryInExePath', '1'), ('LANG', 'zh_CN.UTF-8'), ('LC_TELEPHONE', 'zh_CN.UTF-8'), ('LS_COLORS', ''), ('JETSON_SOC', 'tegra234'), ('SSH_AUTH_SOCK', '/run/user/1000/vscode-ssh-auth-sock-156418832'), ('ROS_DOMAIN_ID', '73'), ('AMENT_PREFIX_PATH', '/home/nvidia/acfly_ws/install/ring_detector:/home/nvidia/acfly_ws/install/pole_detector:/home/nvidia/acfly_ws/install/multi_pole_detector:/home/nvidia/acfly_ws/install/mavros_extras:/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/fly_mission_gps:/home/nvidia/acfly_ws/install/fly_mission:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/exploration_planner:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_orbbec/install/gemini_vision:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/opt/ros/humble'), ('CONDA_PYTHON_EXE', '/home/nvidia/miniforge3/bin/python'), ('SHELL', '/bin/bash'), ('LC_NAME', 'zh_CN.UTF-8'), ('ANTHROPIC_AUTH_TOKEN', 'sk-sssaicode-a9605a1bee4103768854918f844ebbdb4617b76768b3fe4651fb41e6a010f329'), ('MXC_BIN_DIR', '/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node_modules/@microsoft/mxc-sdk/bin'), ('ELECTRON_RUN_AS_NODE', '1'), ('CLAUDE_CODE_DISABLE_TERMINAL_TITLE', '1'), ('CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING', 'true'), ('CLAUDE_CODE_SESSION_ID', '6c2addeb-fa30-4ab9-8a74-428d19203968'), ('LESSCLOSE', '/usr/bin/lesspipe %s %s'), ('CLAUDECODE', '1'), ('LC_MEASUREMENT', 'zh_CN.UTF-8'), ('_CONDA_EXE', '/home/nvidia/miniforge3/bin/conda'), ('MAMBA_EXE', '/home/nvidia/miniforge3/bin/mamba'), ('LC_IDENTIFICATION', 'zh_CN.UTF-8'), ('JETSON_CUDA_ARCH_BIN', '8.7'), ('PWD', '/home/nvidia/acfly_ws/build/multi_pole_detector'), ('LC_ALL', 'en_US.UTF-8'), ('CONDA_EXE', '/home/nvidia/miniforge3/bin/conda'), ('SSH_CONNECTION', '192.168.12.101 43844 192.168.12.1 22'), ('XDG_DATA_DIRS', '/usr/share/gnome:/usr/local/share:/usr/share:/var/lib/snapd/desktop'), ('CLAUDE_CODE_EXECPATH', '/home/nvidia/.vscode-server/extensions/anthropic.claude-code-2.1.216-linux-arm64/resources/native-binary/claude'), ('CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', '1'), ('PYTHONPATH', '/usr/local/lib/python3.10/site-packages/:/home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages:/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs/local/lib/python3.10/dist-packages:/home/nvidia/ws_orbbec/install/gemini_vision/lib/python3.10/site-packages:/home/nvidia/ws_livox/install/livox_ros_driver2/local/lib/python3.10/dist-packages:/home/nvidia/ws_point/install/ac_link/local/lib/python3.10/dist-packages:/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('LC_NUMERIC', 'zh_CN.UTF-8'), ('CLAUDE_CODE_ENABLE_TASKS', '0'), ('LC_PAPER', 'zh_CN.UTF-8'), ('COLCON', '1'), ('COPILOT_CLI_ENABLED_FEATURE_FLAGS', 'SHELL_SPAWN_BACKEND'), ('JETSON_JETPACK', ''), ('CMAKE_PREFIX_PATH', '/home/nvidia/acfly_ws/install/ring_detector:/home/nvidia/acfly_ws/install/pole_detector:/home/nvidia/acfly_ws/install/multi_pole_detector:/home/nvidia/acfly_ws/install/mavros_extras:/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/fly_mission_gps:/home/nvidia/acfly_ws/install/fly_mission:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/acfly_ws/install/exploration_planner:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble'), ('JETSON_P_NUMBER', 'p3767-0000')]), 'shell': False}
+[0.039618] (pole_detector) JobProgress: {'identifier': 'pole_detector', 'progress': 'cmake'}
+[0.040330] (pole_detector) Command: {'cmd': ['/usr/bin/cmake', '/home/nvidia/acfly_ws/src/finding_objects_ws/pole_detector', '-DPython3_EXECUTABLE=/usr/bin/python3', '-DCMAKE_INSTALL_PREFIX=/home/nvidia/acfly_ws/install/pole_detector'], 'cwd': '/home/nvidia/acfly_ws/build/pole_detector', 'env': OrderedDict([('LESSOPEN', '| /usr/bin/lesspipe %s'), ('VSCODE_CWD', '/home/nvidia'), ('VSCODE_ESM_ENTRYPOINT', 'vs/workbench/api/node/extensionHostProcess'), ('AI_AGENT', 'claude-code_2-1-216_agent'), ('LANGUAGE', 'zh_CN:zh:en_US:en'), ('USER', 'nvidia'), ('SSH_CLIENT', '192.168.12.101 43844 22'), ('CLAUDE_CODE_ENTRYPOINT', 'claude-vscode'), ('LC_TIME', 'zh_CN.UTF-8'), ('VSCODE_NLS_CONFIG', '{"userLocale":"zh-cn","osLocale":"zh-cn","resolvedLanguage":"zh-cn","defaultMessagesFile":"/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/nls.messages.json","languagePack":{"translationsConfigFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/tcf.json","messagesFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/4fe60c8b1cdac1c4c174f2fb180d0d758272d713/nls.messages.json","corruptMarkerFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/corrupted.info"},"locale":"zh-cn","availableLanguages":{"*":"zh-cn"},"_languagePackId":"7d3970334613eea704823c76d6198ba3.zh-cn","_languagePackSupport":true,"_translationsConfigFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/tcf.json","_cacheRoot":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn","_resolvedLanguagePackCoreLocation":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/4fe60c8b1cdac1c4c174f2fb180d0d758272d713","_corruptedFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/corrupted.info"}'), ('GIT_EDITOR', 'true'), ('VSCODE_HANDLES_UNCAUGHT_ERRORS', 'true'), ('XDG_SESSION_TYPE', 'tty'), ('CLAUDE_AGENT_SDK_VERSION', '0.3.216'), ('SHLVL', '2'), ('LD_LIBRARY_PATH', '/usr/local/lib:/home/nvidia/acfly_ws/install/mavros_extras/lib:/home/nvidia/acfly_ws/install/mavros/lib:/home/nvidia/acfly_ws/install/mavros_msgs/lib:/home/nvidia/acfly_ws/install/libmavconn/lib:/home/nvidia/ws_orbbec/install/orbbec_camera/lib:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs/lib:/home/nvidia/ws_livox/install/livox_ros_driver2/lib:/home/nvidia/ws_point/install/ac_link/lib:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/aarch64-linux-gnu:/opt/ros/humble/lib'), ('BROWSER', '/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/bin/helpers/browser.sh'), ('MOTD_SHOWN', 'pam'), ('HOME', '/home/nvidia'), ('CONDA_SHLVL', '0'), ('OLDPWD', '/home/nvidia'), ('VSCODE_RECONNECTION_GRACE_TIME', '10800000'), ('VSCODE_IPC_HOOK_CLI', '/run/user/1000/vscode-ipc-44c9265a-0351-4407-b8c8-091342c10b3c.sock'), ('JETSON_L4T', '36.4.7'), ('ROS_PYTHON_VERSION', '3'), ('JETSON_MODEL', 'NVIDIA Jetson Orin NX Engineering Reference Developer Kit Super'), ('CLAUDE_CODE_CHILD_SESSION', '1'), ('LC_MONETARY', 'zh_CN.UTF-8'), ('COPILOT_OTEL_FILE_EXPORTER_PATH', '/dev/null'), ('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/1000/bus'), ('_CE_M', ''), ('_CONDA_ROOT', '/home/nvidia/miniforge3'), ('COLCON_PREFIX_PATH', '/home/nvidia/acfly_ws/install:/home/nvidia/ws_point/install:/home/nvidia/ws_livox/install:/home/nvidia/ws_orbbec/install'), ('API_TIMEOUT_MS', '600000'), ('APPLICATION_INSIGHTS_NO_STATSBEAT', 'true'), ('ROS_DISTRO', 'humble'), ('LOGNAME', 'nvidia'), ('JETSON_MODULE', 'NVIDIA Jetson Orin NX (16GB ram)'), ('JETSON_SERIAL_NUMBER', '1421325032037'), ('VSCODE_HANDLES_SIGPIPE', 'true'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('PKG_CONFIG_PATH', '/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig'), ('XDG_SESSION_CLASS', 'user'), ('ANTHROPIC_BASE_URL', 'https://node-cf.sssaicodeapi.com/api'), ('XDG_SESSION_ID', '3'), ('VSCODE_CLI_REQUIRE_TOKEN', '52ef4887-3900-480f-8956-94178156c297'), ('_CE_CONDA', ''), ('ROS_LOCALHOST_ONLY', '0'), ('MCP_CONNECTION_NONBLOCKING', 'true'), ('PATH', '/home/nvidia/.local/bin:/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/bin/remote-cli:/home/nvidia/.local/bin:/home/nvidia/miniforge3/condabin:/opt/ros/humble/bin:/home/nvidia/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin'), ('VSCODE_AGENT_FOLDER', '/home/nvidia/.vscode-server'), ('PAPERSIZE', 'a4'), ('COREPACK_ENABLE_AUTO_PIN', '0'), ('LC_ADDRESS', 'zh_CN.UTF-8'), ('XDG_RUNTIME_DIR', '/run/user/1000'), ('CLAUDE_EFFORT', 'high'), ('MAMBA_ROOT_PREFIX', '/home/nvidia/miniforge3'), ('CLAUDE_PID', '8550'), ('NoDefaultCurrentDirectoryInExePath', '1'), ('LANG', 'zh_CN.UTF-8'), ('LC_TELEPHONE', 'zh_CN.UTF-8'), ('LS_COLORS', ''), ('JETSON_SOC', 'tegra234'), ('SSH_AUTH_SOCK', '/run/user/1000/vscode-ssh-auth-sock-156418832'), ('ROS_DOMAIN_ID', '73'), ('AMENT_PREFIX_PATH', '/home/nvidia/acfly_ws/install/ring_detector:/home/nvidia/acfly_ws/install/pole_detector:/home/nvidia/acfly_ws/install/multi_pole_detector:/home/nvidia/acfly_ws/install/mavros_extras:/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/fly_mission_gps:/home/nvidia/acfly_ws/install/fly_mission:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/exploration_planner:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_orbbec/install/gemini_vision:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/opt/ros/humble'), ('CONDA_PYTHON_EXE', '/home/nvidia/miniforge3/bin/python'), ('SHELL', '/bin/bash'), ('LC_NAME', 'zh_CN.UTF-8'), ('ANTHROPIC_AUTH_TOKEN', 'sk-sssaicode-a9605a1bee4103768854918f844ebbdb4617b76768b3fe4651fb41e6a010f329'), ('MXC_BIN_DIR', '/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node_modules/@microsoft/mxc-sdk/bin'), ('ELECTRON_RUN_AS_NODE', '1'), ('CLAUDE_CODE_DISABLE_TERMINAL_TITLE', '1'), ('CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING', 'true'), ('CLAUDE_CODE_SESSION_ID', '6c2addeb-fa30-4ab9-8a74-428d19203968'), ('LESSCLOSE', '/usr/bin/lesspipe %s %s'), ('CLAUDECODE', '1'), ('LC_MEASUREMENT', 'zh_CN.UTF-8'), ('_CONDA_EXE', '/home/nvidia/miniforge3/bin/conda'), ('MAMBA_EXE', '/home/nvidia/miniforge3/bin/mamba'), ('LC_IDENTIFICATION', 'zh_CN.UTF-8'), ('JETSON_CUDA_ARCH_BIN', '8.7'), ('PWD', '/home/nvidia/acfly_ws/build/pole_detector'), ('LC_ALL', 'en_US.UTF-8'), ('CONDA_EXE', '/home/nvidia/miniforge3/bin/conda'), ('SSH_CONNECTION', '192.168.12.101 43844 192.168.12.1 22'), ('XDG_DATA_DIRS', '/usr/share/gnome:/usr/local/share:/usr/share:/var/lib/snapd/desktop'), ('CLAUDE_CODE_EXECPATH', '/home/nvidia/.vscode-server/extensions/anthropic.claude-code-2.1.216-linux-arm64/resources/native-binary/claude'), ('CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', '1'), ('PYTHONPATH', '/usr/local/lib/python3.10/site-packages/:/home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages:/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs/local/lib/python3.10/dist-packages:/home/nvidia/ws_orbbec/install/gemini_vision/lib/python3.10/site-packages:/home/nvidia/ws_livox/install/livox_ros_driver2/local/lib/python3.10/dist-packages:/home/nvidia/ws_point/install/ac_link/local/lib/python3.10/dist-packages:/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('LC_NUMERIC', 'zh_CN.UTF-8'), ('CLAUDE_CODE_ENABLE_TASKS', '0'), ('LC_PAPER', 'zh_CN.UTF-8'), ('COLCON', '1'), ('COPILOT_CLI_ENABLED_FEATURE_FLAGS', 'SHELL_SPAWN_BACKEND'), ('JETSON_JETPACK', ''), ('CMAKE_PREFIX_PATH', '/home/nvidia/acfly_ws/install/ring_detector:/home/nvidia/acfly_ws/install/pole_detector:/home/nvidia/acfly_ws/install/multi_pole_detector:/home/nvidia/acfly_ws/install/mavros_extras:/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/fly_mission_gps:/home/nvidia/acfly_ws/install/fly_mission:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/acfly_ws/install/exploration_planner:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble'), ('JETSON_P_NUMBER', 'p3767-0000')]), 'shell': False}
+[0.044992] (ring_detector) JobProgress: {'identifier': 'ring_detector', 'progress': 'cmake'}
+[0.045874] (ring_detector) Command: {'cmd': ['/usr/bin/cmake', '/home/nvidia/acfly_ws/src/finding_objects_ws/ring_detector', '-DPython3_EXECUTABLE=/usr/bin/python3', '-DCMAKE_INSTALL_PREFIX=/home/nvidia/acfly_ws/install/ring_detector'], 'cwd': '/home/nvidia/acfly_ws/build/ring_detector', 'env': OrderedDict([('LESSOPEN', '| /usr/bin/lesspipe %s'), ('VSCODE_CWD', '/home/nvidia'), ('VSCODE_ESM_ENTRYPOINT', 'vs/workbench/api/node/extensionHostProcess'), ('AI_AGENT', 'claude-code_2-1-216_agent'), ('LANGUAGE', 'zh_CN:zh:en_US:en'), ('USER', 'nvidia'), ('SSH_CLIENT', '192.168.12.101 43844 22'), ('CLAUDE_CODE_ENTRYPOINT', 'claude-vscode'), ('LC_TIME', 'zh_CN.UTF-8'), ('VSCODE_NLS_CONFIG', '{"userLocale":"zh-cn","osLocale":"zh-cn","resolvedLanguage":"zh-cn","defaultMessagesFile":"/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/nls.messages.json","languagePack":{"translationsConfigFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/tcf.json","messagesFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/4fe60c8b1cdac1c4c174f2fb180d0d758272d713/nls.messages.json","corruptMarkerFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/corrupted.info"},"locale":"zh-cn","availableLanguages":{"*":"zh-cn"},"_languagePackId":"7d3970334613eea704823c76d6198ba3.zh-cn","_languagePackSupport":true,"_translationsConfigFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/tcf.json","_cacheRoot":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn","_resolvedLanguagePackCoreLocation":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/4fe60c8b1cdac1c4c174f2fb180d0d758272d713","_corruptedFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/corrupted.info"}'), ('GIT_EDITOR', 'true'), ('VSCODE_HANDLES_UNCAUGHT_ERRORS', 'true'), ('XDG_SESSION_TYPE', 'tty'), ('CLAUDE_AGENT_SDK_VERSION', '0.3.216'), ('SHLVL', '2'), ('LD_LIBRARY_PATH', '/usr/local/lib:/home/nvidia/acfly_ws/install/mavros_extras/lib:/home/nvidia/acfly_ws/install/mavros/lib:/home/nvidia/acfly_ws/install/mavros_msgs/lib:/home/nvidia/acfly_ws/install/libmavconn/lib:/home/nvidia/ws_orbbec/install/orbbec_camera/lib:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs/lib:/home/nvidia/ws_livox/install/livox_ros_driver2/lib:/home/nvidia/ws_point/install/ac_link/lib:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/aarch64-linux-gnu:/opt/ros/humble/lib'), ('BROWSER', '/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/bin/helpers/browser.sh'), ('MOTD_SHOWN', 'pam'), ('HOME', '/home/nvidia'), ('CONDA_SHLVL', '0'), ('OLDPWD', '/home/nvidia'), ('VSCODE_RECONNECTION_GRACE_TIME', '10800000'), ('VSCODE_IPC_HOOK_CLI', '/run/user/1000/vscode-ipc-44c9265a-0351-4407-b8c8-091342c10b3c.sock'), ('JETSON_L4T', '36.4.7'), ('ROS_PYTHON_VERSION', '3'), ('JETSON_MODEL', 'NVIDIA Jetson Orin NX Engineering Reference Developer Kit Super'), ('CLAUDE_CODE_CHILD_SESSION', '1'), ('LC_MONETARY', 'zh_CN.UTF-8'), ('COPILOT_OTEL_FILE_EXPORTER_PATH', '/dev/null'), ('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/1000/bus'), ('_CE_M', ''), ('_CONDA_ROOT', '/home/nvidia/miniforge3'), ('COLCON_PREFIX_PATH', '/home/nvidia/acfly_ws/install:/home/nvidia/ws_point/install:/home/nvidia/ws_livox/install:/home/nvidia/ws_orbbec/install'), ('API_TIMEOUT_MS', '600000'), ('APPLICATION_INSIGHTS_NO_STATSBEAT', 'true'), ('ROS_DISTRO', 'humble'), ('LOGNAME', 'nvidia'), ('JETSON_MODULE', 'NVIDIA Jetson Orin NX (16GB ram)'), ('JETSON_SERIAL_NUMBER', '1421325032037'), ('VSCODE_HANDLES_SIGPIPE', 'true'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('PKG_CONFIG_PATH', '/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig'), ('XDG_SESSION_CLASS', 'user'), ('ANTHROPIC_BASE_URL', 'https://node-cf.sssaicodeapi.com/api'), ('XDG_SESSION_ID', '3'), ('VSCODE_CLI_REQUIRE_TOKEN', '52ef4887-3900-480f-8956-94178156c297'), ('_CE_CONDA', ''), ('ROS_LOCALHOST_ONLY', '0'), ('MCP_CONNECTION_NONBLOCKING', 'true'), ('PATH', '/home/nvidia/.local/bin:/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/bin/remote-cli:/home/nvidia/.local/bin:/home/nvidia/miniforge3/condabin:/opt/ros/humble/bin:/home/nvidia/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin'), ('VSCODE_AGENT_FOLDER', '/home/nvidia/.vscode-server'), ('PAPERSIZE', 'a4'), ('COREPACK_ENABLE_AUTO_PIN', '0'), ('LC_ADDRESS', 'zh_CN.UTF-8'), ('XDG_RUNTIME_DIR', '/run/user/1000'), ('CLAUDE_EFFORT', 'high'), ('MAMBA_ROOT_PREFIX', '/home/nvidia/miniforge3'), ('CLAUDE_PID', '8550'), ('NoDefaultCurrentDirectoryInExePath', '1'), ('LANG', 'zh_CN.UTF-8'), ('LC_TELEPHONE', 'zh_CN.UTF-8'), ('LS_COLORS', ''), ('JETSON_SOC', 'tegra234'), ('SSH_AUTH_SOCK', '/run/user/1000/vscode-ssh-auth-sock-156418832'), ('ROS_DOMAIN_ID', '73'), ('AMENT_PREFIX_PATH', '/home/nvidia/acfly_ws/install/ring_detector:/home/nvidia/acfly_ws/install/pole_detector:/home/nvidia/acfly_ws/install/multi_pole_detector:/home/nvidia/acfly_ws/install/mavros_extras:/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/fly_mission_gps:/home/nvidia/acfly_ws/install/fly_mission:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/exploration_planner:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_orbbec/install/gemini_vision:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/opt/ros/humble'), ('CONDA_PYTHON_EXE', '/home/nvidia/miniforge3/bin/python'), ('SHELL', '/bin/bash'), ('LC_NAME', 'zh_CN.UTF-8'), ('ANTHROPIC_AUTH_TOKEN', 'sk-sssaicode-a9605a1bee4103768854918f844ebbdb4617b76768b3fe4651fb41e6a010f329'), ('MXC_BIN_DIR', '/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node_modules/@microsoft/mxc-sdk/bin'), ('ELECTRON_RUN_AS_NODE', '1'), ('CLAUDE_CODE_DISABLE_TERMINAL_TITLE', '1'), ('CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING', 'true'), ('CLAUDE_CODE_SESSION_ID', '6c2addeb-fa30-4ab9-8a74-428d19203968'), ('LESSCLOSE', '/usr/bin/lesspipe %s %s'), ('CLAUDECODE', '1'), ('LC_MEASUREMENT', 'zh_CN.UTF-8'), ('_CONDA_EXE', '/home/nvidia/miniforge3/bin/conda'), ('MAMBA_EXE', '/home/nvidia/miniforge3/bin/mamba'), ('LC_IDENTIFICATION', 'zh_CN.UTF-8'), ('JETSON_CUDA_ARCH_BIN', '8.7'), ('PWD', '/home/nvidia/acfly_ws/build/ring_detector'), ('LC_ALL', 'en_US.UTF-8'), ('CONDA_EXE', '/home/nvidia/miniforge3/bin/conda'), ('SSH_CONNECTION', '192.168.12.101 43844 192.168.12.1 22'), ('XDG_DATA_DIRS', '/usr/share/gnome:/usr/local/share:/usr/share:/var/lib/snapd/desktop'), ('CLAUDE_CODE_EXECPATH', '/home/nvidia/.vscode-server/extensions/anthropic.claude-code-2.1.216-linux-arm64/resources/native-binary/claude'), ('CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', '1'), ('PYTHONPATH', '/usr/local/lib/python3.10/site-packages/:/home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages:/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs/local/lib/python3.10/dist-packages:/home/nvidia/ws_orbbec/install/gemini_vision/lib/python3.10/site-packages:/home/nvidia/ws_livox/install/livox_ros_driver2/local/lib/python3.10/dist-packages:/home/nvidia/ws_point/install/ac_link/local/lib/python3.10/dist-packages:/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('LC_NUMERIC', 'zh_CN.UTF-8'), ('CLAUDE_CODE_ENABLE_TASKS', '0'), ('LC_PAPER', 'zh_CN.UTF-8'), ('COLCON', '1'), ('COPILOT_CLI_ENABLED_FEATURE_FLAGS', 'SHELL_SPAWN_BACKEND'), ('JETSON_JETPACK', ''), ('CMAKE_PREFIX_PATH', '/home/nvidia/acfly_ws/install/ring_detector:/home/nvidia/acfly_ws/install/pole_detector:/home/nvidia/acfly_ws/install/multi_pole_detector:/home/nvidia/acfly_ws/install/mavros_extras:/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/fly_mission_gps:/home/nvidia/acfly_ws/install/fly_mission:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/acfly_ws/install/exploration_planner:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble'), ('JETSON_P_NUMBER', 'p3767-0000')]), 'shell': False}
+[0.099467] (-) TimerEvent: {}
+[0.156710] (pole_detector) StdoutLine: {'line': b'-- The C compiler identification is GNU 11.4.0\n'}
+[0.158402] (multi_pole_detector) StdoutLine: {'line': b'-- The C compiler identification is GNU 11.4.0\n'}
+[0.165877] (ring_detector) StdoutLine: {'line': b'-- The C compiler identification is GNU 11.4.0\n'}
+[0.199658] (-) TimerEvent: {}
+[0.249243] (multi_pole_detector) StdoutLine: {'line': b'-- The CXX compiler identification is GNU 11.4.0\n'}
+[0.255898] (pole_detector) StdoutLine: {'line': b'-- The CXX compiler identification is GNU 11.4.0\n'}
+[0.263274] (ring_detector) StdoutLine: {'line': b'-- The CXX compiler identification is GNU 11.4.0\n'}
+[0.266436] (multi_pole_detector) StdoutLine: {'line': b'-- Detecting C compiler ABI info\n'}
+[0.270428] (pole_detector) StdoutLine: {'line': b'-- Detecting C compiler ABI info\n'}
+[0.284840] (ring_detector) StdoutLine: {'line': b'-- Detecting C compiler ABI info\n'}
+[0.299847] (-) TimerEvent: {}
+[0.392907] (multi_pole_detector) StdoutLine: {'line': b'-- Detecting C compiler ABI info - done\n'}
+[0.399975] (-) TimerEvent: {}
+[0.403557] (multi_pole_detector) StdoutLine: {'line': b'-- Check for working C compiler: /usr/bin/cc - skipped\n'}
+[0.404049] (multi_pole_detector) StdoutLine: {'line': b'-- Detecting C compile features\n'}
+[0.405048] (multi_pole_detector) StdoutLine: {'line': b'-- Detecting C compile features - done\n'}
+[0.408739] (pole_detector) StdoutLine: {'line': b'-- Detecting C compiler ABI info - done\n'}
+[0.412863] (multi_pole_detector) StdoutLine: {'line': b'-- Detecting CXX compiler ABI info\n'}
+[0.427747] (pole_detector) StdoutLine: {'line': b'-- Check for working C compiler: /usr/bin/cc - skipped\n'}
+[0.428884] (pole_detector) StdoutLine: {'line': b'-- Detecting C compile features\n'}
+[0.429661] (pole_detector) StdoutLine: {'line': b'-- Detecting C compile features - done\n'}
+[0.430074] (ring_detector) StdoutLine: {'line': b'-- Detecting C compiler ABI info - done\n'}
+[0.435238] (pole_detector) StdoutLine: {'line': b'-- Detecting CXX compiler ABI info\n'}
+[0.440364] (ring_detector) StdoutLine: {'line': b'-- Check for working C compiler: /usr/bin/cc - skipped\n'}
+[0.440984] (ring_detector) StdoutLine: {'line': b'-- Detecting C compile features\n'}
+[0.441371] (ring_detector) StdoutLine: {'line': b'-- Detecting C compile features - done\n'}
+[0.446227] (ring_detector) StdoutLine: {'line': b'-- Detecting CXX compiler ABI info\n'}
+[0.500163] (-) TimerEvent: {}
+[0.561300] (multi_pole_detector) StdoutLine: {'line': b'-- Detecting CXX compiler ABI info - done\n'}
+[0.573016] (multi_pole_detector) StdoutLine: {'line': b'-- Check for working CXX compiler: /usr/bin/c++ - skipped\n'}
+[0.573429] (multi_pole_detector) StdoutLine: {'line': b'-- Detecting CXX compile features\n'}
+[0.573769] (multi_pole_detector) StdoutLine: {'line': b'-- Detecting CXX compile features - done\n'}
+[0.583207] (pole_detector) StdoutLine: {'line': b'-- Detecting CXX compiler ABI info - done\n'}
+[0.583621] (multi_pole_detector) StdoutLine: {'line': b'-- Found ament_cmake: 1.3.14 (/opt/ros/humble/share/ament_cmake/cmake)\n'}
+[0.595319] (pole_detector) StdoutLine: {'line': b'-- Check for working CXX compiler: /usr/bin/c++ - skipped\n'}
+[0.595959] (pole_detector) StdoutLine: {'line': b'-- Detecting CXX compile features\n'}
+[0.600283] (-) TimerEvent: {}
+[0.602696] (ring_detector) StdoutLine: {'line': b'-- Detecting CXX compiler ABI info - done\n'}
+[0.603082] (pole_detector) StdoutLine: {'line': b'-- Detecting CXX compile features - done\n'}
+[0.603888] (pole_detector) StdoutLine: {'line': b'-- Found ament_cmake: 1.3.14 (/opt/ros/humble/share/ament_cmake/cmake)\n'}
+[0.607044] (ring_detector) StdoutLine: {'line': b'-- Check for working CXX compiler: /usr/bin/c++ - skipped\n'}
+[0.607433] (ring_detector) StdoutLine: {'line': b'-- Detecting CXX compile features\n'}
+[0.608300] (ring_detector) StdoutLine: {'line': b'-- Detecting CXX compile features - done\n'}
+[0.615218] (ring_detector) StdoutLine: {'line': b'-- Found ament_cmake: 1.3.14 (/opt/ros/humble/share/ament_cmake/cmake)\n'}
+[0.700464] (-) TimerEvent: {}
+[0.800813] (-) TimerEvent: {}
+[0.878260] (multi_pole_detector) StdoutLine: {'line': b'-- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter \n'}
+[0.885845] (ring_detector) StdoutLine: {'line': b'-- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter \n'}
+[0.901017] (-) TimerEvent: {}
+[0.929612] (pole_detector) StdoutLine: {'line': b'-- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter \n'}
+[1.001183] (-) TimerEvent: {}
+[1.101923] (-) TimerEvent: {}
+[1.112930] (ring_detector) StdoutLine: {'line': b'-- Found rclcpp: 16.0.19 (/opt/ros/humble/share/rclcpp/cmake)\n'}
+[1.113323] (multi_pole_detector) StdoutLine: {'line': b'-- Found rclcpp: 16.0.19 (/opt/ros/humble/share/rclcpp/cmake)\n'}
+[1.158092] (pole_detector) StdoutLine: {'line': b'-- Found rclcpp: 16.0.19 (/opt/ros/humble/share/rclcpp/cmake)\n'}
+[1.201735] (-) TimerEvent: {}
+[1.222116] (multi_pole_detector) StdoutLine: {'line': b'-- Found rosidl_generator_c: 3.1.9 (/opt/ros/humble/share/rosidl_generator_c/cmake)\n'}
+[1.222530] (ring_detector) StdoutLine: {'line': b'-- Found rosidl_generator_c: 3.1.9 (/opt/ros/humble/share/rosidl_generator_c/cmake)\n'}
+[1.234584] (ring_detector) StdoutLine: {'line': b'-- Found rosidl_adapter: 3.1.9 (/opt/ros/humble/share/rosidl_adapter/cmake)\n'}
+[1.235566] (multi_pole_detector) StdoutLine: {'line': b'-- Found rosidl_adapter: 3.1.9 (/opt/ros/humble/share/rosidl_adapter/cmake)\n'}
+[1.246561] (pole_detector) StdoutLine: {'line': b'-- Found rosidl_generator_c: 3.1.9 (/opt/ros/humble/share/rosidl_generator_c/cmake)\n'}
+[1.255066] (ring_detector) StdoutLine: {'line': b'-- Found rosidl_generator_cpp: 3.1.9 (/opt/ros/humble/share/rosidl_generator_cpp/cmake)\n'}
+[1.255657] (multi_pole_detector) StdoutLine: {'line': b'-- Found rosidl_generator_cpp: 3.1.9 (/opt/ros/humble/share/rosidl_generator_cpp/cmake)\n'}
+[1.257932] (pole_detector) StdoutLine: {'line': b'-- Found rosidl_adapter: 3.1.9 (/opt/ros/humble/share/rosidl_adapter/cmake)\n'}
+[1.275284] (pole_detector) StdoutLine: {'line': b'-- Found rosidl_generator_cpp: 3.1.9 (/opt/ros/humble/share/rosidl_generator_cpp/cmake)\n'}
+[1.283404] (multi_pole_detector) StdoutLine: {'line': b'-- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c\n'}
+[1.283773] (ring_detector) StdoutLine: {'line': b'-- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c\n'}
+[1.299260] (pole_detector) StdoutLine: {'line': b'-- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c\n'}
+[1.301826] (-) TimerEvent: {}
+[1.319122] (ring_detector) StdoutLine: {'line': b'-- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp\n'}
+[1.319607] (multi_pole_detector) StdoutLine: {'line': b'-- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp\n'}
+[1.330446] (pole_detector) StdoutLine: {'line': b'-- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp\n'}
+[1.402024] (-) TimerEvent: {}
+[1.423247] (pole_detector) StdoutLine: {'line': b'-- Found rmw_implementation_cmake: 6.1.2 (/opt/ros/humble/share/rmw_implementation_cmake/cmake)\n'}
+[1.423672] (ring_detector) StdoutLine: {'line': b'-- Found rmw_implementation_cmake: 6.1.2 (/opt/ros/humble/share/rmw_implementation_cmake/cmake)\n'}
+[1.423815] (multi_pole_detector) StdoutLine: {'line': b'-- Found rmw_implementation_cmake: 6.1.2 (/opt/ros/humble/share/rmw_implementation_cmake/cmake)\n'}
+[1.432740] (ring_detector) StdoutLine: {'line': b'-- Found rmw_fastrtps_cpp: 6.2.10 (/opt/ros/humble/share/rmw_fastrtps_cpp/cmake)\n'}
+[1.433132] (pole_detector) StdoutLine: {'line': b'-- Found rmw_fastrtps_cpp: 6.2.10 (/opt/ros/humble/share/rmw_fastrtps_cpp/cmake)\n'}
+[1.433279] (multi_pole_detector) StdoutLine: {'line': b'-- Found rmw_fastrtps_cpp: 6.2.10 (/opt/ros/humble/share/rmw_fastrtps_cpp/cmake)\n'}
+[1.502210] (-) TimerEvent: {}
+[1.602595] (-) TimerEvent: {}
+[1.619933] (ring_detector) StdoutLine: {'line': b'-- Found OpenSSL: /usr/lib/aarch64-linux-gnu/libcrypto.so (found version "3.0.2")  \n'}
+[1.620392] (pole_detector) StdoutLine: {'line': b'-- Found OpenSSL: /usr/lib/aarch64-linux-gnu/libcrypto.so (found version "3.0.2")  \n'}
+[1.620570] (multi_pole_detector) StdoutLine: {'line': b'-- Found OpenSSL: /usr/lib/aarch64-linux-gnu/libcrypto.so (found version "3.0.2")  \n'}
+[1.666794] (ring_detector) StdoutLine: {'line': b'-- Found FastRTPS: /opt/ros/humble/include  \n'}
+[1.674277] (multi_pole_detector) StdoutLine: {'line': b'-- Found FastRTPS: /opt/ros/humble/include  \n'}
+[1.674691] (pole_detector) StdoutLine: {'line': b'-- Found FastRTPS: /opt/ros/humble/include  \n'}
+[1.702758] (-) TimerEvent: {}
+[1.739368] (ring_detector) StdoutLine: {'line': b"-- Using RMW implementation 'rmw_fastrtps_cpp' as default\n"}
+[1.747138] (multi_pole_detector) StdoutLine: {'line': b"-- Using RMW implementation 'rmw_fastrtps_cpp' as default\n"}
+[1.747561] (pole_detector) StdoutLine: {'line': b"-- Using RMW implementation 'rmw_fastrtps_cpp' as default\n"}
+[1.764121] (ring_detector) StdoutLine: {'line': b'-- Looking for pthread.h\n'}
+[1.767044] (pole_detector) StdoutLine: {'line': b'-- Looking for pthread.h\n'}
+[1.767338] (multi_pole_detector) StdoutLine: {'line': b'-- Looking for pthread.h\n'}
+[1.802935] (-) TimerEvent: {}
+[1.895674] (multi_pole_detector) StdoutLine: {'line': b'-- Looking for pthread.h - found\n'}
+[1.896085] (ring_detector) StdoutLine: {'line': b'-- Looking for pthread.h - found\n'}
+[1.896433] (multi_pole_detector) StdoutLine: {'line': b'-- Performing Test CMAKE_HAVE_LIBC_PTHREAD\n'}
+[1.896791] (ring_detector) StdoutLine: {'line': b'-- Performing Test CMAKE_HAVE_LIBC_PTHREAD\n'}
+[1.898297] (pole_detector) StdoutLine: {'line': b'-- Looking for pthread.h - found\n'}
+[1.899207] (pole_detector) StdoutLine: {'line': b'-- Performing Test CMAKE_HAVE_LIBC_PTHREAD\n'}
+[1.903051] (-) TimerEvent: {}
+[2.003362] (-) TimerEvent: {}
+[2.033539] (ring_detector) StdoutLine: {'line': b'-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success\n'}
+[2.034101] (multi_pole_detector) StdoutLine: {'line': b'-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success\n'}
+[2.034440] (pole_detector) StdoutLine: {'line': b'-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success\n'}
+[2.036976] (ring_detector) StdoutLine: {'line': b'-- Found Threads: TRUE  \n'}
+[2.037376] (multi_pole_detector) StdoutLine: {'line': b'-- Found Threads: TRUE  \n'}
+[2.037638] (pole_detector) StdoutLine: {'line': b'-- Found Threads: TRUE  \n'}
+[2.104184] (-) TimerEvent: {}
+[2.204568] (-) TimerEvent: {}
+[2.205810] (pole_detector) StdoutLine: {'line': b'-- Found sensor_msgs: 4.9.1 (/opt/ros/humble/share/sensor_msgs/cmake)\n'}
+[2.206123] (ring_detector) StdoutLine: {'line': b'-- Found sensor_msgs: 4.9.1 (/opt/ros/humble/share/sensor_msgs/cmake)\n'}
+[2.206334] (multi_pole_detector) StdoutLine: {'line': b'-- Found sensor_msgs: 4.9.1 (/opt/ros/humble/share/sensor_msgs/cmake)\n'}
+[2.276894] (multi_pole_detector) StdoutLine: {'line': b'-- Found nav_msgs: 4.9.1 (/opt/ros/humble/share/nav_msgs/cmake)\n'}
+[2.277289] (pole_detector) StdoutLine: {'line': b'-- Found nav_msgs: 4.9.1 (/opt/ros/humble/share/nav_msgs/cmake)\n'}
+[2.277430] (ring_detector) StdoutLine: {'line': b'-- Found nav_msgs: 4.9.1 (/opt/ros/humble/share/nav_msgs/cmake)\n'}
+[2.304747] (-) TimerEvent: {}
+[2.314809] (pole_detector) StdoutLine: {'line': b'-- Found visualization_msgs: 4.9.1 (/opt/ros/humble/share/visualization_msgs/cmake)\n'}
+[2.315190] (ring_detector) StdoutLine: {'line': b'-- Found visualization_msgs: 4.9.1 (/opt/ros/humble/share/visualization_msgs/cmake)\n'}
+[2.315332] (multi_pole_detector) StdoutLine: {'line': b'-- Found visualization_msgs: 4.9.1 (/opt/ros/humble/share/visualization_msgs/cmake)\n'}
+[2.404899] (-) TimerEvent: {}
+[2.502169] (multi_pole_detector) StdoutLine: {'line': b'-- Configuring done\n'}
+[2.502530] (pole_detector) StdoutLine: {'line': b'-- Configuring done\n'}
+[2.502669] (ring_detector) StdoutLine: {'line': b'-- Configuring done\n'}
+[2.505308] (-) TimerEvent: {}
+[2.524180] (multi_pole_detector) StdoutLine: {'line': b'-- Generating done\n'}
+[2.524755] (pole_detector) StdoutLine: {'line': b'-- Generating done\n'}
+[2.524913] (ring_detector) StdoutLine: {'line': b'-- Generating done\n'}
+[2.531600] (multi_pole_detector) StdoutLine: {'line': b'-- Build files have been written to: /home/nvidia/acfly_ws/build/multi_pole_detector\n'}
+[2.532466] (ring_detector) StdoutLine: {'line': b'-- Build files have been written to: /home/nvidia/acfly_ws/build/ring_detector\n'}
+[2.532641] (pole_detector) StdoutLine: {'line': b'-- Build files have been written to: /home/nvidia/acfly_ws/build/pole_detector\n'}
+[2.556766] (multi_pole_detector) CommandEnded: {'returncode': 0}
+[2.557976] (multi_pole_detector) JobProgress: {'identifier': 'multi_pole_detector', 'progress': 'build'}
+[2.559277] (multi_pole_detector) Command: {'cmd': ['/usr/bin/cmake', '--build', '/home/nvidia/acfly_ws/build/multi_pole_detector', '--', '-j8', '-l8'], 'cwd': '/home/nvidia/acfly_ws/build/multi_pole_detector', 'env': OrderedDict([('LESSOPEN', '| /usr/bin/lesspipe %s'), ('VSCODE_CWD', '/home/nvidia'), ('VSCODE_ESM_ENTRYPOINT', 'vs/workbench/api/node/extensionHostProcess'), ('AI_AGENT', 'claude-code_2-1-216_agent'), ('LANGUAGE', 'zh_CN:zh:en_US:en'), ('USER', 'nvidia'), ('SSH_CLIENT', '192.168.12.101 43844 22'), ('CLAUDE_CODE_ENTRYPOINT', 'claude-vscode'), ('LC_TIME', 'zh_CN.UTF-8'), ('VSCODE_NLS_CONFIG', '{"userLocale":"zh-cn","osLocale":"zh-cn","resolvedLanguage":"zh-cn","defaultMessagesFile":"/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/nls.messages.json","languagePack":{"translationsConfigFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/tcf.json","messagesFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/4fe60c8b1cdac1c4c174f2fb180d0d758272d713/nls.messages.json","corruptMarkerFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/corrupted.info"},"locale":"zh-cn","availableLanguages":{"*":"zh-cn"},"_languagePackId":"7d3970334613eea704823c76d6198ba3.zh-cn","_languagePackSupport":true,"_translationsConfigFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/tcf.json","_cacheRoot":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn","_resolvedLanguagePackCoreLocation":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/4fe60c8b1cdac1c4c174f2fb180d0d758272d713","_corruptedFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/corrupted.info"}'), ('GIT_EDITOR', 'true'), ('VSCODE_HANDLES_UNCAUGHT_ERRORS', 'true'), ('XDG_SESSION_TYPE', 'tty'), ('CLAUDE_AGENT_SDK_VERSION', '0.3.216'), ('SHLVL', '2'), ('LD_LIBRARY_PATH', '/usr/local/lib:/home/nvidia/acfly_ws/install/mavros_extras/lib:/home/nvidia/acfly_ws/install/mavros/lib:/home/nvidia/acfly_ws/install/mavros_msgs/lib:/home/nvidia/acfly_ws/install/libmavconn/lib:/home/nvidia/ws_orbbec/install/orbbec_camera/lib:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs/lib:/home/nvidia/ws_livox/install/livox_ros_driver2/lib:/home/nvidia/ws_point/install/ac_link/lib:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/aarch64-linux-gnu:/opt/ros/humble/lib'), ('BROWSER', '/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/bin/helpers/browser.sh'), ('MOTD_SHOWN', 'pam'), ('HOME', '/home/nvidia'), ('CONDA_SHLVL', '0'), ('OLDPWD', '/home/nvidia'), ('VSCODE_RECONNECTION_GRACE_TIME', '10800000'), ('VSCODE_IPC_HOOK_CLI', '/run/user/1000/vscode-ipc-44c9265a-0351-4407-b8c8-091342c10b3c.sock'), ('JETSON_L4T', '36.4.7'), ('ROS_PYTHON_VERSION', '3'), ('JETSON_MODEL', 'NVIDIA Jetson Orin NX Engineering Reference Developer Kit Super'), ('CLAUDE_CODE_CHILD_SESSION', '1'), ('LC_MONETARY', 'zh_CN.UTF-8'), ('COPILOT_OTEL_FILE_EXPORTER_PATH', '/dev/null'), ('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/1000/bus'), ('_CE_M', ''), ('_CONDA_ROOT', '/home/nvidia/miniforge3'), ('COLCON_PREFIX_PATH', '/home/nvidia/acfly_ws/install:/home/nvidia/ws_point/install:/home/nvidia/ws_livox/install:/home/nvidia/ws_orbbec/install'), ('API_TIMEOUT_MS', '600000'), ('APPLICATION_INSIGHTS_NO_STATSBEAT', 'true'), ('ROS_DISTRO', 'humble'), ('LOGNAME', 'nvidia'), ('JETSON_MODULE', 'NVIDIA Jetson Orin NX (16GB ram)'), ('JETSON_SERIAL_NUMBER', '1421325032037'), ('VSCODE_HANDLES_SIGPIPE', 'true'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('PKG_CONFIG_PATH', '/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig'), ('XDG_SESSION_CLASS', 'user'), ('ANTHROPIC_BASE_URL', 'https://node-cf.sssaicodeapi.com/api'), ('XDG_SESSION_ID', '3'), ('VSCODE_CLI_REQUIRE_TOKEN', '52ef4887-3900-480f-8956-94178156c297'), ('_CE_CONDA', ''), ('ROS_LOCALHOST_ONLY', '0'), ('MCP_CONNECTION_NONBLOCKING', 'true'), ('PATH', '/home/nvidia/.local/bin:/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/bin/remote-cli:/home/nvidia/.local/bin:/home/nvidia/miniforge3/condabin:/opt/ros/humble/bin:/home/nvidia/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin'), ('VSCODE_AGENT_FOLDER', '/home/nvidia/.vscode-server'), ('PAPERSIZE', 'a4'), ('COREPACK_ENABLE_AUTO_PIN', '0'), ('LC_ADDRESS', 'zh_CN.UTF-8'), ('XDG_RUNTIME_DIR', '/run/user/1000'), ('CLAUDE_EFFORT', 'high'), ('MAMBA_ROOT_PREFIX', '/home/nvidia/miniforge3'), ('CLAUDE_PID', '8550'), ('NoDefaultCurrentDirectoryInExePath', '1'), ('LANG', 'zh_CN.UTF-8'), ('LC_TELEPHONE', 'zh_CN.UTF-8'), ('LS_COLORS', ''), ('JETSON_SOC', 'tegra234'), ('SSH_AUTH_SOCK', '/run/user/1000/vscode-ssh-auth-sock-156418832'), ('ROS_DOMAIN_ID', '73'), ('AMENT_PREFIX_PATH', '/home/nvidia/acfly_ws/install/ring_detector:/home/nvidia/acfly_ws/install/pole_detector:/home/nvidia/acfly_ws/install/multi_pole_detector:/home/nvidia/acfly_ws/install/mavros_extras:/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/fly_mission_gps:/home/nvidia/acfly_ws/install/fly_mission:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/exploration_planner:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_orbbec/install/gemini_vision:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/opt/ros/humble'), ('CONDA_PYTHON_EXE', '/home/nvidia/miniforge3/bin/python'), ('SHELL', '/bin/bash'), ('LC_NAME', 'zh_CN.UTF-8'), ('ANTHROPIC_AUTH_TOKEN', 'sk-sssaicode-a9605a1bee4103768854918f844ebbdb4617b76768b3fe4651fb41e6a010f329'), ('MXC_BIN_DIR', '/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node_modules/@microsoft/mxc-sdk/bin'), ('ELECTRON_RUN_AS_NODE', '1'), ('CLAUDE_CODE_DISABLE_TERMINAL_TITLE', '1'), ('CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING', 'true'), ('CLAUDE_CODE_SESSION_ID', '6c2addeb-fa30-4ab9-8a74-428d19203968'), ('LESSCLOSE', '/usr/bin/lesspipe %s %s'), ('CLAUDECODE', '1'), ('LC_MEASUREMENT', 'zh_CN.UTF-8'), ('_CONDA_EXE', '/home/nvidia/miniforge3/bin/conda'), ('MAMBA_EXE', '/home/nvidia/miniforge3/bin/mamba'), ('LC_IDENTIFICATION', 'zh_CN.UTF-8'), ('JETSON_CUDA_ARCH_BIN', '8.7'), ('PWD', '/home/nvidia/acfly_ws/build/multi_pole_detector'), ('LC_ALL', 'en_US.UTF-8'), ('CONDA_EXE', '/home/nvidia/miniforge3/bin/conda'), ('SSH_CONNECTION', '192.168.12.101 43844 192.168.12.1 22'), ('XDG_DATA_DIRS', '/usr/share/gnome:/usr/local/share:/usr/share:/var/lib/snapd/desktop'), ('CLAUDE_CODE_EXECPATH', '/home/nvidia/.vscode-server/extensions/anthropic.claude-code-2.1.216-linux-arm64/resources/native-binary/claude'), ('CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', '1'), ('PYTHONPATH', '/usr/local/lib/python3.10/site-packages/:/home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages:/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs/local/lib/python3.10/dist-packages:/home/nvidia/ws_orbbec/install/gemini_vision/lib/python3.10/site-packages:/home/nvidia/ws_livox/install/livox_ros_driver2/local/lib/python3.10/dist-packages:/home/nvidia/ws_point/install/ac_link/local/lib/python3.10/dist-packages:/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('LC_NUMERIC', 'zh_CN.UTF-8'), ('CLAUDE_CODE_ENABLE_TASKS', '0'), ('LC_PAPER', 'zh_CN.UTF-8'), ('COLCON', '1'), ('COPILOT_CLI_ENABLED_FEATURE_FLAGS', 'SHELL_SPAWN_BACKEND'), ('JETSON_JETPACK', ''), ('CMAKE_PREFIX_PATH', '/home/nvidia/acfly_ws/install/ring_detector:/home/nvidia/acfly_ws/install/pole_detector:/home/nvidia/acfly_ws/install/multi_pole_detector:/home/nvidia/acfly_ws/install/mavros_extras:/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/fly_mission_gps:/home/nvidia/acfly_ws/install/fly_mission:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/acfly_ws/install/exploration_planner:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble'), ('JETSON_P_NUMBER', 'p3767-0000')]), 'shell': False}
+[2.562361] (ring_detector) CommandEnded: {'returncode': 0}
+[2.563176] (ring_detector) JobProgress: {'identifier': 'ring_detector', 'progress': 'build'}
+[2.563557] (ring_detector) Command: {'cmd': ['/usr/bin/cmake', '--build', '/home/nvidia/acfly_ws/build/ring_detector', '--', '-j8', '-l8'], 'cwd': '/home/nvidia/acfly_ws/build/ring_detector', 'env': OrderedDict([('LESSOPEN', '| /usr/bin/lesspipe %s'), ('VSCODE_CWD', '/home/nvidia'), ('VSCODE_ESM_ENTRYPOINT', 'vs/workbench/api/node/extensionHostProcess'), ('AI_AGENT', 'claude-code_2-1-216_agent'), ('LANGUAGE', 'zh_CN:zh:en_US:en'), ('USER', 'nvidia'), ('SSH_CLIENT', '192.168.12.101 43844 22'), ('CLAUDE_CODE_ENTRYPOINT', 'claude-vscode'), ('LC_TIME', 'zh_CN.UTF-8'), ('VSCODE_NLS_CONFIG', '{"userLocale":"zh-cn","osLocale":"zh-cn","resolvedLanguage":"zh-cn","defaultMessagesFile":"/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/nls.messages.json","languagePack":{"translationsConfigFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/tcf.json","messagesFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/4fe60c8b1cdac1c4c174f2fb180d0d758272d713/nls.messages.json","corruptMarkerFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/corrupted.info"},"locale":"zh-cn","availableLanguages":{"*":"zh-cn"},"_languagePackId":"7d3970334613eea704823c76d6198ba3.zh-cn","_languagePackSupport":true,"_translationsConfigFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/tcf.json","_cacheRoot":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn","_resolvedLanguagePackCoreLocation":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/4fe60c8b1cdac1c4c174f2fb180d0d758272d713","_corruptedFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/corrupted.info"}'), ('GIT_EDITOR', 'true'), ('VSCODE_HANDLES_UNCAUGHT_ERRORS', 'true'), ('XDG_SESSION_TYPE', 'tty'), ('CLAUDE_AGENT_SDK_VERSION', '0.3.216'), ('SHLVL', '2'), ('LD_LIBRARY_PATH', '/usr/local/lib:/home/nvidia/acfly_ws/install/mavros_extras/lib:/home/nvidia/acfly_ws/install/mavros/lib:/home/nvidia/acfly_ws/install/mavros_msgs/lib:/home/nvidia/acfly_ws/install/libmavconn/lib:/home/nvidia/ws_orbbec/install/orbbec_camera/lib:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs/lib:/home/nvidia/ws_livox/install/livox_ros_driver2/lib:/home/nvidia/ws_point/install/ac_link/lib:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/aarch64-linux-gnu:/opt/ros/humble/lib'), ('BROWSER', '/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/bin/helpers/browser.sh'), ('MOTD_SHOWN', 'pam'), ('HOME', '/home/nvidia'), ('CONDA_SHLVL', '0'), ('OLDPWD', '/home/nvidia'), ('VSCODE_RECONNECTION_GRACE_TIME', '10800000'), ('VSCODE_IPC_HOOK_CLI', '/run/user/1000/vscode-ipc-44c9265a-0351-4407-b8c8-091342c10b3c.sock'), ('JETSON_L4T', '36.4.7'), ('ROS_PYTHON_VERSION', '3'), ('JETSON_MODEL', 'NVIDIA Jetson Orin NX Engineering Reference Developer Kit Super'), ('CLAUDE_CODE_CHILD_SESSION', '1'), ('LC_MONETARY', 'zh_CN.UTF-8'), ('COPILOT_OTEL_FILE_EXPORTER_PATH', '/dev/null'), ('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/1000/bus'), ('_CE_M', ''), ('_CONDA_ROOT', '/home/nvidia/miniforge3'), ('COLCON_PREFIX_PATH', '/home/nvidia/acfly_ws/install:/home/nvidia/ws_point/install:/home/nvidia/ws_livox/install:/home/nvidia/ws_orbbec/install'), ('API_TIMEOUT_MS', '600000'), ('APPLICATION_INSIGHTS_NO_STATSBEAT', 'true'), ('ROS_DISTRO', 'humble'), ('LOGNAME', 'nvidia'), ('JETSON_MODULE', 'NVIDIA Jetson Orin NX (16GB ram)'), ('JETSON_SERIAL_NUMBER', '1421325032037'), ('VSCODE_HANDLES_SIGPIPE', 'true'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('PKG_CONFIG_PATH', '/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig'), ('XDG_SESSION_CLASS', 'user'), ('ANTHROPIC_BASE_URL', 'https://node-cf.sssaicodeapi.com/api'), ('XDG_SESSION_ID', '3'), ('VSCODE_CLI_REQUIRE_TOKEN', '52ef4887-3900-480f-8956-94178156c297'), ('_CE_CONDA', ''), ('ROS_LOCALHOST_ONLY', '0'), ('MCP_CONNECTION_NONBLOCKING', 'true'), ('PATH', '/home/nvidia/.local/bin:/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/bin/remote-cli:/home/nvidia/.local/bin:/home/nvidia/miniforge3/condabin:/opt/ros/humble/bin:/home/nvidia/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin'), ('VSCODE_AGENT_FOLDER', '/home/nvidia/.vscode-server'), ('PAPERSIZE', 'a4'), ('COREPACK_ENABLE_AUTO_PIN', '0'), ('LC_ADDRESS', 'zh_CN.UTF-8'), ('XDG_RUNTIME_DIR', '/run/user/1000'), ('CLAUDE_EFFORT', 'high'), ('MAMBA_ROOT_PREFIX', '/home/nvidia/miniforge3'), ('CLAUDE_PID', '8550'), ('NoDefaultCurrentDirectoryInExePath', '1'), ('LANG', 'zh_CN.UTF-8'), ('LC_TELEPHONE', 'zh_CN.UTF-8'), ('LS_COLORS', ''), ('JETSON_SOC', 'tegra234'), ('SSH_AUTH_SOCK', '/run/user/1000/vscode-ssh-auth-sock-156418832'), ('ROS_DOMAIN_ID', '73'), ('AMENT_PREFIX_PATH', '/home/nvidia/acfly_ws/install/ring_detector:/home/nvidia/acfly_ws/install/pole_detector:/home/nvidia/acfly_ws/install/multi_pole_detector:/home/nvidia/acfly_ws/install/mavros_extras:/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/fly_mission_gps:/home/nvidia/acfly_ws/install/fly_mission:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/exploration_planner:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_orbbec/install/gemini_vision:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/opt/ros/humble'), ('CONDA_PYTHON_EXE', '/home/nvidia/miniforge3/bin/python'), ('SHELL', '/bin/bash'), ('LC_NAME', 'zh_CN.UTF-8'), ('ANTHROPIC_AUTH_TOKEN', 'sk-sssaicode-a9605a1bee4103768854918f844ebbdb4617b76768b3fe4651fb41e6a010f329'), ('MXC_BIN_DIR', '/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node_modules/@microsoft/mxc-sdk/bin'), ('ELECTRON_RUN_AS_NODE', '1'), ('CLAUDE_CODE_DISABLE_TERMINAL_TITLE', '1'), ('CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING', 'true'), ('CLAUDE_CODE_SESSION_ID', '6c2addeb-fa30-4ab9-8a74-428d19203968'), ('LESSCLOSE', '/usr/bin/lesspipe %s %s'), ('CLAUDECODE', '1'), ('LC_MEASUREMENT', 'zh_CN.UTF-8'), ('_CONDA_EXE', '/home/nvidia/miniforge3/bin/conda'), ('MAMBA_EXE', '/home/nvidia/miniforge3/bin/mamba'), ('LC_IDENTIFICATION', 'zh_CN.UTF-8'), ('JETSON_CUDA_ARCH_BIN', '8.7'), ('PWD', '/home/nvidia/acfly_ws/build/ring_detector'), ('LC_ALL', 'en_US.UTF-8'), ('CONDA_EXE', '/home/nvidia/miniforge3/bin/conda'), ('SSH_CONNECTION', '192.168.12.101 43844 192.168.12.1 22'), ('XDG_DATA_DIRS', '/usr/share/gnome:/usr/local/share:/usr/share:/var/lib/snapd/desktop'), ('CLAUDE_CODE_EXECPATH', '/home/nvidia/.vscode-server/extensions/anthropic.claude-code-2.1.216-linux-arm64/resources/native-binary/claude'), ('CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', '1'), ('PYTHONPATH', '/usr/local/lib/python3.10/site-packages/:/home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages:/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs/local/lib/python3.10/dist-packages:/home/nvidia/ws_orbbec/install/gemini_vision/lib/python3.10/site-packages:/home/nvidia/ws_livox/install/livox_ros_driver2/local/lib/python3.10/dist-packages:/home/nvidia/ws_point/install/ac_link/local/lib/python3.10/dist-packages:/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('LC_NUMERIC', 'zh_CN.UTF-8'), ('CLAUDE_CODE_ENABLE_TASKS', '0'), ('LC_PAPER', 'zh_CN.UTF-8'), ('COLCON', '1'), ('COPILOT_CLI_ENABLED_FEATURE_FLAGS', 'SHELL_SPAWN_BACKEND'), ('JETSON_JETPACK', ''), ('CMAKE_PREFIX_PATH', '/home/nvidia/acfly_ws/install/ring_detector:/home/nvidia/acfly_ws/install/pole_detector:/home/nvidia/acfly_ws/install/multi_pole_detector:/home/nvidia/acfly_ws/install/mavros_extras:/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/fly_mission_gps:/home/nvidia/acfly_ws/install/fly_mission:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/acfly_ws/install/exploration_planner:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble'), ('JETSON_P_NUMBER', 'p3767-0000')]), 'shell': False}
+[2.565364] (pole_detector) CommandEnded: {'returncode': 0}
+[2.566112] (pole_detector) JobProgress: {'identifier': 'pole_detector', 'progress': 'build'}
+[2.566507] (pole_detector) Command: {'cmd': ['/usr/bin/cmake', '--build', '/home/nvidia/acfly_ws/build/pole_detector', '--', '-j8', '-l8'], 'cwd': '/home/nvidia/acfly_ws/build/pole_detector', 'env': OrderedDict([('LESSOPEN', '| /usr/bin/lesspipe %s'), ('VSCODE_CWD', '/home/nvidia'), ('VSCODE_ESM_ENTRYPOINT', 'vs/workbench/api/node/extensionHostProcess'), ('AI_AGENT', 'claude-code_2-1-216_agent'), ('LANGUAGE', 'zh_CN:zh:en_US:en'), ('USER', 'nvidia'), ('SSH_CLIENT', '192.168.12.101 43844 22'), ('CLAUDE_CODE_ENTRYPOINT', 'claude-vscode'), ('LC_TIME', 'zh_CN.UTF-8'), ('VSCODE_NLS_CONFIG', '{"userLocale":"zh-cn","osLocale":"zh-cn","resolvedLanguage":"zh-cn","defaultMessagesFile":"/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/nls.messages.json","languagePack":{"translationsConfigFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/tcf.json","messagesFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/4fe60c8b1cdac1c4c174f2fb180d0d758272d713/nls.messages.json","corruptMarkerFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/corrupted.info"},"locale":"zh-cn","availableLanguages":{"*":"zh-cn"},"_languagePackId":"7d3970334613eea704823c76d6198ba3.zh-cn","_languagePackSupport":true,"_translationsConfigFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/tcf.json","_cacheRoot":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn","_resolvedLanguagePackCoreLocation":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/4fe60c8b1cdac1c4c174f2fb180d0d758272d713","_corruptedFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/corrupted.info"}'), ('GIT_EDITOR', 'true'), ('VSCODE_HANDLES_UNCAUGHT_ERRORS', 'true'), ('XDG_SESSION_TYPE', 'tty'), ('CLAUDE_AGENT_SDK_VERSION', '0.3.216'), ('SHLVL', '2'), ('LD_LIBRARY_PATH', '/usr/local/lib:/home/nvidia/acfly_ws/install/mavros_extras/lib:/home/nvidia/acfly_ws/install/mavros/lib:/home/nvidia/acfly_ws/install/mavros_msgs/lib:/home/nvidia/acfly_ws/install/libmavconn/lib:/home/nvidia/ws_orbbec/install/orbbec_camera/lib:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs/lib:/home/nvidia/ws_livox/install/livox_ros_driver2/lib:/home/nvidia/ws_point/install/ac_link/lib:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/aarch64-linux-gnu:/opt/ros/humble/lib'), ('BROWSER', '/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/bin/helpers/browser.sh'), ('MOTD_SHOWN', 'pam'), ('HOME', '/home/nvidia'), ('CONDA_SHLVL', '0'), ('OLDPWD', '/home/nvidia'), ('VSCODE_RECONNECTION_GRACE_TIME', '10800000'), ('VSCODE_IPC_HOOK_CLI', '/run/user/1000/vscode-ipc-44c9265a-0351-4407-b8c8-091342c10b3c.sock'), ('JETSON_L4T', '36.4.7'), ('ROS_PYTHON_VERSION', '3'), ('JETSON_MODEL', 'NVIDIA Jetson Orin NX Engineering Reference Developer Kit Super'), ('CLAUDE_CODE_CHILD_SESSION', '1'), ('LC_MONETARY', 'zh_CN.UTF-8'), ('COPILOT_OTEL_FILE_EXPORTER_PATH', '/dev/null'), ('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/1000/bus'), ('_CE_M', ''), ('_CONDA_ROOT', '/home/nvidia/miniforge3'), ('COLCON_PREFIX_PATH', '/home/nvidia/acfly_ws/install:/home/nvidia/ws_point/install:/home/nvidia/ws_livox/install:/home/nvidia/ws_orbbec/install'), ('API_TIMEOUT_MS', '600000'), ('APPLICATION_INSIGHTS_NO_STATSBEAT', 'true'), ('ROS_DISTRO', 'humble'), ('LOGNAME', 'nvidia'), ('JETSON_MODULE', 'NVIDIA Jetson Orin NX (16GB ram)'), ('JETSON_SERIAL_NUMBER', '1421325032037'), ('VSCODE_HANDLES_SIGPIPE', 'true'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('PKG_CONFIG_PATH', '/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig'), ('XDG_SESSION_CLASS', 'user'), ('ANTHROPIC_BASE_URL', 'https://node-cf.sssaicodeapi.com/api'), ('XDG_SESSION_ID', '3'), ('VSCODE_CLI_REQUIRE_TOKEN', '52ef4887-3900-480f-8956-94178156c297'), ('_CE_CONDA', ''), ('ROS_LOCALHOST_ONLY', '0'), ('MCP_CONNECTION_NONBLOCKING', 'true'), ('PATH', '/home/nvidia/.local/bin:/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/bin/remote-cli:/home/nvidia/.local/bin:/home/nvidia/miniforge3/condabin:/opt/ros/humble/bin:/home/nvidia/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin'), ('VSCODE_AGENT_FOLDER', '/home/nvidia/.vscode-server'), ('PAPERSIZE', 'a4'), ('COREPACK_ENABLE_AUTO_PIN', '0'), ('LC_ADDRESS', 'zh_CN.UTF-8'), ('XDG_RUNTIME_DIR', '/run/user/1000'), ('CLAUDE_EFFORT', 'high'), ('MAMBA_ROOT_PREFIX', '/home/nvidia/miniforge3'), ('CLAUDE_PID', '8550'), ('NoDefaultCurrentDirectoryInExePath', '1'), ('LANG', 'zh_CN.UTF-8'), ('LC_TELEPHONE', 'zh_CN.UTF-8'), ('LS_COLORS', ''), ('JETSON_SOC', 'tegra234'), ('SSH_AUTH_SOCK', '/run/user/1000/vscode-ssh-auth-sock-156418832'), ('ROS_DOMAIN_ID', '73'), ('AMENT_PREFIX_PATH', '/home/nvidia/acfly_ws/install/ring_detector:/home/nvidia/acfly_ws/install/pole_detector:/home/nvidia/acfly_ws/install/multi_pole_detector:/home/nvidia/acfly_ws/install/mavros_extras:/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/fly_mission_gps:/home/nvidia/acfly_ws/install/fly_mission:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/exploration_planner:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_orbbec/install/gemini_vision:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/opt/ros/humble'), ('CONDA_PYTHON_EXE', '/home/nvidia/miniforge3/bin/python'), ('SHELL', '/bin/bash'), ('LC_NAME', 'zh_CN.UTF-8'), ('ANTHROPIC_AUTH_TOKEN', 'sk-sssaicode-a9605a1bee4103768854918f844ebbdb4617b76768b3fe4651fb41e6a010f329'), ('MXC_BIN_DIR', '/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node_modules/@microsoft/mxc-sdk/bin'), ('ELECTRON_RUN_AS_NODE', '1'), ('CLAUDE_CODE_DISABLE_TERMINAL_TITLE', '1'), ('CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING', 'true'), ('CLAUDE_CODE_SESSION_ID', '6c2addeb-fa30-4ab9-8a74-428d19203968'), ('LESSCLOSE', '/usr/bin/lesspipe %s %s'), ('CLAUDECODE', '1'), ('LC_MEASUREMENT', 'zh_CN.UTF-8'), ('_CONDA_EXE', '/home/nvidia/miniforge3/bin/conda'), ('MAMBA_EXE', '/home/nvidia/miniforge3/bin/mamba'), ('LC_IDENTIFICATION', 'zh_CN.UTF-8'), ('JETSON_CUDA_ARCH_BIN', '8.7'), ('PWD', '/home/nvidia/acfly_ws/build/pole_detector'), ('LC_ALL', 'en_US.UTF-8'), ('CONDA_EXE', '/home/nvidia/miniforge3/bin/conda'), ('SSH_CONNECTION', '192.168.12.101 43844 192.168.12.1 22'), ('XDG_DATA_DIRS', '/usr/share/gnome:/usr/local/share:/usr/share:/var/lib/snapd/desktop'), ('CLAUDE_CODE_EXECPATH', '/home/nvidia/.vscode-server/extensions/anthropic.claude-code-2.1.216-linux-arm64/resources/native-binary/claude'), ('CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', '1'), ('PYTHONPATH', '/usr/local/lib/python3.10/site-packages/:/home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages:/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs/local/lib/python3.10/dist-packages:/home/nvidia/ws_orbbec/install/gemini_vision/lib/python3.10/site-packages:/home/nvidia/ws_livox/install/livox_ros_driver2/local/lib/python3.10/dist-packages:/home/nvidia/ws_point/install/ac_link/local/lib/python3.10/dist-packages:/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('LC_NUMERIC', 'zh_CN.UTF-8'), ('CLAUDE_CODE_ENABLE_TASKS', '0'), ('LC_PAPER', 'zh_CN.UTF-8'), ('COLCON', '1'), ('COPILOT_CLI_ENABLED_FEATURE_FLAGS', 'SHELL_SPAWN_BACKEND'), ('JETSON_JETPACK', ''), ('CMAKE_PREFIX_PATH', '/home/nvidia/acfly_ws/install/ring_detector:/home/nvidia/acfly_ws/install/pole_detector:/home/nvidia/acfly_ws/install/multi_pole_detector:/home/nvidia/acfly_ws/install/mavros_extras:/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/fly_mission_gps:/home/nvidia/acfly_ws/install/fly_mission:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/acfly_ws/install/exploration_planner:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble'), ('JETSON_P_NUMBER', 'p3767-0000')]), 'shell': False}
+[2.605503] (-) TimerEvent: {}
+[2.653333] (multi_pole_detector) StdoutLine: {'line': b'[ 50%] Building CXX object CMakeFiles/multi_pole_detector_node.dir/src/multi_pole_detector_node.cpp.o\n'}
+[2.653721] (ring_detector) StdoutLine: {'line': b'[ 50%] Building CXX object CMakeFiles/ring_detector_node.dir/src/ring_detector_node.cpp.o\n'}
+[2.659820] (pole_detector) StdoutLine: {'line': b'[ 50%] Building CXX object CMakeFiles/pole_detector_node.dir/src/pole_detector_node.cpp.o\n'}
+[2.705676] (-) TimerEvent: {}
+[2.806052] (-) TimerEvent: {}
+[2.906451] (-) TimerEvent: {}
+[3.006823] (-) TimerEvent: {}
+[3.107189] (-) TimerEvent: {}
+[3.207570] (-) TimerEvent: {}
+[3.307934] (-) TimerEvent: {}
+[3.408334] (-) TimerEvent: {}
+[3.508752] (-) TimerEvent: {}
+[3.609138] (-) TimerEvent: {}
+[3.709530] (-) TimerEvent: {}
+[3.809915] (-) TimerEvent: {}
+[3.910304] (-) TimerEvent: {}
+[4.010698] (-) TimerEvent: {}
+[4.111078] (-) TimerEvent: {}
+[4.211449] (-) TimerEvent: {}
+[4.311840] (-) TimerEvent: {}
+[4.412259] (-) TimerEvent: {}
+[4.512652] (-) TimerEvent: {}
+[4.613027] (-) TimerEvent: {}
+[4.713401] (-) TimerEvent: {}
+[4.813793] (-) TimerEvent: {}
+[4.914211] (-) TimerEvent: {}
+[5.014659] (-) TimerEvent: {}
+[5.115050] (-) TimerEvent: {}
+[5.215430] (-) TimerEvent: {}
+[5.315816] (-) TimerEvent: {}
+[5.416195] (-) TimerEvent: {}
+[5.516573] (-) TimerEvent: {}
+[5.616977] (-) TimerEvent: {}
+[5.717360] (-) TimerEvent: {}
+[5.817758] (-) TimerEvent: {}
+[5.918186] (-) TimerEvent: {}
+[6.018568] (-) TimerEvent: {}
+[6.118961] (-) TimerEvent: {}
+[6.219341] (-) TimerEvent: {}
+[6.319741] (-) TimerEvent: {}
+[6.420141] (-) TimerEvent: {}
+[6.520544] (-) TimerEvent: {}
+[6.620949] (-) TimerEvent: {}
+[6.721335] (-) TimerEvent: {}
+[6.821725] (-) TimerEvent: {}
+[6.922105] (-) TimerEvent: {}
+[7.022547] (-) TimerEvent: {}
+[7.122934] (-) TimerEvent: {}
+[7.223333] (-) TimerEvent: {}
+[7.323726] (-) TimerEvent: {}
+[7.424141] (-) TimerEvent: {}
+[7.524545] (-) TimerEvent: {}
+[7.624943] (-) TimerEvent: {}
+[7.725334] (-) TimerEvent: {}
+[7.825709] (-) TimerEvent: {}
+[7.926098] (-) TimerEvent: {}
+[8.026626] (-) TimerEvent: {}
+[8.127027] (-) TimerEvent: {}
+[8.227416] (-) TimerEvent: {}
+[8.327811] (-) TimerEvent: {}
+[8.428213] (-) TimerEvent: {}
+[8.528606] (-) TimerEvent: {}
+[8.629002] (-) TimerEvent: {}
+[8.729379] (-) TimerEvent: {}
+[8.829789] (-) TimerEvent: {}
+[8.930211] (-) TimerEvent: {}
+[9.030605] (-) TimerEvent: {}
+[9.130997] (-) TimerEvent: {}
+[9.231411] (-) TimerEvent: {}
+[9.331824] (-) TimerEvent: {}
+[9.432245] (-) TimerEvent: {}
+[9.532661] (-) TimerEvent: {}
+[9.633079] (-) TimerEvent: {}
+[9.733458] (-) TimerEvent: {}
+[9.833876] (-) TimerEvent: {}
+[9.934306] (-) TimerEvent: {}
+[10.034702] (-) TimerEvent: {}
+[10.135087] (-) TimerEvent: {}
+[10.235491] (-) TimerEvent: {}
+[10.335857] (-) TimerEvent: {}
+[10.436277] (-) TimerEvent: {}
+[10.536687] (-) TimerEvent: {}
+[10.637075] (-) TimerEvent: {}
+[10.737459] (-) TimerEvent: {}
+[10.837866] (-) TimerEvent: {}
+[10.938336] (-) TimerEvent: {}
+[11.038736] (-) TimerEvent: {}
+[11.139140] (-) TimerEvent: {}
+[11.239582] (-) TimerEvent: {}
+[11.340012] (-) TimerEvent: {}
+[11.440427] (-) TimerEvent: {}
+[11.540848] (-) TimerEvent: {}
+[11.641270] (-) TimerEvent: {}
+[11.741654] (-) TimerEvent: {}
+[11.842070] (-) TimerEvent: {}
+[11.942494] (-) TimerEvent: {}
+[12.042873] (-) TimerEvent: {}
+[12.143285] (-) TimerEvent: {}
+[12.243689] (-) TimerEvent: {}
+[12.344106] (-) TimerEvent: {}
+[12.444510] (-) TimerEvent: {}
+[12.544916] (-) TimerEvent: {}
+[12.645327] (-) TimerEvent: {}
+[12.745741] (-) TimerEvent: {}
+[12.846198] (-) TimerEvent: {}
+[12.946623] (-) TimerEvent: {}
+[13.047034] (-) TimerEvent: {}
+[13.147446] (-) TimerEvent: {}
+[13.247850] (-) TimerEvent: {}
+[13.348235] (-) TimerEvent: {}
+[13.448612] (-) TimerEvent: {}
+[13.549021] (-) TimerEvent: {}
+[13.649454] (-) TimerEvent: {}
+[13.749868] (-) TimerEvent: {}
+[13.850305] (-) TimerEvent: {}
+[13.950706] (-) TimerEvent: {}
+[14.051088] (-) TimerEvent: {}
+[14.151505] (-) TimerEvent: {}
+[14.251932] (-) TimerEvent: {}
+[14.352321] (-) TimerEvent: {}
+[14.452712] (-) TimerEvent: {}
+[14.553139] (-) TimerEvent: {}
+[14.653554] (-) TimerEvent: {}
+[14.753987] (-) TimerEvent: {}
+[14.854480] (-) TimerEvent: {}
+[14.954900] (-) TimerEvent: {}
+[15.055294] (-) TimerEvent: {}
+[15.155702] (-) TimerEvent: {}
+[15.256111] (-) TimerEvent: {}
+[15.356522] (-) TimerEvent: {}
+[15.456928] (-) TimerEvent: {}
+[15.557345] (-) TimerEvent: {}
+[15.657751] (-) TimerEvent: {}
+[15.758189] (-) TimerEvent: {}
+[15.858590] (-) TimerEvent: {}
+[15.959000] (-) TimerEvent: {}
+[16.059392] (-) TimerEvent: {}
+[16.159806] (-) TimerEvent: {}
+[16.260232] (-) TimerEvent: {}
+[16.360634] (-) TimerEvent: {}
+[16.461013] (-) TimerEvent: {}
+[16.561401] (-) TimerEvent: {}
+[16.661799] (-) TimerEvent: {}
+[16.762249] (-) TimerEvent: {}
+[16.862623] (-) TimerEvent: {}
+[16.963045] (-) TimerEvent: {}
+[17.063441] (-) TimerEvent: {}
+[17.163840] (-) TimerEvent: {}
+[17.264230] (-) TimerEvent: {}
+[17.364605] (-) TimerEvent: {}
+[17.465009] (-) TimerEvent: {}
+[17.565419] (-) TimerEvent: {}
+[17.665835] (-) TimerEvent: {}
+[17.766282] (-) TimerEvent: {}
+[17.866718] (-) TimerEvent: {}
+[17.967137] (-) TimerEvent: {}
+[18.067567] (-) TimerEvent: {}
+[18.167979] (-) TimerEvent: {}
+[18.268376] (-) TimerEvent: {}
+[18.368789] (-) TimerEvent: {}
+[18.469201] (-) TimerEvent: {}
+[18.569615] (-) TimerEvent: {}
+[18.670024] (-) TimerEvent: {}
+[18.770563] (-) TimerEvent: {}
+[18.870932] (-) TimerEvent: {}
+[18.971320] (-) TimerEvent: {}
+[19.071706] (-) TimerEvent: {}
+[19.172114] (-) TimerEvent: {}
+[19.272530] (-) TimerEvent: {}
+[19.372943] (-) TimerEvent: {}
+[19.473350] (-) TimerEvent: {}
+[19.573749] (-) TimerEvent: {}
+[19.674220] (-) TimerEvent: {}
+[19.774602] (-) TimerEvent: {}
+[19.875010] (-) TimerEvent: {}
+[19.975432] (-) TimerEvent: {}
+[20.075866] (-) TimerEvent: {}
+[20.176289] (-) TimerEvent: {}
+[20.276671] (-) TimerEvent: {}
+[20.377070] (-) TimerEvent: {}
+[20.477454] (-) TimerEvent: {}
+[20.577856] (-) TimerEvent: {}
+[20.678291] (-) TimerEvent: {}
+[20.778686] (-) TimerEvent: {}
+[20.879096] (-) TimerEvent: {}
+[20.979485] (-) TimerEvent: {}
+[21.079870] (-) TimerEvent: {}
+[21.180273] (-) TimerEvent: {}
+[21.280694] (-) TimerEvent: {}
+[21.381114] (-) TimerEvent: {}
+[21.481524] (-) TimerEvent: {}
+[21.581921] (-) TimerEvent: {}
+[21.682356] (-) TimerEvent: {}
+[21.782749] (-) TimerEvent: {}
+[21.883167] (-) TimerEvent: {}
+[21.983587] (-) TimerEvent: {}
+[22.084007] (-) TimerEvent: {}
+[22.184446] (-) TimerEvent: {}
+[22.284826] (-) TimerEvent: {}
+[22.385221] (-) TimerEvent: {}
+[22.485618] (-) TimerEvent: {}
+[22.586020] (-) TimerEvent: {}
+[22.686463] (-) TimerEvent: {}
+[22.786862] (-) TimerEvent: {}
+[22.887288] (-) TimerEvent: {}
+[22.987684] (-) TimerEvent: {}
+[23.088081] (-) TimerEvent: {}
+[23.188526] (-) TimerEvent: {}
+[23.288926] (-) TimerEvent: {}
+[23.389363] (-) TimerEvent: {}
+[23.489742] (-) TimerEvent: {}
+[23.590167] (-) TimerEvent: {}
+[23.690558] (-) TimerEvent: {}
+[23.790946] (-) TimerEvent: {}
+[23.891330] (-) TimerEvent: {}
+[23.991730] (-) TimerEvent: {}
+[24.092112] (-) TimerEvent: {}
+[24.192497] (-) TimerEvent: {}
+[24.292869] (-) TimerEvent: {}
+[24.393268] (-) TimerEvent: {}
+[24.493669] (-) TimerEvent: {}
+[24.594051] (-) TimerEvent: {}
+[24.694468] (-) TimerEvent: {}
+[24.794839] (-) TimerEvent: {}
+[24.895213] (-) TimerEvent: {}
+[24.995632] (-) TimerEvent: {}
+[25.096013] (-) TimerEvent: {}
+[25.196399] (-) TimerEvent: {}
+[25.298303] (-) TimerEvent: {}
+[25.398766] (-) TimerEvent: {}
+[25.499280] (-) TimerEvent: {}
+[25.599885] (-) TimerEvent: {}
+[25.700317] (-) TimerEvent: {}
+[25.800753] (-) TimerEvent: {}
+[25.901150] (-) TimerEvent: {}
+[26.001530] (-) TimerEvent: {}
+[26.101908] (-) TimerEvent: {}
+[26.202302] (-) TimerEvent: {}
+[26.302696] (-) TimerEvent: {}
+[26.403088] (-) TimerEvent: {}
+[26.503472] (-) TimerEvent: {}
+[26.603850] (-) TimerEvent: {}
+[26.704228] (-) TimerEvent: {}
+[26.804599] (-) TimerEvent: {}
+[26.904982] (-) TimerEvent: {}
+[27.005370] (-) TimerEvent: {}
+[27.105750] (-) TimerEvent: {}
+[27.206172] (-) TimerEvent: {}
+[27.306521] (-) TimerEvent: {}
+[27.406909] (-) TimerEvent: {}
+[27.507290] (-) TimerEvent: {}
+[27.607674] (-) TimerEvent: {}
+[27.708057] (-) TimerEvent: {}
+[27.808435] (-) TimerEvent: {}
+[27.908807] (-) TimerEvent: {}
+[28.009199] (-) TimerEvent: {}
+[28.109591] (-) TimerEvent: {}
+[28.209987] (-) TimerEvent: {}
+[28.310435] (-) TimerEvent: {}
+[28.410842] (-) TimerEvent: {}
+[28.511216] (-) TimerEvent: {}
+[28.611598] (-) TimerEvent: {}
+[28.711989] (-) TimerEvent: {}
+[28.812506] (-) TimerEvent: {}
+[28.912902] (-) TimerEvent: {}
+[29.013300] (-) TimerEvent: {}
+[29.113693] (-) TimerEvent: {}
+[29.214093] (-) TimerEvent: {}
+[29.314507] (-) TimerEvent: {}
+[29.415046] (-) TimerEvent: {}
+[29.515434] (-) TimerEvent: {}
+[29.615839] (-) TimerEvent: {}
+[29.716234] (-) TimerEvent: {}
+[29.816628] (-) TimerEvent: {}
+[29.917017] (-) TimerEvent: {}
+[30.017408] (-) TimerEvent: {}
+[30.117781] (-) TimerEvent: {}
+[30.218211] (-) TimerEvent: {}
+[30.318590] (-) TimerEvent: {}
+[30.418974] (-) TimerEvent: {}
+[30.519373] (-) TimerEvent: {}
+[30.619748] (-) TimerEvent: {}
+[30.720130] (-) TimerEvent: {}
+[30.820514] (-) TimerEvent: {}
+[30.920885] (-) TimerEvent: {}
+[31.021255] (-) TimerEvent: {}
+[31.121642] (-) TimerEvent: {}
+[31.222041] (-) TimerEvent: {}
+[31.322459] (-) TimerEvent: {}
+[31.422855] (-) TimerEvent: {}
+[31.523257] (-) TimerEvent: {}
+[31.623658] (-) TimerEvent: {}
+[31.724158] (-) TimerEvent: {}
+[31.824551] (-) TimerEvent: {}
+[31.924955] (-) TimerEvent: {}
+[32.025350] (-) TimerEvent: {}
+[32.125742] (-) TimerEvent: {}
+[32.226115] (-) TimerEvent: {}
+[32.326501] (-) TimerEvent: {}
+[32.426866] (-) TimerEvent: {}
+[32.527245] (-) TimerEvent: {}
+[32.627625] (-) TimerEvent: {}
+[32.728005] (-) TimerEvent: {}
+[32.828421] (-) TimerEvent: {}
+[32.928795] (-) TimerEvent: {}
+[33.029179] (-) TimerEvent: {}
+[33.129585] (-) TimerEvent: {}
+[33.229977] (-) TimerEvent: {}
+[33.330381] (-) TimerEvent: {}
+[33.430830] (-) TimerEvent: {}
+[33.531210] (-) TimerEvent: {}
+[33.631591] (-) TimerEvent: {}
+[33.731994] (-) TimerEvent: {}
+[33.832415] (-) TimerEvent: {}
+[33.932841] (-) TimerEvent: {}
+[34.033280] (-) TimerEvent: {}
+[34.133678] (-) TimerEvent: {}
+[34.234066] (-) TimerEvent: {}
+[34.334476] (-) TimerEvent: {}
+[34.434850] (-) TimerEvent: {}
+[34.535234] (-) TimerEvent: {}
+[34.635595] (-) TimerEvent: {}
+[34.735985] (-) TimerEvent: {}
+[34.836379] (-) TimerEvent: {}
+[34.936760] (-) TimerEvent: {}
+[35.037153] (-) TimerEvent: {}
+[35.137547] (-) TimerEvent: {}
+[35.237935] (-) TimerEvent: {}
+[35.338365] (-) TimerEvent: {}
+[35.438731] (-) TimerEvent: {}
+[35.539108] (-) TimerEvent: {}
+[35.639503] (-) TimerEvent: {}
+[35.739901] (-) TimerEvent: {}
+[35.840429] (-) TimerEvent: {}
+[35.940837] (-) TimerEvent: {}
+[35.977909] (pole_detector) StdoutLine: {'line': b'[100%] Linking CXX executable pole_detector_node\n'}
+[36.041009] (-) TimerEvent: {}
+[36.141428] (-) TimerEvent: {}
+[36.156877] (multi_pole_detector) StdoutLine: {'line': b'[100%] Linking CXX executable multi_pole_detector_node\n'}
+[36.241611] (-) TimerEvent: {}
+[36.342059] (-) TimerEvent: {}
+[36.442547] (-) TimerEvent: {}
+[36.542991] (-) TimerEvent: {}
+[36.643411] (-) TimerEvent: {}
+[36.743846] (-) TimerEvent: {}
+[36.844275] (-) TimerEvent: {}
+[36.947573] (-) TimerEvent: {}
+[37.047981] (-) TimerEvent: {}
+[37.148385] (-) TimerEvent: {}
+[37.248786] (-) TimerEvent: {}
+[37.349180] (-) TimerEvent: {}
+[37.449554] (-) TimerEvent: {}
+[37.542931] (pole_detector) StdoutLine: {'line': b'[100%] Built target pole_detector_node\n'}
+[37.549704] (-) TimerEvent: {}
+[37.564762] (pole_detector) CommandEnded: {'returncode': 0}
+[37.566208] (pole_detector) JobProgress: {'identifier': 'pole_detector', 'progress': 'install'}
+[37.584076] (pole_detector) Command: {'cmd': ['/usr/bin/cmake', '--install', '/home/nvidia/acfly_ws/build/pole_detector'], 'cwd': '/home/nvidia/acfly_ws/build/pole_detector', 'env': OrderedDict([('LESSOPEN', '| /usr/bin/lesspipe %s'), ('VSCODE_CWD', '/home/nvidia'), ('VSCODE_ESM_ENTRYPOINT', 'vs/workbench/api/node/extensionHostProcess'), ('AI_AGENT', 'claude-code_2-1-216_agent'), ('LANGUAGE', 'zh_CN:zh:en_US:en'), ('USER', 'nvidia'), ('SSH_CLIENT', '192.168.12.101 43844 22'), ('CLAUDE_CODE_ENTRYPOINT', 'claude-vscode'), ('LC_TIME', 'zh_CN.UTF-8'), ('VSCODE_NLS_CONFIG', '{"userLocale":"zh-cn","osLocale":"zh-cn","resolvedLanguage":"zh-cn","defaultMessagesFile":"/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/nls.messages.json","languagePack":{"translationsConfigFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/tcf.json","messagesFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/4fe60c8b1cdac1c4c174f2fb180d0d758272d713/nls.messages.json","corruptMarkerFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/corrupted.info"},"locale":"zh-cn","availableLanguages":{"*":"zh-cn"},"_languagePackId":"7d3970334613eea704823c76d6198ba3.zh-cn","_languagePackSupport":true,"_translationsConfigFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/tcf.json","_cacheRoot":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn","_resolvedLanguagePackCoreLocation":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/4fe60c8b1cdac1c4c174f2fb180d0d758272d713","_corruptedFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/corrupted.info"}'), ('GIT_EDITOR', 'true'), ('VSCODE_HANDLES_UNCAUGHT_ERRORS', 'true'), ('XDG_SESSION_TYPE', 'tty'), ('CLAUDE_AGENT_SDK_VERSION', '0.3.216'), ('SHLVL', '2'), ('LD_LIBRARY_PATH', '/usr/local/lib:/home/nvidia/acfly_ws/install/mavros_extras/lib:/home/nvidia/acfly_ws/install/mavros/lib:/home/nvidia/acfly_ws/install/mavros_msgs/lib:/home/nvidia/acfly_ws/install/libmavconn/lib:/home/nvidia/ws_orbbec/install/orbbec_camera/lib:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs/lib:/home/nvidia/ws_livox/install/livox_ros_driver2/lib:/home/nvidia/ws_point/install/ac_link/lib:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/aarch64-linux-gnu:/opt/ros/humble/lib'), ('BROWSER', '/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/bin/helpers/browser.sh'), ('MOTD_SHOWN', 'pam'), ('HOME', '/home/nvidia'), ('CONDA_SHLVL', '0'), ('OLDPWD', '/home/nvidia'), ('VSCODE_RECONNECTION_GRACE_TIME', '10800000'), ('VSCODE_IPC_HOOK_CLI', '/run/user/1000/vscode-ipc-44c9265a-0351-4407-b8c8-091342c10b3c.sock'), ('JETSON_L4T', '36.4.7'), ('ROS_PYTHON_VERSION', '3'), ('JETSON_MODEL', 'NVIDIA Jetson Orin NX Engineering Reference Developer Kit Super'), ('CLAUDE_CODE_CHILD_SESSION', '1'), ('LC_MONETARY', 'zh_CN.UTF-8'), ('COPILOT_OTEL_FILE_EXPORTER_PATH', '/dev/null'), ('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/1000/bus'), ('_CE_M', ''), ('_CONDA_ROOT', '/home/nvidia/miniforge3'), ('COLCON_PREFIX_PATH', '/home/nvidia/acfly_ws/install:/home/nvidia/ws_point/install:/home/nvidia/ws_livox/install:/home/nvidia/ws_orbbec/install'), ('API_TIMEOUT_MS', '600000'), ('APPLICATION_INSIGHTS_NO_STATSBEAT', 'true'), ('ROS_DISTRO', 'humble'), ('LOGNAME', 'nvidia'), ('JETSON_MODULE', 'NVIDIA Jetson Orin NX (16GB ram)'), ('JETSON_SERIAL_NUMBER', '1421325032037'), ('VSCODE_HANDLES_SIGPIPE', 'true'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('PKG_CONFIG_PATH', '/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig'), ('XDG_SESSION_CLASS', 'user'), ('ANTHROPIC_BASE_URL', 'https://node-cf.sssaicodeapi.com/api'), ('XDG_SESSION_ID', '3'), ('VSCODE_CLI_REQUIRE_TOKEN', '52ef4887-3900-480f-8956-94178156c297'), ('_CE_CONDA', ''), ('ROS_LOCALHOST_ONLY', '0'), ('MCP_CONNECTION_NONBLOCKING', 'true'), ('PATH', '/home/nvidia/.local/bin:/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/bin/remote-cli:/home/nvidia/.local/bin:/home/nvidia/miniforge3/condabin:/opt/ros/humble/bin:/home/nvidia/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin'), ('VSCODE_AGENT_FOLDER', '/home/nvidia/.vscode-server'), ('PAPERSIZE', 'a4'), ('COREPACK_ENABLE_AUTO_PIN', '0'), ('LC_ADDRESS', 'zh_CN.UTF-8'), ('XDG_RUNTIME_DIR', '/run/user/1000'), ('CLAUDE_EFFORT', 'high'), ('MAMBA_ROOT_PREFIX', '/home/nvidia/miniforge3'), ('CLAUDE_PID', '8550'), ('NoDefaultCurrentDirectoryInExePath', '1'), ('LANG', 'zh_CN.UTF-8'), ('LC_TELEPHONE', 'zh_CN.UTF-8'), ('LS_COLORS', ''), ('JETSON_SOC', 'tegra234'), ('SSH_AUTH_SOCK', '/run/user/1000/vscode-ssh-auth-sock-156418832'), ('ROS_DOMAIN_ID', '73'), ('AMENT_PREFIX_PATH', '/home/nvidia/acfly_ws/install/ring_detector:/home/nvidia/acfly_ws/install/pole_detector:/home/nvidia/acfly_ws/install/multi_pole_detector:/home/nvidia/acfly_ws/install/mavros_extras:/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/fly_mission_gps:/home/nvidia/acfly_ws/install/fly_mission:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/exploration_planner:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_orbbec/install/gemini_vision:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/opt/ros/humble'), ('CONDA_PYTHON_EXE', '/home/nvidia/miniforge3/bin/python'), ('SHELL', '/bin/bash'), ('LC_NAME', 'zh_CN.UTF-8'), ('ANTHROPIC_AUTH_TOKEN', 'sk-sssaicode-a9605a1bee4103768854918f844ebbdb4617b76768b3fe4651fb41e6a010f329'), ('MXC_BIN_DIR', '/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node_modules/@microsoft/mxc-sdk/bin'), ('ELECTRON_RUN_AS_NODE', '1'), ('CLAUDE_CODE_DISABLE_TERMINAL_TITLE', '1'), ('CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING', 'true'), ('CLAUDE_CODE_SESSION_ID', '6c2addeb-fa30-4ab9-8a74-428d19203968'), ('LESSCLOSE', '/usr/bin/lesspipe %s %s'), ('CLAUDECODE', '1'), ('LC_MEASUREMENT', 'zh_CN.UTF-8'), ('_CONDA_EXE', '/home/nvidia/miniforge3/bin/conda'), ('MAMBA_EXE', '/home/nvidia/miniforge3/bin/mamba'), ('LC_IDENTIFICATION', 'zh_CN.UTF-8'), ('JETSON_CUDA_ARCH_BIN', '8.7'), ('PWD', '/home/nvidia/acfly_ws/build/pole_detector'), ('LC_ALL', 'en_US.UTF-8'), ('CONDA_EXE', '/home/nvidia/miniforge3/bin/conda'), ('SSH_CONNECTION', '192.168.12.101 43844 192.168.12.1 22'), ('XDG_DATA_DIRS', '/usr/share/gnome:/usr/local/share:/usr/share:/var/lib/snapd/desktop'), ('CLAUDE_CODE_EXECPATH', '/home/nvidia/.vscode-server/extensions/anthropic.claude-code-2.1.216-linux-arm64/resources/native-binary/claude'), ('CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', '1'), ('PYTHONPATH', '/usr/local/lib/python3.10/site-packages/:/home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages:/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs/local/lib/python3.10/dist-packages:/home/nvidia/ws_orbbec/install/gemini_vision/lib/python3.10/site-packages:/home/nvidia/ws_livox/install/livox_ros_driver2/local/lib/python3.10/dist-packages:/home/nvidia/ws_point/install/ac_link/local/lib/python3.10/dist-packages:/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('LC_NUMERIC', 'zh_CN.UTF-8'), ('CLAUDE_CODE_ENABLE_TASKS', '0'), ('LC_PAPER', 'zh_CN.UTF-8'), ('COLCON', '1'), ('COPILOT_CLI_ENABLED_FEATURE_FLAGS', 'SHELL_SPAWN_BACKEND'), ('JETSON_JETPACK', ''), ('CMAKE_PREFIX_PATH', '/home/nvidia/acfly_ws/install/ring_detector:/home/nvidia/acfly_ws/install/pole_detector:/home/nvidia/acfly_ws/install/multi_pole_detector:/home/nvidia/acfly_ws/install/mavros_extras:/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/fly_mission_gps:/home/nvidia/acfly_ws/install/fly_mission:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/acfly_ws/install/exploration_planner:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble'), ('JETSON_P_NUMBER', 'p3767-0000')]), 'shell': False}
+[37.599826] (pole_detector) StdoutLine: {'line': b'-- Install configuration: ""\n'}
+[37.600350] (pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/pole_detector/lib/pole_detector/pole_detector_node\n'}
+[37.611850] (pole_detector) StdoutLine: {'line': b'-- Set runtime path of "/home/nvidia/acfly_ws/install/pole_detector/lib/pole_detector/pole_detector_node" to ""\n'}
+[37.612303] (pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/rviz\n'}
+[37.612441] (pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/rviz/pole_detector.rviz\n'}
+[37.612815] (pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/ament_index/resource_index/package_run_dependencies/pole_detector\n'}
+[37.613192] (pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/ament_index/resource_index/parent_prefix_path/pole_detector\n'}
+[37.613566] (pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/environment/ament_prefix_path.sh\n'}
+[37.613882] (pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/environment/ament_prefix_path.dsv\n'}
+[37.614075] (pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/environment/path.sh\n'}
+[37.614296] (pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/environment/path.dsv\n'}
+[37.614396] (pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/local_setup.bash\n'}
+[37.614489] (pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/local_setup.sh\n'}
+[37.614671] (pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/local_setup.zsh\n'}
+[37.614856] (pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/local_setup.dsv\n'}
+[37.615033] (pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/package.dsv\n'}
+[37.615237] (pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/ament_index/resource_index/packages/pole_detector\n'}
+[37.615477] (pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/cmake/pole_detectorConfig.cmake\n'}
+[37.615655] (pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/cmake/pole_detectorConfig-version.cmake\n'}
+[37.615869] (pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/package.xml\n'}
+[37.618969] (pole_detector) CommandEnded: {'returncode': 0}
+[37.649828] (-) TimerEvent: {}
+[37.658050] (pole_detector) JobEnded: {'identifier': 'pole_detector', 'rc': 0}
+[37.727570] (multi_pole_detector) StdoutLine: {'line': b'[100%] Built target multi_pole_detector_node\n'}
+[37.748213] (multi_pole_detector) CommandEnded: {'returncode': 0}
+[37.749802] (multi_pole_detector) JobProgress: {'identifier': 'multi_pole_detector', 'progress': 'install'}
+[37.749884] (-) TimerEvent: {}
+[37.750306] (multi_pole_detector) Command: {'cmd': ['/usr/bin/cmake', '--install', '/home/nvidia/acfly_ws/build/multi_pole_detector'], 'cwd': '/home/nvidia/acfly_ws/build/multi_pole_detector', 'env': OrderedDict([('LESSOPEN', '| /usr/bin/lesspipe %s'), ('VSCODE_CWD', '/home/nvidia'), ('VSCODE_ESM_ENTRYPOINT', 'vs/workbench/api/node/extensionHostProcess'), ('AI_AGENT', 'claude-code_2-1-216_agent'), ('LANGUAGE', 'zh_CN:zh:en_US:en'), ('USER', 'nvidia'), ('SSH_CLIENT', '192.168.12.101 43844 22'), ('CLAUDE_CODE_ENTRYPOINT', 'claude-vscode'), ('LC_TIME', 'zh_CN.UTF-8'), ('VSCODE_NLS_CONFIG', '{"userLocale":"zh-cn","osLocale":"zh-cn","resolvedLanguage":"zh-cn","defaultMessagesFile":"/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/nls.messages.json","languagePack":{"translationsConfigFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/tcf.json","messagesFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/4fe60c8b1cdac1c4c174f2fb180d0d758272d713/nls.messages.json","corruptMarkerFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/corrupted.info"},"locale":"zh-cn","availableLanguages":{"*":"zh-cn"},"_languagePackId":"7d3970334613eea704823c76d6198ba3.zh-cn","_languagePackSupport":true,"_translationsConfigFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/tcf.json","_cacheRoot":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn","_resolvedLanguagePackCoreLocation":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/4fe60c8b1cdac1c4c174f2fb180d0d758272d713","_corruptedFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/corrupted.info"}'), ('GIT_EDITOR', 'true'), ('VSCODE_HANDLES_UNCAUGHT_ERRORS', 'true'), ('XDG_SESSION_TYPE', 'tty'), ('CLAUDE_AGENT_SDK_VERSION', '0.3.216'), ('SHLVL', '2'), ('LD_LIBRARY_PATH', '/usr/local/lib:/home/nvidia/acfly_ws/install/mavros_extras/lib:/home/nvidia/acfly_ws/install/mavros/lib:/home/nvidia/acfly_ws/install/mavros_msgs/lib:/home/nvidia/acfly_ws/install/libmavconn/lib:/home/nvidia/ws_orbbec/install/orbbec_camera/lib:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs/lib:/home/nvidia/ws_livox/install/livox_ros_driver2/lib:/home/nvidia/ws_point/install/ac_link/lib:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/aarch64-linux-gnu:/opt/ros/humble/lib'), ('BROWSER', '/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/bin/helpers/browser.sh'), ('MOTD_SHOWN', 'pam'), ('HOME', '/home/nvidia'), ('CONDA_SHLVL', '0'), ('OLDPWD', '/home/nvidia'), ('VSCODE_RECONNECTION_GRACE_TIME', '10800000'), ('VSCODE_IPC_HOOK_CLI', '/run/user/1000/vscode-ipc-44c9265a-0351-4407-b8c8-091342c10b3c.sock'), ('JETSON_L4T', '36.4.7'), ('ROS_PYTHON_VERSION', '3'), ('JETSON_MODEL', 'NVIDIA Jetson Orin NX Engineering Reference Developer Kit Super'), ('CLAUDE_CODE_CHILD_SESSION', '1'), ('LC_MONETARY', 'zh_CN.UTF-8'), ('COPILOT_OTEL_FILE_EXPORTER_PATH', '/dev/null'), ('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/1000/bus'), ('_CE_M', ''), ('_CONDA_ROOT', '/home/nvidia/miniforge3'), ('COLCON_PREFIX_PATH', '/home/nvidia/acfly_ws/install:/home/nvidia/ws_point/install:/home/nvidia/ws_livox/install:/home/nvidia/ws_orbbec/install'), ('API_TIMEOUT_MS', '600000'), ('APPLICATION_INSIGHTS_NO_STATSBEAT', 'true'), ('ROS_DISTRO', 'humble'), ('LOGNAME', 'nvidia'), ('JETSON_MODULE', 'NVIDIA Jetson Orin NX (16GB ram)'), ('JETSON_SERIAL_NUMBER', '1421325032037'), ('VSCODE_HANDLES_SIGPIPE', 'true'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('PKG_CONFIG_PATH', '/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig'), ('XDG_SESSION_CLASS', 'user'), ('ANTHROPIC_BASE_URL', 'https://node-cf.sssaicodeapi.com/api'), ('XDG_SESSION_ID', '3'), ('VSCODE_CLI_REQUIRE_TOKEN', '52ef4887-3900-480f-8956-94178156c297'), ('_CE_CONDA', ''), ('ROS_LOCALHOST_ONLY', '0'), ('MCP_CONNECTION_NONBLOCKING', 'true'), ('PATH', '/home/nvidia/.local/bin:/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/bin/remote-cli:/home/nvidia/.local/bin:/home/nvidia/miniforge3/condabin:/opt/ros/humble/bin:/home/nvidia/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin'), ('VSCODE_AGENT_FOLDER', '/home/nvidia/.vscode-server'), ('PAPERSIZE', 'a4'), ('COREPACK_ENABLE_AUTO_PIN', '0'), ('LC_ADDRESS', 'zh_CN.UTF-8'), ('XDG_RUNTIME_DIR', '/run/user/1000'), ('CLAUDE_EFFORT', 'high'), ('MAMBA_ROOT_PREFIX', '/home/nvidia/miniforge3'), ('CLAUDE_PID', '8550'), ('NoDefaultCurrentDirectoryInExePath', '1'), ('LANG', 'zh_CN.UTF-8'), ('LC_TELEPHONE', 'zh_CN.UTF-8'), ('LS_COLORS', ''), ('JETSON_SOC', 'tegra234'), ('SSH_AUTH_SOCK', '/run/user/1000/vscode-ssh-auth-sock-156418832'), ('ROS_DOMAIN_ID', '73'), ('AMENT_PREFIX_PATH', '/home/nvidia/acfly_ws/install/ring_detector:/home/nvidia/acfly_ws/install/pole_detector:/home/nvidia/acfly_ws/install/multi_pole_detector:/home/nvidia/acfly_ws/install/mavros_extras:/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/fly_mission_gps:/home/nvidia/acfly_ws/install/fly_mission:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/exploration_planner:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_orbbec/install/gemini_vision:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/opt/ros/humble'), ('CONDA_PYTHON_EXE', '/home/nvidia/miniforge3/bin/python'), ('SHELL', '/bin/bash'), ('LC_NAME', 'zh_CN.UTF-8'), ('ANTHROPIC_AUTH_TOKEN', 'sk-sssaicode-a9605a1bee4103768854918f844ebbdb4617b76768b3fe4651fb41e6a010f329'), ('MXC_BIN_DIR', '/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node_modules/@microsoft/mxc-sdk/bin'), ('ELECTRON_RUN_AS_NODE', '1'), ('CLAUDE_CODE_DISABLE_TERMINAL_TITLE', '1'), ('CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING', 'true'), ('CLAUDE_CODE_SESSION_ID', '6c2addeb-fa30-4ab9-8a74-428d19203968'), ('LESSCLOSE', '/usr/bin/lesspipe %s %s'), ('CLAUDECODE', '1'), ('LC_MEASUREMENT', 'zh_CN.UTF-8'), ('_CONDA_EXE', '/home/nvidia/miniforge3/bin/conda'), ('MAMBA_EXE', '/home/nvidia/miniforge3/bin/mamba'), ('LC_IDENTIFICATION', 'zh_CN.UTF-8'), ('JETSON_CUDA_ARCH_BIN', '8.7'), ('PWD', '/home/nvidia/acfly_ws/build/multi_pole_detector'), ('LC_ALL', 'en_US.UTF-8'), ('CONDA_EXE', '/home/nvidia/miniforge3/bin/conda'), ('SSH_CONNECTION', '192.168.12.101 43844 192.168.12.1 22'), ('XDG_DATA_DIRS', '/usr/share/gnome:/usr/local/share:/usr/share:/var/lib/snapd/desktop'), ('CLAUDE_CODE_EXECPATH', '/home/nvidia/.vscode-server/extensions/anthropic.claude-code-2.1.216-linux-arm64/resources/native-binary/claude'), ('CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', '1'), ('PYTHONPATH', '/usr/local/lib/python3.10/site-packages/:/home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages:/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs/local/lib/python3.10/dist-packages:/home/nvidia/ws_orbbec/install/gemini_vision/lib/python3.10/site-packages:/home/nvidia/ws_livox/install/livox_ros_driver2/local/lib/python3.10/dist-packages:/home/nvidia/ws_point/install/ac_link/local/lib/python3.10/dist-packages:/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('LC_NUMERIC', 'zh_CN.UTF-8'), ('CLAUDE_CODE_ENABLE_TASKS', '0'), ('LC_PAPER', 'zh_CN.UTF-8'), ('COLCON', '1'), ('COPILOT_CLI_ENABLED_FEATURE_FLAGS', 'SHELL_SPAWN_BACKEND'), ('JETSON_JETPACK', ''), ('CMAKE_PREFIX_PATH', '/home/nvidia/acfly_ws/install/ring_detector:/home/nvidia/acfly_ws/install/pole_detector:/home/nvidia/acfly_ws/install/multi_pole_detector:/home/nvidia/acfly_ws/install/mavros_extras:/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/fly_mission_gps:/home/nvidia/acfly_ws/install/fly_mission:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/acfly_ws/install/exploration_planner:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble'), ('JETSON_P_NUMBER', 'p3767-0000')]), 'shell': False}
+[37.765442] (multi_pole_detector) StdoutLine: {'line': b'-- Install configuration: ""\n'}
+[37.765945] (multi_pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/multi_pole_detector/lib/multi_pole_detector/multi_pole_detector_node\n'}
+[37.779453] (multi_pole_detector) StdoutLine: {'line': b'-- Set runtime path of "/home/nvidia/acfly_ws/install/multi_pole_detector/lib/multi_pole_detector/multi_pole_detector_node" to ""\n'}
+[37.780087] (multi_pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/rviz\n'}
+[37.780501] (multi_pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/rviz/multi_pole_detector.rviz\n'}
+[37.780770] (multi_pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/multi_pole_detector/share/ament_index/resource_index/package_run_dependencies/multi_pole_detector\n'}
+[37.781130] (multi_pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/multi_pole_detector/share/ament_index/resource_index/parent_prefix_path/multi_pole_detector\n'}
+[37.781387] (multi_pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/environment/ament_prefix_path.sh\n'}
+[37.781710] (multi_pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/environment/ament_prefix_path.dsv\n'}
+[37.781852] (multi_pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/environment/path.sh\n'}
+[37.782197] (multi_pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/environment/path.dsv\n'}
+[37.782409] (multi_pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/local_setup.bash\n'}
+[37.782617] (multi_pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/local_setup.sh\n'}
+[37.782730] (multi_pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/local_setup.zsh\n'}
+[37.783010] (multi_pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/local_setup.dsv\n'}
+[37.783224] (multi_pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/package.dsv\n'}
+[37.783326] (multi_pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/multi_pole_detector/share/ament_index/resource_index/packages/multi_pole_detector\n'}
+[37.783463] (multi_pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/cmake/multi_pole_detectorConfig.cmake\n'}
+[37.783561] (multi_pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/cmake/multi_pole_detectorConfig-version.cmake\n'}
+[37.783656] (multi_pole_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/package.xml\n'}
+[37.786091] (multi_pole_detector) CommandEnded: {'returncode': 0}
+[37.815551] (multi_pole_detector) JobEnded: {'identifier': 'multi_pole_detector', 'rc': 0}
+[37.850085] (-) TimerEvent: {}
+[37.950509] (-) TimerEvent: {}
+[38.050985] (-) TimerEvent: {}
+[38.151464] (-) TimerEvent: {}
+[38.251944] (-) TimerEvent: {}
+[38.352377] (-) TimerEvent: {}
+[38.452801] (-) TimerEvent: {}
+[38.553226] (-) TimerEvent: {}
+[38.653638] (-) TimerEvent: {}
+[38.754056] (-) TimerEvent: {}
+[38.854470] (-) TimerEvent: {}
+[38.954862] (-) TimerEvent: {}
+[39.055260] (-) TimerEvent: {}
+[39.155687] (-) TimerEvent: {}
+[39.256134] (-) TimerEvent: {}
+[39.356579] (-) TimerEvent: {}
+[39.457016] (-) TimerEvent: {}
+[39.557483] (-) TimerEvent: {}
+[39.657930] (-) TimerEvent: {}
+[39.720527] (ring_detector) StdoutLine: {'line': b'[100%] Linking CXX executable ring_detector_node\n'}
+[39.758114] (-) TimerEvent: {}
+[39.858577] (-) TimerEvent: {}
+[39.958993] (-) TimerEvent: {}
+[40.059416] (-) TimerEvent: {}
+[40.159876] (-) TimerEvent: {}
+[40.260316] (-) TimerEvent: {}
+[40.360738] (-) TimerEvent: {}
+[40.461174] (-) TimerEvent: {}
+[40.561558] (-) TimerEvent: {}
+[40.661984] (-) TimerEvent: {}
+[40.762751] (-) TimerEvent: {}
+[40.863162] (-) TimerEvent: {}
+[40.963758] (-) TimerEvent: {}
+[41.064222] (-) TimerEvent: {}
+[41.164674] (-) TimerEvent: {}
+[41.265086] (-) TimerEvent: {}
+[41.365528] (-) TimerEvent: {}
+[41.406041] (ring_detector) StdoutLine: {'line': b'[100%] Built target ring_detector_node\n'}
+[41.430944] (ring_detector) CommandEnded: {'returncode': 0}
+[41.433354] (ring_detector) JobProgress: {'identifier': 'ring_detector', 'progress': 'install'}
+[41.434202] (ring_detector) Command: {'cmd': ['/usr/bin/cmake', '--install', '/home/nvidia/acfly_ws/build/ring_detector'], 'cwd': '/home/nvidia/acfly_ws/build/ring_detector', 'env': OrderedDict([('LESSOPEN', '| /usr/bin/lesspipe %s'), ('VSCODE_CWD', '/home/nvidia'), ('VSCODE_ESM_ENTRYPOINT', 'vs/workbench/api/node/extensionHostProcess'), ('AI_AGENT', 'claude-code_2-1-216_agent'), ('LANGUAGE', 'zh_CN:zh:en_US:en'), ('USER', 'nvidia'), ('SSH_CLIENT', '192.168.12.101 43844 22'), ('CLAUDE_CODE_ENTRYPOINT', 'claude-vscode'), ('LC_TIME', 'zh_CN.UTF-8'), ('VSCODE_NLS_CONFIG', '{"userLocale":"zh-cn","osLocale":"zh-cn","resolvedLanguage":"zh-cn","defaultMessagesFile":"/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/nls.messages.json","languagePack":{"translationsConfigFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/tcf.json","messagesFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/4fe60c8b1cdac1c4c174f2fb180d0d758272d713/nls.messages.json","corruptMarkerFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/corrupted.info"},"locale":"zh-cn","availableLanguages":{"*":"zh-cn"},"_languagePackId":"7d3970334613eea704823c76d6198ba3.zh-cn","_languagePackSupport":true,"_translationsConfigFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/tcf.json","_cacheRoot":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn","_resolvedLanguagePackCoreLocation":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/4fe60c8b1cdac1c4c174f2fb180d0d758272d713","_corruptedFile":"/home/nvidia/.vscode-server/data/clp/7d3970334613eea704823c76d6198ba3.zh-cn/corrupted.info"}'), ('GIT_EDITOR', 'true'), ('VSCODE_HANDLES_UNCAUGHT_ERRORS', 'true'), ('XDG_SESSION_TYPE', 'tty'), ('CLAUDE_AGENT_SDK_VERSION', '0.3.216'), ('SHLVL', '2'), ('LD_LIBRARY_PATH', '/usr/local/lib:/home/nvidia/acfly_ws/install/mavros_extras/lib:/home/nvidia/acfly_ws/install/mavros/lib:/home/nvidia/acfly_ws/install/mavros_msgs/lib:/home/nvidia/acfly_ws/install/libmavconn/lib:/home/nvidia/ws_orbbec/install/orbbec_camera/lib:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs/lib:/home/nvidia/ws_livox/install/livox_ros_driver2/lib:/home/nvidia/ws_point/install/ac_link/lib:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/aarch64-linux-gnu:/opt/ros/humble/lib'), ('BROWSER', '/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/bin/helpers/browser.sh'), ('MOTD_SHOWN', 'pam'), ('HOME', '/home/nvidia'), ('CONDA_SHLVL', '0'), ('OLDPWD', '/home/nvidia'), ('VSCODE_RECONNECTION_GRACE_TIME', '10800000'), ('VSCODE_IPC_HOOK_CLI', '/run/user/1000/vscode-ipc-44c9265a-0351-4407-b8c8-091342c10b3c.sock'), ('JETSON_L4T', '36.4.7'), ('ROS_PYTHON_VERSION', '3'), ('JETSON_MODEL', 'NVIDIA Jetson Orin NX Engineering Reference Developer Kit Super'), ('CLAUDE_CODE_CHILD_SESSION', '1'), ('LC_MONETARY', 'zh_CN.UTF-8'), ('COPILOT_OTEL_FILE_EXPORTER_PATH', '/dev/null'), ('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/1000/bus'), ('_CE_M', ''), ('_CONDA_ROOT', '/home/nvidia/miniforge3'), ('COLCON_PREFIX_PATH', '/home/nvidia/acfly_ws/install:/home/nvidia/ws_point/install:/home/nvidia/ws_livox/install:/home/nvidia/ws_orbbec/install'), ('API_TIMEOUT_MS', '600000'), ('APPLICATION_INSIGHTS_NO_STATSBEAT', 'true'), ('ROS_DISTRO', 'humble'), ('LOGNAME', 'nvidia'), ('JETSON_MODULE', 'NVIDIA Jetson Orin NX (16GB ram)'), ('JETSON_SERIAL_NUMBER', '1421325032037'), ('VSCODE_HANDLES_SIGPIPE', 'true'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('PKG_CONFIG_PATH', '/home/nvidia/acfly_ws/install/mavlink/lib/aarch64-linux-gnu/pkgconfig:/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig'), ('XDG_SESSION_CLASS', 'user'), ('ANTHROPIC_BASE_URL', 'https://node-cf.sssaicodeapi.com/api'), ('XDG_SESSION_ID', '3'), ('VSCODE_CLI_REQUIRE_TOKEN', '52ef4887-3900-480f-8956-94178156c297'), ('_CE_CONDA', ''), ('ROS_LOCALHOST_ONLY', '0'), ('MCP_CONNECTION_NONBLOCKING', 'true'), ('PATH', '/home/nvidia/.local/bin:/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/bin/remote-cli:/home/nvidia/.local/bin:/home/nvidia/miniforge3/condabin:/opt/ros/humble/bin:/home/nvidia/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin'), ('VSCODE_AGENT_FOLDER', '/home/nvidia/.vscode-server'), ('PAPERSIZE', 'a4'), ('COREPACK_ENABLE_AUTO_PIN', '0'), ('LC_ADDRESS', 'zh_CN.UTF-8'), ('XDG_RUNTIME_DIR', '/run/user/1000'), ('CLAUDE_EFFORT', 'high'), ('MAMBA_ROOT_PREFIX', '/home/nvidia/miniforge3'), ('CLAUDE_PID', '8550'), ('NoDefaultCurrentDirectoryInExePath', '1'), ('LANG', 'zh_CN.UTF-8'), ('LC_TELEPHONE', 'zh_CN.UTF-8'), ('LS_COLORS', ''), ('JETSON_SOC', 'tegra234'), ('SSH_AUTH_SOCK', '/run/user/1000/vscode-ssh-auth-sock-156418832'), ('ROS_DOMAIN_ID', '73'), ('AMENT_PREFIX_PATH', '/home/nvidia/acfly_ws/install/ring_detector:/home/nvidia/acfly_ws/install/pole_detector:/home/nvidia/acfly_ws/install/multi_pole_detector:/home/nvidia/acfly_ws/install/mavros_extras:/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/fly_mission_gps:/home/nvidia/acfly_ws/install/fly_mission:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/exploration_planner:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_orbbec/install/gemini_vision:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/opt/ros/humble'), ('CONDA_PYTHON_EXE', '/home/nvidia/miniforge3/bin/python'), ('SHELL', '/bin/bash'), ('LC_NAME', 'zh_CN.UTF-8'), ('ANTHROPIC_AUTH_TOKEN', 'sk-sssaicode-a9605a1bee4103768854918f844ebbdb4617b76768b3fe4651fb41e6a010f329'), ('MXC_BIN_DIR', '/home/nvidia/.vscode-server/cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node_modules/@microsoft/mxc-sdk/bin'), ('ELECTRON_RUN_AS_NODE', '1'), ('CLAUDE_CODE_DISABLE_TERMINAL_TITLE', '1'), ('CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING', 'true'), ('CLAUDE_CODE_SESSION_ID', '6c2addeb-fa30-4ab9-8a74-428d19203968'), ('LESSCLOSE', '/usr/bin/lesspipe %s %s'), ('CLAUDECODE', '1'), ('LC_MEASUREMENT', 'zh_CN.UTF-8'), ('_CONDA_EXE', '/home/nvidia/miniforge3/bin/conda'), ('MAMBA_EXE', '/home/nvidia/miniforge3/bin/mamba'), ('LC_IDENTIFICATION', 'zh_CN.UTF-8'), ('JETSON_CUDA_ARCH_BIN', '8.7'), ('PWD', '/home/nvidia/acfly_ws/build/ring_detector'), ('LC_ALL', 'en_US.UTF-8'), ('CONDA_EXE', '/home/nvidia/miniforge3/bin/conda'), ('SSH_CONNECTION', '192.168.12.101 43844 192.168.12.1 22'), ('XDG_DATA_DIRS', '/usr/share/gnome:/usr/local/share:/usr/share:/var/lib/snapd/desktop'), ('CLAUDE_CODE_EXECPATH', '/home/nvidia/.vscode-server/extensions/anthropic.claude-code-2.1.216-linux-arm64/resources/native-binary/claude'), ('CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', '1'), ('PYTHONPATH', '/usr/local/lib/python3.10/site-packages/:/home/nvidia/acfly_ws/install/mavros/local/lib/python3.10/dist-packages:/home/nvidia/acfly_ws/install/mavros_msgs/local/lib/python3.10/dist-packages:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs/local/lib/python3.10/dist-packages:/home/nvidia/ws_orbbec/install/gemini_vision/lib/python3.10/site-packages:/home/nvidia/ws_livox/install/livox_ros_driver2/local/lib/python3.10/dist-packages:/home/nvidia/ws_point/install/ac_link/local/lib/python3.10/dist-packages:/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('LC_NUMERIC', 'zh_CN.UTF-8'), ('CLAUDE_CODE_ENABLE_TASKS', '0'), ('LC_PAPER', 'zh_CN.UTF-8'), ('COLCON', '1'), ('COPILOT_CLI_ENABLED_FEATURE_FLAGS', 'SHELL_SPAWN_BACKEND'), ('JETSON_JETPACK', ''), ('CMAKE_PREFIX_PATH', '/home/nvidia/acfly_ws/install/ring_detector:/home/nvidia/acfly_ws/install/pole_detector:/home/nvidia/acfly_ws/install/multi_pole_detector:/home/nvidia/acfly_ws/install/mavros_extras:/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/fly_mission_gps:/home/nvidia/acfly_ws/install/fly_mission:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/acfly_ws/install/exploration_planner:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble'), ('JETSON_P_NUMBER', 'p3767-0000')]), 'shell': False}
+[41.452499] (ring_detector) StdoutLine: {'line': b'-- Install configuration: ""\n'}
+[41.453111] (ring_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/ring_detector/lib/ring_detector/ring_detector_node\n'}
+[41.465679] (-) TimerEvent: {}
+[41.468219] (ring_detector) StdoutLine: {'line': b'-- Set runtime path of "/home/nvidia/acfly_ws/install/ring_detector/lib/ring_detector/ring_detector_node" to ""\n'}
+[41.468805] (ring_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/rviz\n'}
+[41.469148] (ring_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/rviz/ring_detector.rviz\n'}
+[41.469429] (ring_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ament_index/resource_index/package_run_dependencies/ring_detector\n'}
+[41.469690] (ring_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ament_index/resource_index/parent_prefix_path/ring_detector\n'}
+[41.469943] (ring_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/environment/ament_prefix_path.sh\n'}
+[41.470211] (ring_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/environment/ament_prefix_path.dsv\n'}
+[41.470462] (ring_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/environment/path.sh\n'}
+[41.470694] (ring_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/environment/path.dsv\n'}
+[41.471004] (ring_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/local_setup.bash\n'}
+[41.471238] (ring_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/local_setup.sh\n'}
+[41.471477] (ring_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/local_setup.zsh\n'}
+[41.471620] (ring_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/local_setup.dsv\n'}
+[41.471843] (ring_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/package.dsv\n'}
+[41.472148] (ring_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ament_index/resource_index/packages/ring_detector\n'}
+[41.472392] (ring_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/cmake/ring_detectorConfig.cmake\n'}
+[41.472538] (ring_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/cmake/ring_detectorConfig-version.cmake\n'}
+[41.472745] (ring_detector) StdoutLine: {'line': b'-- Installing: /home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/package.xml\n'}
+[41.475565] (ring_detector) CommandEnded: {'returncode': 0}
+[41.513137] (ring_detector) JobEnded: {'identifier': 'ring_detector', 'rc': 0}
+[41.515355] (-) EventReactorShutdown: {}

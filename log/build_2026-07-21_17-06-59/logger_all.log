@@ -1,0 +1,414 @@
+[0.258s] [34mcolcon[0m [1;30mDEBUG[0m [32mCommand line arguments: ['/usr/bin/colcon', 'build'][0m
+[0.258s] [34mcolcon[0m [1;30mDEBUG[0m [32mParsed command line arguments: Namespace(log_base=None, log_level=None, verb_name='build', build_base='build', install_base='install', merge_install=False, symlink_install=False, test_result_base=None, continue_on_error=False, executor='parallel', parallel_workers=8, event_handlers=None, ignore_user_meta=False, metas=['./colcon.meta'], base_paths=['.'], packages_ignore=None, packages_ignore_regex=None, paths=None, packages_up_to=None, packages_up_to_regex=None, packages_above=None, packages_above_and_dependencies=None, packages_above_depth=None, packages_select_by_dep=None, packages_skip_by_dep=None, packages_skip_up_to=None, packages_select_build_failed=False, packages_skip_build_finished=False, packages_select_test_failures=False, packages_skip_test_passed=False, packages_select=None, packages_skip=None, packages_select_regex=None, packages_skip_regex=None, packages_start=None, packages_end=None, allow_overriding=[], cmake_args=['-DPython3_EXECUTABLE=/usr/bin/python3'], cmake_target=None, cmake_target_skip_unavailable=False, cmake_clean_cache=False, cmake_clean_first=False, cmake_force_configure=False, ament_cmake_args=None, catkin_cmake_args=None, catkin_skip_building_tests=False, verb_parser=<colcon_defaults.argument_parser.defaults.DefaultArgumentsDecorator object at 0xffff7dab3d00>, verb_extension=<colcon_core.verb.build.BuildVerb object at 0xffff7dab3700>, main=<bound method BuildVerb.main of <colcon_core.verb.build.BuildVerb object at 0xffff7dab3700>>)[0m
+[0.627s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(colcon_meta) check parameters
+[0.627s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(recursive) check parameters
+[0.628s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(ignore) check parameters
+[0.628s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(path) check parameters
+[0.628s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(colcon_meta) discover
+[0.628s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(recursive) discover
+[0.628s] [34mcolcon.colcon_core.package_discovery[0m [1;30mINFO[0m Crawling recursively for packages in '/home/nvidia/acfly_ws'
+[0.628s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extensions ['ignore', 'ignore_ament_install']
+[0.628s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extension 'ignore'
+[0.628s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extension 'ignore_ament_install'
+[0.629s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extensions ['colcon_pkg']
+[0.629s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extension 'colcon_pkg'
+[0.629s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extensions ['colcon_meta']
+[0.629s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extension 'colcon_meta'
+[0.629s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extensions ['ros']
+[0.629s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extension 'ros'
+[0.650s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extensions ['cmake', 'python']
+[0.651s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extension 'cmake'
+[0.651s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extension 'python'
+[0.651s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extensions ['python_setup_py']
+[0.651s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(.) by extension 'python_setup_py'
+[0.651s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(build) by extensions ['ignore', 'ignore_ament_install']
+[0.651s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(build) by extension 'ignore'
+[0.652s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(build) ignored
+[0.652s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(install) by extensions ['ignore', 'ignore_ament_install']
+[0.652s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(install) by extension 'ignore'
+[0.652s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(install) ignored
+[0.652s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(log) by extensions ['ignore', 'ignore_ament_install']
+[0.652s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(log) by extension 'ignore'
+[0.653s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(log) ignored
+[0.653s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extensions ['ignore', 'ignore_ament_install']
+[0.653s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extension 'ignore'
+[0.653s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extension 'ignore_ament_install'
+[0.653s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extensions ['colcon_pkg']
+[0.653s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extension 'colcon_pkg'
+[0.653s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extensions ['colcon_meta']
+[0.653s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extension 'colcon_meta'
+[0.653s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extensions ['ros']
+[0.653s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extension 'ros'
+[0.654s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extensions ['cmake', 'python']
+[0.654s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extension 'cmake'
+[0.654s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extension 'python'
+[0.654s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extensions ['python_setup_py']
+[0.654s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src) by extension 'python_setup_py'
+[0.654s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros) by extensions ['ignore', 'ignore_ament_install']
+[0.654s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros) by extension 'ignore'
+[0.654s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/acfly_mavros) ignored
+[0.655s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/exploration_planner) by extensions ['ignore', 'ignore_ament_install']
+[0.655s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/exploration_planner) by extension 'ignore'
+[0.655s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/exploration_planner) by extension 'ignore_ament_install'
+[0.655s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/exploration_planner) by extensions ['colcon_pkg']
+[0.655s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/exploration_planner) by extension 'colcon_pkg'
+[0.655s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/exploration_planner) by extensions ['colcon_meta']
+[0.655s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/exploration_planner) by extension 'colcon_meta'
+[0.655s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/exploration_planner) by extensions ['ros']
+[0.655s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/exploration_planner) by extension 'ros'
+[0.662s] [34mcolcon.colcon_core.package_identification[0m [1;30mDEBUG[0m [32mPackage 'src/exploration_planner' with type 'ros.ament_cmake' and name 'exploration_planner'[0m
+[0.662s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws) by extensions ['ignore', 'ignore_ament_install']
+[0.662s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws) by extension 'ignore'
+[0.662s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws) by extension 'ignore_ament_install'
+[0.662s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws) by extensions ['colcon_pkg']
+[0.663s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws) by extension 'colcon_pkg'
+[0.663s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws) by extensions ['colcon_meta']
+[0.663s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws) by extension 'colcon_meta'
+[0.663s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws) by extensions ['ros']
+[0.663s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws) by extension 'ros'
+[0.663s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws) by extensions ['cmake', 'python']
+[0.663s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws) by extension 'cmake'
+[0.663s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws) by extension 'python'
+[0.663s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws) by extensions ['python_setup_py']
+[0.663s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws) by extension 'python_setup_py'
+[0.664s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/multi_pole_detector) by extensions ['ignore', 'ignore_ament_install']
+[0.664s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/multi_pole_detector) by extension 'ignore'
+[0.664s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/multi_pole_detector) by extension 'ignore_ament_install'
+[0.664s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/multi_pole_detector) by extensions ['colcon_pkg']
+[0.664s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/multi_pole_detector) by extension 'colcon_pkg'
+[0.664s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/multi_pole_detector) by extensions ['colcon_meta']
+[0.664s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/multi_pole_detector) by extension 'colcon_meta'
+[0.664s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/multi_pole_detector) by extensions ['ros']
+[0.664s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/multi_pole_detector) by extension 'ros'
+[0.666s] [34mcolcon.colcon_core.package_identification[0m [1;30mDEBUG[0m [32mPackage 'src/finding_objects_ws/multi_pole_detector' with type 'ros.ament_cmake' and name 'multi_pole_detector'[0m
+[0.667s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/pole_detector) by extensions ['ignore', 'ignore_ament_install']
+[0.667s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/pole_detector) by extension 'ignore'
+[0.667s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/pole_detector) by extension 'ignore_ament_install'
+[0.667s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/pole_detector) by extensions ['colcon_pkg']
+[0.667s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/pole_detector) by extension 'colcon_pkg'
+[0.667s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/pole_detector) by extensions ['colcon_meta']
+[0.667s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/pole_detector) by extension 'colcon_meta'
+[0.667s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/pole_detector) by extensions ['ros']
+[0.667s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/pole_detector) by extension 'ros'
+[0.669s] [34mcolcon.colcon_core.package_identification[0m [1;30mDEBUG[0m [32mPackage 'src/finding_objects_ws/pole_detector' with type 'ros.ament_cmake' and name 'pole_detector'[0m
+[0.669s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/ring_detector) by extensions ['ignore', 'ignore_ament_install']
+[0.669s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/ring_detector) by extension 'ignore'
+[0.670s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/ring_detector) by extension 'ignore_ament_install'
+[0.670s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/ring_detector) by extensions ['colcon_pkg']
+[0.670s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/ring_detector) by extension 'colcon_pkg'
+[0.670s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/ring_detector) by extensions ['colcon_meta']
+[0.670s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/ring_detector) by extension 'colcon_meta'
+[0.670s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/ring_detector) by extensions ['ros']
+[0.670s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/finding_objects_ws/ring_detector) by extension 'ros'
+[0.675s] [34mcolcon.colcon_core.package_identification[0m [1;30mDEBUG[0m [32mPackage 'src/finding_objects_ws/ring_detector' with type 'ros.ament_cmake' and name 'ring_detector'[0m
+[0.675s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission) by extensions ['ignore', 'ignore_ament_install']
+[0.675s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission) by extension 'ignore'
+[0.676s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission) by extension 'ignore_ament_install'
+[0.676s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission) by extensions ['colcon_pkg']
+[0.676s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission) by extension 'colcon_pkg'
+[0.676s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission) by extensions ['colcon_meta']
+[0.676s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission) by extension 'colcon_meta'
+[0.676s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission) by extensions ['ros']
+[0.676s] [34mcolcon.colcon_core.package_identification[0m [1;30mLevel 1[0m _identify(src/fly_mission) by extension 'ros'
+[0.678s] [34mcolcon.colcon_core.package_identification[0m [1;30mDEBUG[0m [32mPackage 'src/fly_mission' with type 'ros.ament_cmake' and name 'fly_mission'[0m
+[0.678s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(recursive) using defaults
+[0.678s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(ignore) discover
+[0.678s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(ignore) using defaults
+[0.678s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(path) discover
+[0.678s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(path) using defaults
+[0.744s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(prefix_path) check parameters
+[0.744s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(prefix_path) discover
+[0.751s] [34mcolcon.colcon_installed_package_information.package_discovery[0m [1;30mDEBUG[0m [32mFound 11 installed packages in /home/nvidia/acfly_ws/install[0m
+[0.752s] [34mcolcon.colcon_installed_package_information.package_discovery[0m [1;30mDEBUG[0m [32mFound 4 installed packages in /home/nvidia/ws_point/install[0m
+[0.752s] [34mcolcon.colcon_installed_package_information.package_discovery[0m [1;30mDEBUG[0m [32mFound 1 installed packages in /home/nvidia/ws_livox/install[0m
+[0.753s] [34mcolcon.colcon_installed_package_information.package_discovery[0m [1;30mDEBUG[0m [32mFound 4 installed packages in /home/nvidia/ws_orbbec/install[0m
+[0.755s] [34mcolcon.colcon_installed_package_information.package_discovery[0m [1;30mDEBUG[0m [32mFound 285 installed packages in /opt/ros/humble[0m
+[0.757s] [34mcolcon.colcon_core.package_discovery[0m [1;30mLevel 1[0m discover_packages(prefix_path) using defaults
+[0.827s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'exploration_planner' build argument 'cmake_args' from command line to '['-DPython3_EXECUTABLE=/usr/bin/python3']'
+[0.828s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'exploration_planner' build argument 'cmake_target' from command line to 'None'
+[0.828s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'exploration_planner' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.828s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'exploration_planner' build argument 'cmake_clean_cache' from command line to 'False'
+[0.828s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'exploration_planner' build argument 'cmake_clean_first' from command line to 'False'
+[0.828s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'exploration_planner' build argument 'cmake_force_configure' from command line to 'False'
+[0.828s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'exploration_planner' build argument 'ament_cmake_args' from command line to 'None'
+[0.828s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'exploration_planner' build argument 'catkin_cmake_args' from command line to 'None'
+[0.828s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'exploration_planner' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.828s] [34mcolcon.colcon_core.verb[0m [1;30mDEBUG[0m [32mBuilding package 'exploration_planner' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/nvidia/acfly_ws/build/exploration_planner', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': ['-DPython3_EXECUTABLE=/usr/bin/python3'], 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/nvidia/acfly_ws/install/exploration_planner', 'merge_install': False, 'path': '/home/nvidia/acfly_ws/src/exploration_planner', 'symlink_install': False, 'test_result_base': None}[0m
+[0.829s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission' build argument 'cmake_args' from command line to '['-DPython3_EXECUTABLE=/usr/bin/python3']'
+[0.829s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission' build argument 'cmake_target' from command line to 'None'
+[0.829s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.829s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission' build argument 'cmake_clean_cache' from command line to 'False'
+[0.829s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission' build argument 'cmake_clean_first' from command line to 'False'
+[0.829s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission' build argument 'cmake_force_configure' from command line to 'False'
+[0.829s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission' build argument 'ament_cmake_args' from command line to 'None'
+[0.829s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission' build argument 'catkin_cmake_args' from command line to 'None'
+[0.829s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'fly_mission' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.829s] [34mcolcon.colcon_core.verb[0m [1;30mDEBUG[0m [32mBuilding package 'fly_mission' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/nvidia/acfly_ws/build/fly_mission', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': ['-DPython3_EXECUTABLE=/usr/bin/python3'], 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/nvidia/acfly_ws/install/fly_mission', 'merge_install': False, 'path': '/home/nvidia/acfly_ws/src/fly_mission', 'symlink_install': False, 'test_result_base': None}[0m
+[0.830s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'multi_pole_detector' build argument 'cmake_args' from command line to '['-DPython3_EXECUTABLE=/usr/bin/python3']'
+[0.830s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'multi_pole_detector' build argument 'cmake_target' from command line to 'None'
+[0.830s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'multi_pole_detector' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.830s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'multi_pole_detector' build argument 'cmake_clean_cache' from command line to 'False'
+[0.830s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'multi_pole_detector' build argument 'cmake_clean_first' from command line to 'False'
+[0.830s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'multi_pole_detector' build argument 'cmake_force_configure' from command line to 'False'
+[0.830s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'multi_pole_detector' build argument 'ament_cmake_args' from command line to 'None'
+[0.830s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'multi_pole_detector' build argument 'catkin_cmake_args' from command line to 'None'
+[0.830s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'multi_pole_detector' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.830s] [34mcolcon.colcon_core.verb[0m [1;30mDEBUG[0m [32mBuilding package 'multi_pole_detector' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/nvidia/acfly_ws/build/multi_pole_detector', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': ['-DPython3_EXECUTABLE=/usr/bin/python3'], 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/nvidia/acfly_ws/install/multi_pole_detector', 'merge_install': False, 'path': '/home/nvidia/acfly_ws/src/finding_objects_ws/multi_pole_detector', 'symlink_install': False, 'test_result_base': None}[0m
+[0.831s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'pole_detector' build argument 'cmake_args' from command line to '['-DPython3_EXECUTABLE=/usr/bin/python3']'
+[0.831s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'pole_detector' build argument 'cmake_target' from command line to 'None'
+[0.831s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'pole_detector' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.831s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'pole_detector' build argument 'cmake_clean_cache' from command line to 'False'
+[0.831s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'pole_detector' build argument 'cmake_clean_first' from command line to 'False'
+[0.831s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'pole_detector' build argument 'cmake_force_configure' from command line to 'False'
+[0.831s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'pole_detector' build argument 'ament_cmake_args' from command line to 'None'
+[0.831s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'pole_detector' build argument 'catkin_cmake_args' from command line to 'None'
+[0.831s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'pole_detector' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.831s] [34mcolcon.colcon_core.verb[0m [1;30mDEBUG[0m [32mBuilding package 'pole_detector' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/nvidia/acfly_ws/build/pole_detector', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': ['-DPython3_EXECUTABLE=/usr/bin/python3'], 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/nvidia/acfly_ws/install/pole_detector', 'merge_install': False, 'path': '/home/nvidia/acfly_ws/src/finding_objects_ws/pole_detector', 'symlink_install': False, 'test_result_base': None}[0m
+[0.832s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'ring_detector' build argument 'cmake_args' from command line to '['-DPython3_EXECUTABLE=/usr/bin/python3']'
+[0.832s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'ring_detector' build argument 'cmake_target' from command line to 'None'
+[0.832s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'ring_detector' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.832s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'ring_detector' build argument 'cmake_clean_cache' from command line to 'False'
+[0.832s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'ring_detector' build argument 'cmake_clean_first' from command line to 'False'
+[0.832s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'ring_detector' build argument 'cmake_force_configure' from command line to 'False'
+[0.832s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'ring_detector' build argument 'ament_cmake_args' from command line to 'None'
+[0.832s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'ring_detector' build argument 'catkin_cmake_args' from command line to 'None'
+[0.832s] [34mcolcon.colcon_core.verb[0m [1;30mLevel 5[0m set package 'ring_detector' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.832s] [34mcolcon.colcon_core.verb[0m [1;30mDEBUG[0m [32mBuilding package 'ring_detector' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/nvidia/acfly_ws/build/ring_detector', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': ['-DPython3_EXECUTABLE=/usr/bin/python3'], 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/nvidia/acfly_ws/install/ring_detector', 'merge_install': False, 'path': '/home/nvidia/acfly_ws/src/finding_objects_ws/ring_detector', 'symlink_install': False, 'test_result_base': None}[0m
+[0.832s] [34mcolcon.colcon_core.executor[0m [1;30mINFO[0m Executing jobs using 'parallel' executor
+[0.834s] [34mcolcon.colcon_parallel_executor.executor.parallel[0m [1;30mDEBUG[0m [32mrun_until_complete[0m
+[0.835s] [34mcolcon.colcon_ros.task.ament_cmake.build[0m [1;30mINFO[0m Building ROS package in '/home/nvidia/acfly_ws/src/exploration_planner' with build type 'ament_cmake'
+[0.835s] [34mcolcon.colcon_cmake.task.cmake.build[0m [1;30mINFO[0m Building CMake package in '/home/nvidia/acfly_ws/src/exploration_planner'
+[0.841s] [34mcolcon.colcon_core.plugin_system[0m [1;30mINFO[0m Skipping extension 'colcon_core.shell.bat': Not used on non-Windows systems
+[0.841s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.841s] [34mcolcon.colcon_core.shell[0m [1;30mDEBUG[0m [32mSkip shell extension 'dsv' for command environment[0m
+[0.851s] [34mcolcon.colcon_ros.task.ament_cmake.build[0m [1;30mINFO[0m Building ROS package in '/home/nvidia/acfly_ws/src/fly_mission' with build type 'ament_cmake'
+[0.852s] [34mcolcon.colcon_cmake.task.cmake.build[0m [1;30mINFO[0m Building CMake package in '/home/nvidia/acfly_ws/src/fly_mission'
+[0.852s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.852s] [34mcolcon.colcon_core.shell[0m [1;30mDEBUG[0m [32mSkip shell extension 'dsv' for command environment[0m
+[0.861s] [34mcolcon.colcon_ros.task.ament_cmake.build[0m [1;30mINFO[0m Building ROS package in '/home/nvidia/acfly_ws/src/finding_objects_ws/multi_pole_detector' with build type 'ament_cmake'
+[0.862s] [34mcolcon.colcon_cmake.task.cmake.build[0m [1;30mINFO[0m Building CMake package in '/home/nvidia/acfly_ws/src/finding_objects_ws/multi_pole_detector'
+[0.862s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.862s] [34mcolcon.colcon_core.shell[0m [1;30mDEBUG[0m [32mSkip shell extension 'dsv' for command environment[0m
+[0.873s] [34mcolcon.colcon_ros.task.ament_cmake.build[0m [1;30mINFO[0m Building ROS package in '/home/nvidia/acfly_ws/src/finding_objects_ws/pole_detector' with build type 'ament_cmake'
+[0.873s] [34mcolcon.colcon_cmake.task.cmake.build[0m [1;30mINFO[0m Building CMake package in '/home/nvidia/acfly_ws/src/finding_objects_ws/pole_detector'
+[0.874s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.874s] [34mcolcon.colcon_core.shell[0m [1;30mDEBUG[0m [32mSkip shell extension 'dsv' for command environment[0m
+[0.885s] [34mcolcon.colcon_ros.task.ament_cmake.build[0m [1;30mINFO[0m Building ROS package in '/home/nvidia/acfly_ws/src/finding_objects_ws/ring_detector' with build type 'ament_cmake'
+[0.886s] [34mcolcon.colcon_cmake.task.cmake.build[0m [1;30mINFO[0m Building CMake package in '/home/nvidia/acfly_ws/src/finding_objects_ws/ring_detector'
+[0.886s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.887s] [34mcolcon.colcon_core.shell[0m [1;30mDEBUG[0m [32mSkip shell extension 'dsv' for command environment[0m
+[0.905s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoking command in '/home/nvidia/acfly_ws/build/exploration_planner': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/exploration_planner -- -j8 -l8[0m
+[0.913s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoking command in '/home/nvidia/acfly_ws/build/fly_mission': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/fly_mission -- -j8 -l8[0m
+[0.923s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoking command in '/home/nvidia/acfly_ws/build/multi_pole_detector': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/multi_pole_detector -- -j8 -l8[0m
+[0.929s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoking command in '/home/nvidia/acfly_ws/build/pole_detector': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/pole_detector -- -j8 -l8[0m
+[0.940s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoking command in '/home/nvidia/acfly_ws/build/ring_detector': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/ring_detector -- -j8 -l8[0m
+[1.110s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoked command in '/home/nvidia/acfly_ws/build/pole_detector' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/pole_detector -- -j8 -l8[0m
+[1.132s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoking command in '/home/nvidia/acfly_ws/build/pole_detector': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/pole_detector[0m
+[1.134s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoked command in '/home/nvidia/acfly_ws/build/exploration_planner' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/exploration_planner -- -j8 -l8[0m
+[1.137s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoking command in '/home/nvidia/acfly_ws/build/exploration_planner': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/exploration_planner[0m
+[1.141s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoked command in '/home/nvidia/acfly_ws/build/ring_detector' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/ring_detector -- -j8 -l8[0m
+[1.147s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoking command in '/home/nvidia/acfly_ws/build/ring_detector': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/ring_detector[0m
+[1.148s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoked command in '/home/nvidia/acfly_ws/build/fly_mission' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/fly_mission -- -j8 -l8[0m
+[1.151s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoking command in '/home/nvidia/acfly_ws/build/fly_mission': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/fly_mission[0m
+[1.159s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoked command in '/home/nvidia/acfly_ws/build/multi_pole_detector' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/multi_pole_detector -- -j8 -l8[0m
+[1.163s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoking command in '/home/nvidia/acfly_ws/build/multi_pole_detector': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/multi_pole_detector[0m
+[1.169s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_environment_scripts_only(pole_detector)
+[1.173s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoked command in '/home/nvidia/acfly_ws/build/pole_detector' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/pole_detector[0m
+[1.184s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/pole_detector' for CMake module files
+[1.186s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/pole_detector' for CMake config files
+[1.187s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('pole_detector', 'cmake_prefix_path')
+[1.187s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/hook/cmake_prefix_path.ps1'
+[1.189s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/hook/cmake_prefix_path.dsv'
+[1.190s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/hook/cmake_prefix_path.sh'
+[1.192s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/pole_detector/lib'
+[1.192s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/pole_detector/bin'
+[1.193s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/pole_detector/lib/pkgconfig/pole_detector.pc'
+[1.193s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/pole_detector/lib/python3.10/site-packages'
+[1.194s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/pole_detector/bin'
+[1.195s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/package.ps1'
+[1.198s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package descriptor '/home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/package.dsv'
+[1.199s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/package.sh'
+[1.201s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/package.bash'
+[1.202s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/package.zsh'
+[1.204s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/pole_detector/share/colcon-core/packages/pole_detector)
+[1.205s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_environment_scripts_only(pole_detector)
+[1.206s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/pole_detector' for CMake module files
+[1.206s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/pole_detector' for CMake config files
+[1.207s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('pole_detector', 'cmake_prefix_path')
+[1.207s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/hook/cmake_prefix_path.ps1'
+[1.208s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/hook/cmake_prefix_path.dsv'
+[1.209s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/hook/cmake_prefix_path.sh'
+[1.210s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/pole_detector/lib'
+[1.210s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/pole_detector/bin'
+[1.210s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/pole_detector/lib/pkgconfig/pole_detector.pc'
+[1.210s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/pole_detector/lib/python3.10/site-packages'
+[1.211s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/pole_detector/bin'
+[1.212s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/package.ps1'
+[1.213s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package descriptor '/home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/package.dsv'
+[1.214s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/package.sh'
+[1.214s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/package.bash'
+[1.215s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/pole_detector/share/pole_detector/package.zsh'
+[1.216s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/pole_detector/share/colcon-core/packages/pole_detector)
+[1.216s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_environment_scripts_only(exploration_planner)
+[1.217s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/exploration_planner' for CMake module files
+[1.218s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/exploration_planner' for CMake config files
+[1.219s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoked command in '/home/nvidia/acfly_ws/build/exploration_planner' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/exploration_planner[0m
+[1.220s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('exploration_planner', 'cmake_prefix_path')
+[1.220s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/hook/cmake_prefix_path.ps1'
+[1.221s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/hook/cmake_prefix_path.dsv'
+[1.221s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/hook/cmake_prefix_path.sh'
+[1.222s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/exploration_planner/lib'
+[1.223s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/exploration_planner/bin'
+[1.223s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/exploration_planner/lib/pkgconfig/exploration_planner.pc'
+[1.223s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/exploration_planner/lib/python3.10/site-packages'
+[1.224s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/exploration_planner/bin'
+[1.224s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/package.ps1'
+[1.225s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package descriptor '/home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/package.dsv'
+[1.226s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/package.sh'
+[1.227s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/package.bash'
+[1.228s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/package.zsh'
+[1.228s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/exploration_planner/share/colcon-core/packages/exploration_planner)
+[1.229s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_environment_scripts_only(exploration_planner)
+[1.230s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/exploration_planner' for CMake module files
+[1.230s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/exploration_planner' for CMake config files
+[1.231s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('exploration_planner', 'cmake_prefix_path')
+[1.231s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/hook/cmake_prefix_path.ps1'
+[1.232s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/hook/cmake_prefix_path.dsv'
+[1.233s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/hook/cmake_prefix_path.sh'
+[1.234s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/exploration_planner/lib'
+[1.234s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/exploration_planner/bin'
+[1.234s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/exploration_planner/lib/pkgconfig/exploration_planner.pc'
+[1.234s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/exploration_planner/lib/python3.10/site-packages'
+[1.235s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/exploration_planner/bin'
+[1.236s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/package.ps1'
+[1.237s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package descriptor '/home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/package.dsv'
+[1.239s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/package.sh'
+[1.240s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/package.bash'
+[1.241s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/package.zsh'
+[1.243s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/exploration_planner/share/colcon-core/packages/exploration_planner)
+[1.243s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_environment_scripts_only(ring_detector)
+[1.244s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/ring_detector' for CMake module files
+[1.246s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoked command in '/home/nvidia/acfly_ws/build/ring_detector' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/ring_detector[0m
+[1.246s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/ring_detector' for CMake config files
+[1.247s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('ring_detector', 'cmake_prefix_path')
+[1.247s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/hook/cmake_prefix_path.ps1'
+[1.248s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/hook/cmake_prefix_path.dsv'
+[1.248s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/hook/cmake_prefix_path.sh'
+[1.249s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/ring_detector/lib'
+[1.249s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/ring_detector/bin'
+[1.250s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/ring_detector/lib/pkgconfig/ring_detector.pc'
+[1.250s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/ring_detector/lib/python3.10/site-packages'
+[1.251s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/ring_detector/bin'
+[1.251s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/package.ps1'
+[1.252s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package descriptor '/home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/package.dsv'
+[1.253s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/package.sh'
+[1.254s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/package.bash'
+[1.255s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/package.zsh'
+[1.256s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/ring_detector/share/colcon-core/packages/ring_detector)
+[1.256s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_environment_scripts_only(ring_detector)
+[1.257s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/ring_detector' for CMake module files
+[1.258s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/ring_detector' for CMake config files
+[1.258s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('ring_detector', 'cmake_prefix_path')
+[1.258s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/hook/cmake_prefix_path.ps1'
+[1.259s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/hook/cmake_prefix_path.dsv'
+[1.260s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/hook/cmake_prefix_path.sh'
+[1.260s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/ring_detector/lib'
+[1.261s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/ring_detector/bin'
+[1.261s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/ring_detector/lib/pkgconfig/ring_detector.pc'
+[1.261s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/ring_detector/lib/python3.10/site-packages'
+[1.262s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/ring_detector/bin'
+[1.262s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/package.ps1'
+[1.264s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package descriptor '/home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/package.dsv'
+[1.264s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/package.sh'
+[1.265s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/package.bash'
+[1.266s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/package.zsh'
+[1.266s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/ring_detector/share/colcon-core/packages/ring_detector)
+[1.269s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_environment_scripts_only(fly_mission)
+[1.269s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission' for CMake module files
+[1.270s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoked command in '/home/nvidia/acfly_ws/build/fly_mission' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/fly_mission[0m
+[1.271s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission' for CMake config files
+[1.271s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('fly_mission', 'cmake_prefix_path')
+[1.271s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/hook/cmake_prefix_path.ps1'
+[1.272s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/hook/cmake_prefix_path.dsv'
+[1.273s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/hook/cmake_prefix_path.sh'
+[1.274s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission/lib'
+[1.274s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission/bin'
+[1.274s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission/lib/pkgconfig/fly_mission.pc'
+[1.274s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission/lib/python3.10/site-packages'
+[1.275s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission/bin'
+[1.275s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/package.ps1'
+[1.276s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package descriptor '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/package.dsv'
+[1.277s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/package.sh'
+[1.278s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/package.bash'
+[1.278s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/package.zsh'
+[1.279s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/fly_mission/share/colcon-core/packages/fly_mission)
+[1.280s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_environment_scripts_only(fly_mission)
+[1.280s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission' for CMake module files
+[1.281s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission' for CMake config files
+[1.281s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('fly_mission', 'cmake_prefix_path')
+[1.281s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/hook/cmake_prefix_path.ps1'
+[1.282s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/hook/cmake_prefix_path.dsv'
+[1.282s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/hook/cmake_prefix_path.sh'
+[1.283s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission/lib'
+[1.283s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission/bin'
+[1.284s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission/lib/pkgconfig/fly_mission.pc'
+[1.284s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission/lib/python3.10/site-packages'
+[1.284s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/fly_mission/bin'
+[1.285s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/package.ps1'
+[1.286s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package descriptor '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/package.dsv'
+[1.287s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/package.sh'
+[1.287s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/package.bash'
+[1.288s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/package.zsh'
+[1.289s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/fly_mission/share/colcon-core/packages/fly_mission)
+[1.289s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_environment_scripts_only(multi_pole_detector)
+[1.290s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/multi_pole_detector' for CMake module files
+[1.292s] [34mcolcon.colcon_core.event_handler.log_command[0m [1;30mDEBUG[0m [32mInvoked command in '/home/nvidia/acfly_ws/build/multi_pole_detector' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/multi_pole_detector[0m
+[1.292s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/multi_pole_detector' for CMake config files
+[1.293s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('multi_pole_detector', 'cmake_prefix_path')
+[1.293s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/hook/cmake_prefix_path.ps1'
+[1.294s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/hook/cmake_prefix_path.dsv'
+[1.294s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/hook/cmake_prefix_path.sh'
+[1.295s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/multi_pole_detector/lib'
+[1.295s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/multi_pole_detector/bin'
+[1.295s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/multi_pole_detector/lib/pkgconfig/multi_pole_detector.pc'
+[1.296s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/multi_pole_detector/lib/python3.10/site-packages'
+[1.296s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/multi_pole_detector/bin'
+[1.297s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/package.ps1'
+[1.298s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package descriptor '/home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/package.dsv'
+[1.298s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/package.sh'
+[1.299s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/package.bash'
+[1.300s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/package.zsh'
+[1.300s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/multi_pole_detector/share/colcon-core/packages/multi_pole_detector)
+[1.301s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_environment_scripts_only(multi_pole_detector)
+[1.301s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/multi_pole_detector' for CMake module files
+[1.302s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/multi_pole_detector' for CMake config files
+[1.302s] [34mcolcon.colcon_core.shell[0m [1;30mLevel 1[0m create_environment_hook('multi_pole_detector', 'cmake_prefix_path')
+[1.303s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/hook/cmake_prefix_path.ps1'
+[1.303s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment descriptor '/home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/hook/cmake_prefix_path.dsv'
+[1.304s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating environment hook '/home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/hook/cmake_prefix_path.sh'
+[1.305s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/multi_pole_detector/lib'
+[1.305s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/multi_pole_detector/bin'
+[1.305s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/multi_pole_detector/lib/pkgconfig/multi_pole_detector.pc'
+[1.305s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/multi_pole_detector/lib/python3.10/site-packages'
+[1.306s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m checking '/home/nvidia/acfly_ws/install/multi_pole_detector/bin'
+[1.306s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/package.ps1'
+[1.307s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package descriptor '/home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/package.dsv'
+[1.308s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/package.sh'
+[1.309s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/package.bash'
+[1.309s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating package script '/home/nvidia/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/package.zsh'
+[1.310s] [34mcolcon.colcon_core.environment[0m [1;30mLevel 1[0m create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/multi_pole_detector/share/colcon-core/packages/multi_pole_detector)
+[1.310s] [34mcolcon.colcon_parallel_executor.executor.parallel[0m [1;30mDEBUG[0m [32mclosing loop[0m
+[1.311s] [34mcolcon.colcon_parallel_executor.executor.parallel[0m [1;30mDEBUG[0m [32mloop closed[0m
+[1.311s] [34mcolcon.colcon_parallel_executor.executor.parallel[0m [1;30mDEBUG[0m [32mrun_until_complete finished with '0'[0m
+[1.312s] [34mcolcon.colcon_core.event_reactor[0m [1;30mDEBUG[0m [32mjoining thread[0m
+[1.313s] [34mcolcon.colcon_core.event_reactor[0m [1;30mDEBUG[0m [32mjoined thread[0m
+[1.313s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating prefix script '/home/nvidia/acfly_ws/install/local_setup.ps1'
+[1.315s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating prefix util module '/home/nvidia/acfly_ws/install/_local_setup_util_ps1.py'
+[1.318s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating prefix chain script '/home/nvidia/acfly_ws/install/setup.ps1'
+[1.322s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating prefix script '/home/nvidia/acfly_ws/install/local_setup.sh'
+[1.323s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating prefix util module '/home/nvidia/acfly_ws/install/_local_setup_util_sh.py'
+[1.324s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating prefix chain script '/home/nvidia/acfly_ws/install/setup.sh'
+[1.327s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating prefix script '/home/nvidia/acfly_ws/install/local_setup.bash'
+[1.328s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating prefix chain script '/home/nvidia/acfly_ws/install/setup.bash'
+[1.331s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating prefix script '/home/nvidia/acfly_ws/install/local_setup.zsh'
+[1.332s] [34mcolcon.colcon_core.shell[0m [1;30mINFO[0m Creating prefix chain script '/home/nvidia/acfly_ws/install/setup.zsh'

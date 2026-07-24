@@ -1,0 +1,42 @@
+[0.062s] Invoking command in '/home/nvidia/acfly_ws/build/fly_mission': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/fly_mission -- -j8 -l8
+[0.247s] [ 25%] [32mBuilding CXX object CMakeFiles/fly_mission_node.dir/src/drone_controller.cpp.o[0m
+[0.248s] [ 25%] [32mBuilding CXX object CMakeFiles/fly_mission_node.dir/src/fly_mission_node.cpp.o[0m
+[0.248s] [ 37%] [32mBuilding CXX object CMakeFiles/fly_mission_node.dir/src/ring_driller.cpp.o[0m
+[0.249s] [ 50%] [32mBuilding CXX object CMakeFiles/fly_mission_node.dir/src/line_follower.cpp.o[0m
+[0.249s] [ 62%] [32mBuilding CXX object CMakeFiles/fly_mission_node.dir/src/find_figure.cpp.o[0m
+[30.292s] [ 75%] [32m[1mLinking CXX executable fly_mission_node[0m
+[33.562s] [100%] Built target fly_mission_node
+[33.587s] Invoked command in '/home/nvidia/acfly_ws/build/fly_mission' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/fly_mission -- -j8 -l8
+[33.593s] Invoking command in '/home/nvidia/acfly_ws/build/fly_mission': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/fly_mission
+[33.610s] -- Install configuration: ""
+[33.611s] -- Installing: /home/nvidia/acfly_ws/install/fly_mission/lib/fly_mission/fly_mission_node
+[33.643s] -- Set runtime path of "/home/nvidia/acfly_ws/install/fly_mission/lib/fly_mission/fly_mission_node" to ""
+[33.643s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/include/
+[33.643s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/include//fly_mission
+[33.644s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/include//fly_mission/shm_mailbox.hpp
+[33.644s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/include//fly_mission/avoidance.hpp
+[33.644s] -- Installing: /home/nvidia/acfly_ws/install/fly_mission/include//fly_mission/arduino_serial.hpp
+[33.644s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/include//fly_mission/drone_controller.hpp
+[33.645s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/include//fly_mission/waypoint_receiver.hpp
+[33.645s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/include//fly_mission/find_figure.hpp
+[33.645s] -- Installing: /home/nvidia/acfly_ws/install/fly_mission/include//fly_mission/params.hpp
+[33.645s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/include//fly_mission/waypoint_runner.hpp
+[33.645s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/include//fly_mission/waypoints.hpp
+[33.646s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/include//fly_mission/line_follower.hpp
+[33.646s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/include//fly_mission/ring_driller.hpp
+[33.646s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/ament_index/resource_index/package_run_dependencies/fly_mission
+[33.646s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/ament_index/resource_index/parent_prefix_path/fly_mission
+[33.646s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/environment/ament_prefix_path.sh
+[33.646s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/environment/ament_prefix_path.dsv
+[33.646s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/environment/path.sh
+[33.647s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/environment/path.dsv
+[33.647s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/local_setup.bash
+[33.647s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/local_setup.sh
+[33.647s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/local_setup.zsh
+[33.647s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/local_setup.dsv
+[33.647s] -- Installing: /home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/package.dsv
+[33.648s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/ament_index/resource_index/packages/fly_mission
+[33.649s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/cmake/fly_missionConfig.cmake
+[33.650s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/cmake/fly_missionConfig-version.cmake
+[33.651s] -- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/package.xml
+[33.651s] Invoked command in '/home/nvidia/acfly_ws/build/fly_mission' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/fly_mission

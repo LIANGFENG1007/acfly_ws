@@ -1,0 +1,17 @@
+[0.004s] Invoking command in '/home/nvidia/acfly_ws/build/libmavconn': CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/acfly_ws/install/mavros_extras:/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/fly_mission_gps:/home/nvidia/acfly_ws/install/fly_mission:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/libmavconn -- -j8 -l8
+[0.056s] [  8%] Building CXX object gtest/CMakeFiles/gtest.dir/src/gtest-all.cc.o
+[0.076s] [ 16%] Building CXX object gtest/CMakeFiles/gtest_main.dir/src/gtest_main.cc.o
+[0.095s] [ 25%] Building CXX object CMakeFiles/mavconn.dir/generated/src/mavlink_helpers.cpp.o
+[0.116s] [ 33%] Building CXX object CMakeFiles/mavconn.dir/src/interface.cpp.o
+[0.131s] [ 41%] Building CXX object CMakeFiles/mavconn.dir/src/serial.cpp.o
+[0.171s] [ 50%] Building CXX object CMakeFiles/mavconn.dir/src/tcp.cpp.o
+[0.190s] [ 58%] Building CXX object CMakeFiles/mavconn.dir/src/udp.cpp.o
+[4.024s] [ 66%] Linking CXX static library libgtest_main.a
+[4.251s] [ 66%] Built target gtest_main
+[9.973s] [ 75%] Linking CXX static library libgtest.a
+[10.337s] [ 75%] Built target gtest
+[14.116s] [ 83%] Linking CXX shared library libmavconn.so
+[14.487s] [ 83%] Built target mavconn
+[14.549s] [ 91%] Building CXX object CMakeFiles/test_mavconn.dir/test/test_mavconn.cpp.o
+[25.611s] [100%] Linking CXX executable test_mavconn
+[25.913s] [100%] Built target test_mavconn

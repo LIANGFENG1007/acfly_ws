@@ -1,0 +1,68 @@
+[0.045s] Invoking command in '/home/nvidia/acfly_ws/build/multi_pole_detector': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake /home/nvidia/acfly_ws/src/finding_objects_ws/multi_pole_detector -DPython3_EXECUTABLE=/usr/bin/python3 -DCMAKE_INSTALL_PREFIX=/home/nvidia/acfly_ws/install/multi_pole_detector
+[0.140s] -- The C compiler identification is GNU 11.4.0
+[0.243s] -- The CXX compiler identification is GNU 11.4.0
+[0.255s] -- Detecting C compiler ABI info
+[0.398s] -- Detecting C compiler ABI info - done
+[0.404s] -- Check for working C compiler: /usr/bin/cc - skipped
+[0.404s] -- Detecting C compile features
+[0.407s] -- Detecting C compile features - done
+[0.412s] -- Detecting CXX compiler ABI info
+[0.558s] -- Detecting CXX compiler ABI info - done
+[0.569s] -- Check for working CXX compiler: /usr/bin/c++ - skipped
+[0.570s] -- Detecting CXX compile features
+[0.570s] -- Detecting CXX compile features - done
+[0.578s] -- Found ament_cmake: 1.3.14 (/opt/ros/humble/share/ament_cmake/cmake)
+[0.860s] -- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter 
+[1.062s] -- Found rclcpp: 16.0.19 (/opt/ros/humble/share/rclcpp/cmake)
+[1.144s] -- Found rosidl_generator_c: 3.1.9 (/opt/ros/humble/share/rosidl_generator_c/cmake)
+[1.155s] -- Found rosidl_adapter: 3.1.9 (/opt/ros/humble/share/rosidl_adapter/cmake)
+[1.171s] -- Found rosidl_generator_cpp: 3.1.9 (/opt/ros/humble/share/rosidl_generator_cpp/cmake)
+[1.193s] -- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c
+[1.223s] -- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp
+[1.304s] -- Found rmw_implementation_cmake: 6.1.2 (/opt/ros/humble/share/rmw_implementation_cmake/cmake)
+[1.310s] -- Found rmw_fastrtps_cpp: 6.2.10 (/opt/ros/humble/share/rmw_fastrtps_cpp/cmake)
+[1.472s] -- Found OpenSSL: /usr/lib/aarch64-linux-gnu/libcrypto.so (found version "3.0.2")  
+[1.519s] -- Found FastRTPS: /opt/ros/humble/include  
+[1.587s] -- Using RMW implementation 'rmw_fastrtps_cpp' as default
+[1.607s] -- Looking for pthread.h
+[1.742s] -- Looking for pthread.h - found
+[1.742s] -- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+[1.890s] -- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+[1.890s] -- Found Threads: TRUE  
+[1.988s] -- Found sensor_msgs: 4.9.1 (/opt/ros/humble/share/sensor_msgs/cmake)
+[2.038s] -- Found nav_msgs: 4.9.1 (/opt/ros/humble/share/nav_msgs/cmake)
+[2.065s] -- Found visualization_msgs: 4.9.1 (/opt/ros/humble/share/visualization_msgs/cmake)
+[2.242s] -- Configuring done
+[2.264s] -- Generating done
+[2.272s] -- Build files have been written to: /home/nvidia/acfly_ws/build/multi_pole_detector
+[2.302s] Invoked command in '/home/nvidia/acfly_ws/build/multi_pole_detector' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake /home/nvidia/acfly_ws/src/finding_objects_ws/multi_pole_detector -DPython3_EXECUTABLE=/usr/bin/python3 -DCMAKE_INSTALL_PREFIX=/home/nvidia/acfly_ws/install/multi_pole_detector
+[2.303s] Invoking command in '/home/nvidia/acfly_ws/build/multi_pole_detector': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/multi_pole_detector -- -j8 -l8
+[2.398s] [ 50%] Building CXX object CMakeFiles/multi_pole_detector_node.dir/src/multi_pole_detector_node.cpp.o
+[7.826s] In file included from /usr/include/eigen3/Eigen/Core:214,
+[7.826s]                  from /usr/include/eigen3/Eigen/Dense:1,
+[7.827s]                  from /home/nvidia/acfly_ws/src/finding_objects_ws/multi_pole_detector/src/multi_pole_detector_node.cpp:36:
+[7.827s] /usr/include/eigen3/Eigen/src/Core/arch/NEON/PacketMath.h: In function ‘Packet Eigen::internal::pload(const typename Eigen::internal::unpacket_traits<T>::type*) [with Packet = Eigen::internal::eigen_packet_wrapper<int, 2>; typename Eigen::internal::unpacket_traits<T>::type = signed char]’:
+[7.827s] /usr/include/eigen3/Eigen/src/Core/arch/NEON/PacketMath.h:1671:9: warning: ‘void* memcpy(void*, const void*, size_t)’ copying an object of non-trivial type ‘Eigen::internal::Packet4c’ {aka ‘struct Eigen::internal::eigen_packet_wrapper<int, 2>’} from an array of ‘const int8_t’ {aka ‘const signed char’} [-Wclass-memaccess]
+[7.827s]  1671 |   memcpy(&res, from, sizeof(Packet4c));
+[7.827s]       |   ~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[7.827s] In file included from /usr/include/eigen3/Eigen/Core:172,
+[7.827s]                  from /usr/include/eigen3/Eigen/Dense:1,
+[7.827s]                  from /home/nvidia/acfly_ws/src/finding_objects_ws/multi_pole_detector/src/multi_pole_detector_node.cpp:36:
+[7.827s] /usr/include/eigen3/Eigen/src/Core/GenericPacketMath.h:159:8: note: ‘Eigen::internal::Packet4c’ {aka ‘struct Eigen::internal::eigen_packet_wrapper<int, 2>’} declared here
+[7.827s]   159 | struct eigen_packet_wrapper
+[7.828s]       |        ^~~~~~~~~~~~~~~~~~~~
+[7.829s] In file included from /usr/include/eigen3/Eigen/Core:214,
+[7.829s]                  from /usr/include/eigen3/Eigen/Dense:1,
+[7.829s]                  from /home/nvidia/acfly_ws/src/finding_objects_ws/multi_pole_detector/src/multi_pole_detector_node.cpp:36:
+[7.829s] /usr/include/eigen3/Eigen/src/Core/arch/NEON/PacketMath.h: In function ‘Packet Eigen::internal::ploadu(const typename Eigen::internal::unpacket_traits<T>::type*) [with Packet = Eigen::internal::eigen_packet_wrapper<int, 2>; typename Eigen::internal::unpacket_traits<T>::type = signed char]’:
+[7.829s] /usr/include/eigen3/Eigen/src/Core/arch/NEON/PacketMath.h:1716:9: warning: ‘void* memcpy(void*, const void*, size_t)’ copying an object of non-trivial type ‘Eigen::internal::Packet4c’ {aka ‘struct Eigen::internal::eigen_packet_wrapper<int, 2>’} from an array of ‘const int8_t’ {aka ‘const signed char’} [-Wclass-memaccess]
+[7.830s]  1716 |   memcpy(&res, from, sizeof(Packet4c));
+[7.830s]       |   ~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[7.830s] In file included from /usr/include/eigen3/Eigen/Core:172,
+[7.830s]                  from /usr/include/eigen3/Eigen/Dense:1,
+[7.830s]                  from /home/nvidia/acfly_ws/src/finding_objects_ws/multi_pole_detector/src/multi_pole_detector_node.cpp:36:
+[7.830s] /usr/include/eigen3/Eigen/src/Core/GenericPacketMath.h:159:8: note: ‘Eigen::internal::Packet4c’ {aka ‘struct Eigen::internal::eigen_packet_wrapper<int, 2>’} declared here
+[7.830s]   159 | struct eigen_packet_wrapper
+[7.830s]       |        ^~~~~~~~~~~~~~~~~~~~
+[34.212s] [100%] Linking CXX executable multi_pole_detector_node
+[35.776s] [100%] Built target multi_pole_detector_node

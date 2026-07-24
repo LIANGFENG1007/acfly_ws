@@ -1,0 +1,35 @@
+启动雷达驱动
+ros2 launch livox_ros_driver2 msg_mid360_launch.py
+
+启动 Point-LIO 算法
+ros2 launch point_lio mapping_mid360.launch.py rviz:=false
+
+启动通信节点
+ros2 launch mavros acfly.launch.py
+/bin/python3 /home/nvidia/ws_opencv/pose.py
+
+启动视觉
+ros2 launch orbbec_camera gemini2.launch.py
+
+/bin/python /home/nvidia/ws_opencv/finding.py
+
+主控程序
+ros2 run fly_mission fly_mission_node
+
+自主探索
+ros2 run exploration_planner exploration_planner_node
+
+pcl 找圈
+ros2 run ring_detector ring_detector_node
+
+rviz2 -d ~/acfly_ws/install/ring_detector/share/ring_detector/rviz/ring_detector.rviz
+
+pcl 找杆（单杆）
+ros2 run pole_detector pole_detector_node
+
+rviz2 -d ~/acfly_ws/install/pole_detector/share/pole_detector/rviz/pole_detector.rviz
+
+pcl 找杆（多杆带 ID）
+ros2 run multi_pole_detector multi_pole_detector_node
+
+rviz2 -d ~/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/rviz/multi_pole_detector.rviz

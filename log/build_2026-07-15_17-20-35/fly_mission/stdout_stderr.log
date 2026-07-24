@@ -1,0 +1,35 @@
+[35m[1mConsolidate compiler generated dependencies of target fly_mission_node[0m
+[ 12%] [32mBuilding CXX object CMakeFiles/fly_mission_node.dir/src/fly_mission_node.cpp.o[0m
+[ 25%] [32m[1mLinking CXX executable fly_mission_node[0m
+[100%] Built target fly_mission_node
+-- Install configuration: ""
+-- Installing: /home/nvidia/acfly_ws/install/fly_mission/lib/fly_mission/fly_mission_node
+-- Set runtime path of "/home/nvidia/acfly_ws/install/fly_mission/lib/fly_mission/fly_mission_node" to ""
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/include/
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/include//fly_mission
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/include//fly_mission/shm_mailbox.hpp
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/include//fly_mission/avoidance.hpp
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/include//fly_mission/arduino_serial.hpp
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/include//fly_mission/drone_controller.hpp
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/include//fly_mission/waypoint_receiver.hpp
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/include//fly_mission/find_figure.hpp
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/include//fly_mission/params.hpp
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/include//fly_mission/waypoint_runner.hpp
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/include//fly_mission/waypoints.hpp
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/include//fly_mission/line_follower.hpp
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/include//fly_mission/ring_driller.hpp
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/ament_index/resource_index/package_run_dependencies/fly_mission
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/ament_index/resource_index/parent_prefix_path/fly_mission
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/environment/ament_prefix_path.sh
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/environment/ament_prefix_path.dsv
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/environment/path.sh
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/environment/path.dsv
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/local_setup.bash
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/local_setup.sh
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/local_setup.zsh
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/local_setup.dsv
+-- Installing: /home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/package.dsv
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/ament_index/resource_index/packages/fly_mission
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/cmake/fly_missionConfig.cmake
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/cmake/fly_missionConfig-version.cmake
+-- Up-to-date: /home/nvidia/acfly_ws/install/fly_mission/share/fly_mission/package.xml

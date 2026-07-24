@@ -1,0 +1,93 @@
+[0.052s] Invoking command in '/home/nvidia/acfly_ws/build/exploration_planner': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake /home/nvidia/acfly_ws/src/exploration_planner -DPython3_EXECUTABLE=/usr/bin/python3 -DCMAKE_INSTALL_PREFIX=/home/nvidia/acfly_ws/install/exploration_planner
+[0.194s] -- The C compiler identification is GNU 11.4.0
+[0.290s] -- The CXX compiler identification is GNU 11.4.0
+[0.306s] -- Detecting C compiler ABI info
+[0.439s] -- Detecting C compiler ABI info - done
+[0.449s] -- Check for working C compiler: /usr/bin/cc - skipped
+[0.449s] -- Detecting C compile features
+[0.449s] -- Detecting C compile features - done
+[0.453s] -- Detecting CXX compiler ABI info
+[0.591s] -- Detecting CXX compiler ABI info - done
+[0.603s] -- Check for working CXX compiler: /usr/bin/c++ - skipped
+[0.603s] -- Detecting CXX compile features
+[0.604s] -- Detecting CXX compile features - done
+[0.611s] -- Found ament_cmake: 1.3.14 (/opt/ros/humble/share/ament_cmake/cmake)
+[0.898s] -- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter 
+[1.117s] -- Found rclcpp: 16.0.19 (/opt/ros/humble/share/rclcpp/cmake)
+[1.206s] -- Found rosidl_generator_c: 3.1.9 (/opt/ros/humble/share/rosidl_generator_c/cmake)
+[1.219s] -- Found rosidl_adapter: 3.1.9 (/opt/ros/humble/share/rosidl_adapter/cmake)
+[1.238s] -- Found rosidl_generator_cpp: 3.1.9 (/opt/ros/humble/share/rosidl_generator_cpp/cmake)
+[1.265s] -- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c
+[1.298s] -- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp
+[1.394s] -- Found rmw_implementation_cmake: 6.1.2 (/opt/ros/humble/share/rmw_implementation_cmake/cmake)
+[1.402s] -- Found rmw_fastrtps_cpp: 6.2.10 (/opt/ros/humble/share/rmw_fastrtps_cpp/cmake)
+[1.584s] -- Found OpenSSL: /usr/lib/aarch64-linux-gnu/libcrypto.so (found version "3.0.2")  
+[1.638s] -- Found FastRTPS: /opt/ros/humble/include  
+[1.709s] -- Using RMW implementation 'rmw_fastrtps_cpp' as default
+[1.727s] -- Looking for pthread.h
+[1.863s] -- Looking for pthread.h - found
+[1.863s] -- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+[1.998s] -- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+[2.000s] -- Found Threads: TRUE  
+[2.099s] -- Found geometry_msgs: 4.9.1 (/opt/ros/humble/share/geometry_msgs/cmake)
+[2.123s] -- Found nav_msgs: 4.9.1 (/opt/ros/humble/share/nav_msgs/cmake)
+[2.151s] -- Found sensor_msgs: 4.9.1 (/opt/ros/humble/share/sensor_msgs/cmake)
+[2.179s] -- Found visualization_msgs: 4.9.1 (/opt/ros/humble/share/visualization_msgs/cmake)
+[2.211s] -- Found tf2: 0.25.20 (/opt/ros/humble/share/tf2/cmake)
+[2.300s] -- Found CUDA: /usr/local/cuda (found suitable exact version "12.6") 
+[2.319s] -- Found OpenCV: /usr/local (found version "4.10.0") 
+[2.331s] -- Found ament_lint_auto: 0.12.15 (/opt/ros/humble/share/ament_lint_auto/cmake)
+[2.503s] -- Added test 'cppcheck' to perform static code analysis on C / C++ code
+[2.504s] -- Configured cppcheck include dirs: /home/nvidia/acfly_ws/src/exploration_planner/include
+[2.504s] -- Configured cppcheck exclude dirs and/or files: 
+[2.505s] -- Added test 'lint_cmake' to check CMake code style
+[2.508s] -- Added test 'uncrustify' to check C / C++ code style
+[2.508s] -- Configured uncrustify additional arguments: 
+[2.509s] -- Added test 'xmllint' to check XML markup files
+[2.512s] -- Configuring done
+[2.544s] -- Generating done
+[2.554s] -- Build files have been written to: /home/nvidia/acfly_ws/build/exploration_planner
+[2.587s] Invoked command in '/home/nvidia/acfly_ws/build/exploration_planner' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake /home/nvidia/acfly_ws/src/exploration_planner -DPython3_EXECUTABLE=/usr/bin/python3 -DCMAKE_INSTALL_PREFIX=/home/nvidia/acfly_ws/install/exploration_planner
+[2.588s] Invoking command in '/home/nvidia/acfly_ws/build/exploration_planner': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/exploration_planner -- -j8 -l8
+[2.685s] [ 22%] Building CXX object CMakeFiles/exploration_planner_node.dir/src/exploration_planner_node.cpp.o
+[2.685s] [ 22%] Building CXX object CMakeFiles/exploration_planner_node.dir/src/coverage_planner.cpp.o
+[2.696s] [ 33%] Building CXX object CMakeFiles/exploration_planner_node.dir/src/grid_map.cpp.o
+[2.703s] [ 44%] Building CXX object CMakeFiles/exploration_planner_node.dir/src/trajectory_tracker.cpp.o
+[2.711s] [ 55%] Building CXX object CMakeFiles/exploration_planner_node.dir/src/bezier.cpp.o
+[2.754s] [ 66%] Building CXX object CMakeFiles/exploration_planner_node.dir/src/visualizer.cpp.o
+[2.810s] [ 77%] Building CXX object CMakeFiles/exploration_planner_node.dir/src/obstacle_map.cpp.o
+[2.839s] [ 88%] Building CXX object CMakeFiles/exploration_planner_node.dir/src/global_planner.cpp.o
+[46.922s] [100%] Linking CXX executable exploration_planner_node
+[49.283s] [100%] Built target exploration_planner_node
+[49.308s] Invoked command in '/home/nvidia/acfly_ws/build/exploration_planner' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/exploration_planner -- -j8 -l8
+[49.312s] Invoking command in '/home/nvidia/acfly_ws/build/exploration_planner': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/exploration_planner
+[49.332s] -- Install configuration: ""
+[49.333s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/lib/exploration_planner/exploration_planner_node
+[49.351s] -- Set runtime path of "/home/nvidia/acfly_ws/install/exploration_planner/lib/exploration_planner/exploration_planner_node" to ""
+[49.352s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/include/
+[49.353s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/include//exploration_planner
+[49.353s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/include//exploration_planner/global_planner.hpp
+[49.353s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/include//exploration_planner/coverage_planner.hpp
+[49.354s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/include//exploration_planner/bezier.hpp
+[49.355s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/include//exploration_planner/obstacle_map.hpp
+[49.355s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/include//exploration_planner/trajectory_tracker.hpp
+[49.356s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/include//exploration_planner/visualizer.hpp
+[49.356s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/include//exploration_planner/grid_map.hpp
+[49.356s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/include//exploration_planner/params.hpp
+[49.357s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/include//exploration_planner/types.hpp
+[49.357s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/share/ament_index/resource_index/package_run_dependencies/exploration_planner
+[49.357s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/share/ament_index/resource_index/parent_prefix_path/exploration_planner
+[49.357s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/environment/ament_prefix_path.sh
+[49.358s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/environment/ament_prefix_path.dsv
+[49.358s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/environment/path.sh
+[49.358s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/environment/path.dsv
+[49.358s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/local_setup.bash
+[49.358s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/local_setup.sh
+[49.359s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/local_setup.zsh
+[49.359s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/local_setup.dsv
+[49.359s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/package.dsv
+[49.360s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/share/ament_index/resource_index/packages/exploration_planner
+[49.361s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/cmake/exploration_plannerConfig.cmake
+[49.362s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/cmake/exploration_plannerConfig-version.cmake
+[49.363s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/package.xml
+[49.363s] Invoked command in '/home/nvidia/acfly_ws/build/exploration_planner' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/exploration_planner

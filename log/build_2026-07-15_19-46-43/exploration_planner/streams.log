@@ -1,0 +1,37 @@
+[0.057s] Invoking command in '/home/nvidia/acfly_ws/build/exploration_planner': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/exploration_planner -- -j8 -l8
+[0.138s] [35m[1mConsolidate compiler generated dependencies of target exploration_planner_node[0m
+[0.176s] [ 11%] [32mBuilding CXX object CMakeFiles/exploration_planner_node.dir/src/exploration_planner_node.cpp.o[0m
+[35.643s] [ 22%] [32m[1mLinking CXX executable exploration_planner_node[0m
+[37.887s] [100%] Built target exploration_planner_node
+[37.911s] Invoked command in '/home/nvidia/acfly_ws/build/exploration_planner' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/exploration_planner -- -j8 -l8
+[37.915s] Invoking command in '/home/nvidia/acfly_ws/build/exploration_planner': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/exploration_planner
+[37.932s] -- Install configuration: ""
+[37.933s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/lib/exploration_planner/exploration_planner_node
+[37.953s] -- Set runtime path of "/home/nvidia/acfly_ws/install/exploration_planner/lib/exploration_planner/exploration_planner_node" to ""
+[37.954s] -- Up-to-date: /home/nvidia/acfly_ws/install/exploration_planner/include/
+[37.954s] -- Up-to-date: /home/nvidia/acfly_ws/install/exploration_planner/include//exploration_planner
+[37.954s] -- Up-to-date: /home/nvidia/acfly_ws/install/exploration_planner/include//exploration_planner/global_planner.hpp
+[37.955s] -- Up-to-date: /home/nvidia/acfly_ws/install/exploration_planner/include//exploration_planner/coverage_planner.hpp
+[37.955s] -- Up-to-date: /home/nvidia/acfly_ws/install/exploration_planner/include//exploration_planner/bezier.hpp
+[37.955s] -- Up-to-date: /home/nvidia/acfly_ws/install/exploration_planner/include//exploration_planner/obstacle_map.hpp
+[37.955s] -- Up-to-date: /home/nvidia/acfly_ws/install/exploration_planner/include//exploration_planner/trajectory_tracker.hpp
+[37.956s] -- Up-to-date: /home/nvidia/acfly_ws/install/exploration_planner/include//exploration_planner/visualizer.hpp
+[37.956s] -- Up-to-date: /home/nvidia/acfly_ws/install/exploration_planner/include//exploration_planner/grid_map.hpp
+[37.956s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/include//exploration_planner/params.hpp
+[37.956s] -- Up-to-date: /home/nvidia/acfly_ws/install/exploration_planner/include//exploration_planner/types.hpp
+[37.956s] -- Up-to-date: /home/nvidia/acfly_ws/install/exploration_planner/share/ament_index/resource_index/package_run_dependencies/exploration_planner
+[37.956s] -- Up-to-date: /home/nvidia/acfly_ws/install/exploration_planner/share/ament_index/resource_index/parent_prefix_path/exploration_planner
+[37.956s] -- Up-to-date: /home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/environment/ament_prefix_path.sh
+[37.956s] -- Up-to-date: /home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/environment/ament_prefix_path.dsv
+[37.956s] -- Up-to-date: /home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/environment/path.sh
+[37.956s] -- Up-to-date: /home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/environment/path.dsv
+[37.957s] -- Up-to-date: /home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/local_setup.bash
+[37.957s] -- Up-to-date: /home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/local_setup.sh
+[37.957s] -- Up-to-date: /home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/local_setup.zsh
+[37.957s] -- Up-to-date: /home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/local_setup.dsv
+[37.957s] -- Installing: /home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/package.dsv
+[37.957s] -- Up-to-date: /home/nvidia/acfly_ws/install/exploration_planner/share/ament_index/resource_index/packages/exploration_planner
+[37.958s] -- Up-to-date: /home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/cmake/exploration_plannerConfig.cmake
+[37.961s] -- Up-to-date: /home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/cmake/exploration_plannerConfig-version.cmake
+[37.962s] -- Up-to-date: /home/nvidia/acfly_ws/install/exploration_planner/share/exploration_planner/package.xml
+[37.963s] Invoked command in '/home/nvidia/acfly_ws/build/exploration_planner' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/exploration_planner

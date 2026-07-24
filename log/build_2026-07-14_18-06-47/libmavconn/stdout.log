@@ -1,0 +1,16 @@
+[  8%] Building CXX object gtest/CMakeFiles/gtest.dir/src/gtest-all.cc.o
+[ 16%] Building CXX object gtest/CMakeFiles/gtest_main.dir/src/gtest_main.cc.o
+[ 25%] Building CXX object CMakeFiles/mavconn.dir/generated/src/mavlink_helpers.cpp.o
+[ 33%] Building CXX object CMakeFiles/mavconn.dir/src/interface.cpp.o
+[ 41%] Building CXX object CMakeFiles/mavconn.dir/src/serial.cpp.o
+[ 50%] Building CXX object CMakeFiles/mavconn.dir/src/tcp.cpp.o
+[ 58%] Building CXX object CMakeFiles/mavconn.dir/src/udp.cpp.o
+[ 66%] Linking CXX static library libgtest_main.a
+[ 66%] Built target gtest_main
+[ 75%] Linking CXX static library libgtest.a
+[ 75%] Built target gtest
+[ 83%] Linking CXX shared library libmavconn.so
+[ 83%] Built target mavconn
+[ 91%] Building CXX object CMakeFiles/test_mavconn.dir/test/test_mavconn.cpp.o
+[100%] Linking CXX executable test_mavconn
+[100%] Built target test_mavconn

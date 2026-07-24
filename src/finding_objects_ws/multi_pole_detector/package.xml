@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>multi_pole_detector</name>
+  <version>0.0.0</version>
+  <description>点云找【多根】杆子(直径≈3cm)：3D包围盒 + 欧式聚类分离每根 + 逐簇XY圆拟合求位置，并给每根一个稳定编号(位置持久化track，编号不乱变)</description>
+  <maintainer email="yk@todo.todo">yk</maintainer>
+  <license>TODO</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>visualization_msgs</depend>
+  <depend>eigen</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

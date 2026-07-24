@@ -1,0 +1,428 @@
+[0.236s] colcon DEBUG Command line arguments: ['/usr/bin/colcon', 'build', '--packages-skip', 'acfly_mavros']
+[0.236s] colcon DEBUG Parsed command line arguments: Namespace(log_base=None, log_level=None, verb_name='build', build_base='build', install_base='install', merge_install=False, symlink_install=False, test_result_base=None, continue_on_error=False, executor='parallel', parallel_workers=8, event_handlers=None, ignore_user_meta=False, metas=['./colcon.meta'], base_paths=['.'], packages_ignore=None, packages_ignore_regex=None, paths=None, packages_up_to=None, packages_up_to_regex=None, packages_above=None, packages_above_and_dependencies=None, packages_above_depth=None, packages_select_by_dep=None, packages_skip_by_dep=None, packages_skip_up_to=None, packages_select_build_failed=False, packages_skip_build_finished=False, packages_select_test_failures=False, packages_skip_test_passed=False, packages_select=None, packages_skip=['acfly_mavros'], packages_select_regex=None, packages_skip_regex=None, packages_start=None, packages_end=None, allow_overriding=[], cmake_args=None, cmake_target=None, cmake_target_skip_unavailable=False, cmake_clean_cache=False, cmake_clean_first=False, cmake_force_configure=False, ament_cmake_args=None, catkin_cmake_args=None, catkin_skip_building_tests=False, verb_parser=<colcon_defaults.argument_parser.defaults.DefaultArgumentsDecorator object at 0xffff8f93bdf0>, verb_extension=<colcon_core.verb.build.BuildVerb object at 0xffff8f93b7f0>, main=<bound method BuildVerb.main of <colcon_core.verb.build.BuildVerb object at 0xffff8f93b7f0>>)
+[0.559s] colcon.colcon_core.package_discovery Level 1 discover_packages(colcon_meta) check parameters
+[0.560s] colcon.colcon_core.package_discovery Level 1 discover_packages(recursive) check parameters
+[0.560s] colcon.colcon_core.package_discovery Level 1 discover_packages(ignore) check parameters
+[0.560s] colcon.colcon_core.package_discovery Level 1 discover_packages(path) check parameters
+[0.560s] colcon.colcon_core.package_discovery Level 1 discover_packages(colcon_meta) discover
+[0.560s] colcon.colcon_core.package_discovery Level 1 discover_packages(recursive) discover
+[0.560s] colcon.colcon_core.package_discovery INFO Crawling recursively for packages in '/home/nvidia/acfly_ws'
+[0.560s] colcon.colcon_core.package_identification Level 1 _identify(.) by extensions ['ignore', 'ignore_ament_install']
+[0.560s] colcon.colcon_core.package_identification Level 1 _identify(.) by extension 'ignore'
+[0.561s] colcon.colcon_core.package_identification Level 1 _identify(.) by extension 'ignore_ament_install'
+[0.561s] colcon.colcon_core.package_identification Level 1 _identify(.) by extensions ['colcon_pkg']
+[0.561s] colcon.colcon_core.package_identification Level 1 _identify(.) by extension 'colcon_pkg'
+[0.561s] colcon.colcon_core.package_identification Level 1 _identify(.) by extensions ['colcon_meta']
+[0.561s] colcon.colcon_core.package_identification Level 1 _identify(.) by extension 'colcon_meta'
+[0.561s] colcon.colcon_core.package_identification Level 1 _identify(.) by extensions ['ros']
+[0.561s] colcon.colcon_core.package_identification Level 1 _identify(.) by extension 'ros'
+[0.579s] colcon.colcon_core.package_identification Level 1 _identify(.) by extensions ['cmake', 'python']
+[0.579s] colcon.colcon_core.package_identification Level 1 _identify(.) by extension 'cmake'
+[0.579s] colcon.colcon_core.package_identification Level 1 _identify(.) by extension 'python'
+[0.580s] colcon.colcon_core.package_identification Level 1 _identify(.) by extensions ['python_setup_py']
+[0.580s] colcon.colcon_core.package_identification Level 1 _identify(.) by extension 'python_setup_py'
+[0.580s] colcon.colcon_core.package_identification Level 1 _identify(build) by extensions ['ignore', 'ignore_ament_install']
+[0.580s] colcon.colcon_core.package_identification Level 1 _identify(build) by extension 'ignore'
+[0.580s] colcon.colcon_core.package_identification Level 1 _identify(build) ignored
+[0.580s] colcon.colcon_core.package_identification Level 1 _identify(install) by extensions ['ignore', 'ignore_ament_install']
+[0.581s] colcon.colcon_core.package_identification Level 1 _identify(install) by extension 'ignore'
+[0.581s] colcon.colcon_core.package_identification Level 1 _identify(install) ignored
+[0.581s] colcon.colcon_core.package_identification Level 1 _identify(log) by extensions ['ignore', 'ignore_ament_install']
+[0.581s] colcon.colcon_core.package_identification Level 1 _identify(log) by extension 'ignore'
+[0.581s] colcon.colcon_core.package_identification Level 1 _identify(log) ignored
+[0.581s] colcon.colcon_core.package_identification Level 1 _identify(src) by extensions ['ignore', 'ignore_ament_install']
+[0.581s] colcon.colcon_core.package_identification Level 1 _identify(src) by extension 'ignore'
+[0.581s] colcon.colcon_core.package_identification Level 1 _identify(src) by extension 'ignore_ament_install'
+[0.582s] colcon.colcon_core.package_identification Level 1 _identify(src) by extensions ['colcon_pkg']
+[0.582s] colcon.colcon_core.package_identification Level 1 _identify(src) by extension 'colcon_pkg'
+[0.582s] colcon.colcon_core.package_identification Level 1 _identify(src) by extensions ['colcon_meta']
+[0.582s] colcon.colcon_core.package_identification Level 1 _identify(src) by extension 'colcon_meta'
+[0.582s] colcon.colcon_core.package_identification Level 1 _identify(src) by extensions ['ros']
+[0.582s] colcon.colcon_core.package_identification Level 1 _identify(src) by extension 'ros'
+[0.582s] colcon.colcon_core.package_identification Level 1 _identify(src) by extensions ['cmake', 'python']
+[0.582s] colcon.colcon_core.package_identification Level 1 _identify(src) by extension 'cmake'
+[0.582s] colcon.colcon_core.package_identification Level 1 _identify(src) by extension 'python'
+[0.582s] colcon.colcon_core.package_identification Level 1 _identify(src) by extensions ['python_setup_py']
+[0.582s] colcon.colcon_core.package_identification Level 1 _identify(src) by extension 'python_setup_py'
+[0.583s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros) by extensions ['ignore', 'ignore_ament_install']
+[0.583s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros) by extension 'ignore'
+[0.583s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros) by extension 'ignore_ament_install'
+[0.583s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros) by extensions ['colcon_pkg']
+[0.583s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros) by extension 'colcon_pkg'
+[0.583s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros) by extensions ['colcon_meta']
+[0.583s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros) by extension 'colcon_meta'
+[0.583s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros) by extensions ['ros']
+[0.583s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros) by extension 'ros'
+[0.583s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros) by extensions ['cmake', 'python']
+[0.583s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros) by extension 'cmake'
+[0.583s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros) by extension 'python'
+[0.584s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros) by extensions ['python_setup_py']
+[0.584s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros) by extension 'python_setup_py'
+[0.584s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavlink-gbp-release) by extensions ['ignore', 'ignore_ament_install']
+[0.584s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavlink-gbp-release) by extension 'ignore'
+[0.584s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavlink-gbp-release) by extension 'ignore_ament_install'
+[0.584s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavlink-gbp-release) by extensions ['colcon_pkg']
+[0.584s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavlink-gbp-release) by extension 'colcon_pkg'
+[0.584s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavlink-gbp-release) by extensions ['colcon_meta']
+[0.584s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavlink-gbp-release) by extension 'colcon_meta'
+[0.584s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavlink-gbp-release) by extensions ['ros']
+[0.584s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavlink-gbp-release) by extension 'ros'
+[0.623s] colcon.colcon_core.package_identification DEBUG Package 'src/acfly_mavros/mavlink-gbp-release' with type 'ros.cmake' and name 'mavlink'
+[0.624s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros) by extensions ['ignore', 'ignore_ament_install']
+[0.624s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros) by extension 'ignore'
+[0.624s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros) by extension 'ignore_ament_install'
+[0.624s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros) by extensions ['colcon_pkg']
+[0.624s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros) by extension 'colcon_pkg'
+[0.625s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros) by extensions ['colcon_meta']
+[0.625s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros) by extension 'colcon_meta'
+[0.625s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros) by extensions ['ros']
+[0.625s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros) by extension 'ros'
+[0.625s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros) by extensions ['cmake', 'python']
+[0.625s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros) by extension 'cmake'
+[0.625s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros) by extension 'python'
+[0.625s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros) by extensions ['python_setup_py']
+[0.625s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros) by extension 'python_setup_py'
+[0.625s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/libmavconn) by extensions ['ignore', 'ignore_ament_install']
+[0.626s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/libmavconn) by extension 'ignore'
+[0.626s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/libmavconn) by extension 'ignore_ament_install'
+[0.626s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/libmavconn) by extensions ['colcon_pkg']
+[0.626s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/libmavconn) by extension 'colcon_pkg'
+[0.626s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/libmavconn) by extensions ['colcon_meta']
+[0.626s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/libmavconn) by extension 'colcon_meta'
+[0.626s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/libmavconn) by extensions ['ros']
+[0.626s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/libmavconn) by extension 'ros'
+[0.629s] colcon.colcon_core.package_identification DEBUG Package 'src/acfly_mavros/mavros/libmavconn' with type 'ros.ament_cmake' and name 'libmavconn'
+[0.629s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros) by extensions ['ignore', 'ignore_ament_install']
+[0.629s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros) by extension 'ignore'
+[0.629s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros) by extension 'ignore_ament_install'
+[0.629s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros) by extensions ['colcon_pkg']
+[0.629s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros) by extension 'colcon_pkg'
+[0.629s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros) by extensions ['colcon_meta']
+[0.629s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros) by extension 'colcon_meta'
+[0.630s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros) by extensions ['ros']
+[0.630s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros) by extension 'ros'
+[0.634s] colcon.colcon_core.package_identification DEBUG Package 'src/acfly_mavros/mavros/mavros' with type 'ros.ament_cmake' and name 'mavros'
+[0.634s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros_extras) by extensions ['ignore', 'ignore_ament_install']
+[0.634s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros_extras) by extension 'ignore'
+[0.635s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros_extras) by extension 'ignore_ament_install'
+[0.635s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros_extras) by extensions ['colcon_pkg']
+[0.635s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros_extras) by extension 'colcon_pkg'
+[0.635s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros_extras) by extensions ['colcon_meta']
+[0.635s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros_extras) by extension 'colcon_meta'
+[0.635s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros_extras) by extensions ['ros']
+[0.635s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros_extras) by extension 'ros'
+[0.640s] colcon.colcon_core.package_identification DEBUG Package 'src/acfly_mavros/mavros/mavros_extras' with type 'ros.ament_cmake' and name 'mavros_extras'
+[0.640s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros_msgs) by extensions ['ignore', 'ignore_ament_install']
+[0.640s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros_msgs) by extension 'ignore'
+[0.640s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros_msgs) by extension 'ignore_ament_install'
+[0.640s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros_msgs) by extensions ['colcon_pkg']
+[0.641s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros_msgs) by extension 'colcon_pkg'
+[0.641s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros_msgs) by extensions ['colcon_meta']
+[0.641s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros_msgs) by extension 'colcon_meta'
+[0.641s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros_msgs) by extensions ['ros']
+[0.641s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/mavros_msgs) by extension 'ros'
+[0.643s] colcon.colcon_core.package_identification DEBUG Package 'src/acfly_mavros/mavros/mavros_msgs' with type 'ros.ament_cmake' and name 'mavros_msgs'
+[0.643s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/test_mavros) by extensions ['ignore', 'ignore_ament_install']
+[0.643s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/test_mavros) by extension 'ignore'
+[0.643s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/test_mavros) ignored
+[0.643s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/tools) by extensions ['ignore', 'ignore_ament_install']
+[0.644s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/tools) by extension 'ignore'
+[0.644s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/tools) by extension 'ignore_ament_install'
+[0.644s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/tools) by extensions ['colcon_pkg']
+[0.644s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/tools) by extension 'colcon_pkg'
+[0.644s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/tools) by extensions ['colcon_meta']
+[0.644s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/tools) by extension 'colcon_meta'
+[0.644s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/tools) by extensions ['ros']
+[0.644s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/tools) by extension 'ros'
+[0.644s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/tools) by extensions ['cmake', 'python']
+[0.644s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/tools) by extension 'cmake'
+[0.644s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/tools) by extension 'python'
+[0.645s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/tools) by extensions ['python_setup_py']
+[0.645s] colcon.colcon_core.package_identification Level 1 _identify(src/acfly_mavros/mavros/tools) by extension 'python_setup_py'
+[0.645s] colcon.colcon_core.package_identification Level 1 _identify(src/exploration_planner) by extensions ['ignore', 'ignore_ament_install']
+[0.645s] colcon.colcon_core.package_identification Level 1 _identify(src/exploration_planner) by extension 'ignore'
+[0.645s] colcon.colcon_core.package_identification Level 1 _identify(src/exploration_planner) by extension 'ignore_ament_install'
+[0.645s] colcon.colcon_core.package_identification Level 1 _identify(src/exploration_planner) by extensions ['colcon_pkg']
+[0.645s] colcon.colcon_core.package_identification Level 1 _identify(src/exploration_planner) by extension 'colcon_pkg'
+[0.645s] colcon.colcon_core.package_identification Level 1 _identify(src/exploration_planner) by extensions ['colcon_meta']
+[0.645s] colcon.colcon_core.package_identification Level 1 _identify(src/exploration_planner) by extension 'colcon_meta'
+[0.645s] colcon.colcon_core.package_identification Level 1 _identify(src/exploration_planner) by extensions ['ros']
+[0.645s] colcon.colcon_core.package_identification Level 1 _identify(src/exploration_planner) by extension 'ros'
+[0.647s] colcon.colcon_core.package_identification DEBUG Package 'src/exploration_planner' with type 'ros.ament_cmake' and name 'exploration_planner'
+[0.647s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws) by extensions ['ignore', 'ignore_ament_install']
+[0.647s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws) by extension 'ignore'
+[0.647s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws) by extension 'ignore_ament_install'
+[0.647s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws) by extensions ['colcon_pkg']
+[0.648s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws) by extension 'colcon_pkg'
+[0.648s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws) by extensions ['colcon_meta']
+[0.648s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws) by extension 'colcon_meta'
+[0.648s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws) by extensions ['ros']
+[0.648s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws) by extension 'ros'
+[0.648s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws) by extensions ['cmake', 'python']
+[0.648s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws) by extension 'cmake'
+[0.648s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws) by extension 'python'
+[0.648s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws) by extensions ['python_setup_py']
+[0.648s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws) by extension 'python_setup_py'
+[0.649s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/multi_pole_detector) by extensions ['ignore', 'ignore_ament_install']
+[0.649s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/multi_pole_detector) by extension 'ignore'
+[0.649s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/multi_pole_detector) by extension 'ignore_ament_install'
+[0.649s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/multi_pole_detector) by extensions ['colcon_pkg']
+[0.649s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/multi_pole_detector) by extension 'colcon_pkg'
+[0.649s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/multi_pole_detector) by extensions ['colcon_meta']
+[0.649s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/multi_pole_detector) by extension 'colcon_meta'
+[0.649s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/multi_pole_detector) by extensions ['ros']
+[0.649s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/multi_pole_detector) by extension 'ros'
+[0.651s] colcon.colcon_core.package_identification DEBUG Package 'src/finding_objects_ws/multi_pole_detector' with type 'ros.ament_cmake' and name 'multi_pole_detector'
+[0.651s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/pole_detector) by extensions ['ignore', 'ignore_ament_install']
+[0.651s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/pole_detector) by extension 'ignore'
+[0.651s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/pole_detector) by extension 'ignore_ament_install'
+[0.651s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/pole_detector) by extensions ['colcon_pkg']
+[0.651s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/pole_detector) by extension 'colcon_pkg'
+[0.651s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/pole_detector) by extensions ['colcon_meta']
+[0.652s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/pole_detector) by extension 'colcon_meta'
+[0.652s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/pole_detector) by extensions ['ros']
+[0.652s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/pole_detector) by extension 'ros'
+[0.653s] colcon.colcon_core.package_identification DEBUG Package 'src/finding_objects_ws/pole_detector' with type 'ros.ament_cmake' and name 'pole_detector'
+[0.653s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/ring_detector) by extensions ['ignore', 'ignore_ament_install']
+[0.653s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/ring_detector) by extension 'ignore'
+[0.654s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/ring_detector) by extension 'ignore_ament_install'
+[0.654s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/ring_detector) by extensions ['colcon_pkg']
+[0.654s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/ring_detector) by extension 'colcon_pkg'
+[0.654s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/ring_detector) by extensions ['colcon_meta']
+[0.654s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/ring_detector) by extension 'colcon_meta'
+[0.654s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/ring_detector) by extensions ['ros']
+[0.654s] colcon.colcon_core.package_identification Level 1 _identify(src/finding_objects_ws/ring_detector) by extension 'ros'
+[0.655s] colcon.colcon_core.package_identification DEBUG Package 'src/finding_objects_ws/ring_detector' with type 'ros.ament_cmake' and name 'ring_detector'
+[0.656s] colcon.colcon_core.package_identification Level 1 _identify(src/fly_mission) by extensions ['ignore', 'ignore_ament_install']
+[0.656s] colcon.colcon_core.package_identification Level 1 _identify(src/fly_mission) by extension 'ignore'
+[0.656s] colcon.colcon_core.package_identification Level 1 _identify(src/fly_mission) by extension 'ignore_ament_install'
+[0.656s] colcon.colcon_core.package_identification Level 1 _identify(src/fly_mission) by extensions ['colcon_pkg']
+[0.656s] colcon.colcon_core.package_identification Level 1 _identify(src/fly_mission) by extension 'colcon_pkg'
+[0.656s] colcon.colcon_core.package_identification Level 1 _identify(src/fly_mission) by extensions ['colcon_meta']
+[0.656s] colcon.colcon_core.package_identification Level 1 _identify(src/fly_mission) by extension 'colcon_meta'
+[0.656s] colcon.colcon_core.package_identification Level 1 _identify(src/fly_mission) by extensions ['ros']
+[0.656s] colcon.colcon_core.package_identification Level 1 _identify(src/fly_mission) by extension 'ros'
+[0.658s] colcon.colcon_core.package_identification DEBUG Package 'src/fly_mission' with type 'ros.ament_cmake' and name 'fly_mission'
+[0.658s] colcon.colcon_core.package_discovery Level 1 discover_packages(recursive) using defaults
+[0.658s] colcon.colcon_core.package_discovery Level 1 discover_packages(ignore) discover
+[0.658s] colcon.colcon_core.package_discovery Level 1 discover_packages(ignore) using defaults
+[0.658s] colcon.colcon_core.package_discovery Level 1 discover_packages(path) discover
+[0.658s] colcon.colcon_core.package_discovery Level 1 discover_packages(path) using defaults
+[0.659s] colcon.colcon_core.package_selection WARNING ignoring unknown package 'acfly_mavros' in --packages-skip
+[0.691s] colcon.colcon_core.package_discovery Level 1 discover_packages(prefix_path) check parameters
+[0.691s] colcon.colcon_core.package_discovery Level 1 discover_packages(prefix_path) discover
+[0.697s] colcon.colcon_installed_package_information.package_discovery DEBUG Found 7 installed packages in /home/nvidia/acfly_ws/install
+[0.697s] colcon.colcon_installed_package_information.package_discovery DEBUG Found 4 installed packages in /home/nvidia/ws_point/install
+[0.698s] colcon.colcon_installed_package_information.package_discovery DEBUG Found 1 installed packages in /home/nvidia/ws_livox/install
+[0.699s] colcon.colcon_installed_package_information.package_discovery DEBUG Found 4 installed packages in /home/nvidia/ws_orbbec/install
+[0.701s] colcon.colcon_installed_package_information.package_discovery DEBUG Found 285 installed packages in /opt/ros/humble
+[0.704s] colcon.colcon_core.package_discovery Level 1 discover_packages(prefix_path) using defaults
+[0.769s] colcon.colcon_core.package_selection WARNING Some selected packages are already built in one or more underlay workspaces:
+	'mavros_msgs' is in: /home/nvidia/acfly_ws/install/mavros_msgs
+If a package in a merged underlay workspace is overridden and it installs headers, then all packages in the overlay must sort their include directories by workspace order. Failure to do so may result in build failures or undefined behavior at run time.
+If the overridden package is used by another package in any underlay, then the overriding package in the overlay must be API and ABI compatible or undefined behavior at run time may occur.
+
+If you understand the risks and want to override a package anyways, add the following to the command line:
+	--allow-overriding mavros_msgs
+
+This may be promoted to an error in a future release of colcon-override-check.
+[0.770s] colcon.colcon_core.verb Level 5 set package 'exploration_planner' build argument 'cmake_args' from command line to 'None'
+[0.770s] colcon.colcon_core.verb Level 5 set package 'exploration_planner' build argument 'cmake_target' from command line to 'None'
+[0.771s] colcon.colcon_core.verb Level 5 set package 'exploration_planner' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.771s] colcon.colcon_core.verb Level 5 set package 'exploration_planner' build argument 'cmake_clean_cache' from command line to 'False'
+[0.771s] colcon.colcon_core.verb Level 5 set package 'exploration_planner' build argument 'cmake_clean_first' from command line to 'False'
+[0.771s] colcon.colcon_core.verb Level 5 set package 'exploration_planner' build argument 'cmake_force_configure' from command line to 'False'
+[0.771s] colcon.colcon_core.verb Level 5 set package 'exploration_planner' build argument 'ament_cmake_args' from command line to 'None'
+[0.771s] colcon.colcon_core.verb Level 5 set package 'exploration_planner' build argument 'catkin_cmake_args' from command line to 'None'
+[0.771s] colcon.colcon_core.verb Level 5 set package 'exploration_planner' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.771s] colcon.colcon_core.verb DEBUG Building package 'exploration_planner' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/nvidia/acfly_ws/build/exploration_planner', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/nvidia/acfly_ws/install/exploration_planner', 'merge_install': False, 'path': '/home/nvidia/acfly_ws/src/exploration_planner', 'symlink_install': False, 'test_result_base': None}
+[0.771s] colcon.colcon_core.verb Level 5 set package 'mavlink' build argument 'cmake_args' from command line to 'None'
+[0.771s] colcon.colcon_core.verb Level 5 set package 'mavlink' build argument 'cmake_target' from command line to 'None'
+[0.772s] colcon.colcon_core.verb Level 5 set package 'mavlink' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.772s] colcon.colcon_core.verb Level 5 set package 'mavlink' build argument 'cmake_clean_cache' from command line to 'False'
+[0.772s] colcon.colcon_core.verb Level 5 set package 'mavlink' build argument 'cmake_clean_first' from command line to 'False'
+[0.772s] colcon.colcon_core.verb Level 5 set package 'mavlink' build argument 'cmake_force_configure' from command line to 'False'
+[0.772s] colcon.colcon_core.verb Level 5 set package 'mavlink' build argument 'ament_cmake_args' from command line to 'None'
+[0.772s] colcon.colcon_core.verb Level 5 set package 'mavlink' build argument 'catkin_cmake_args' from command line to 'None'
+[0.772s] colcon.colcon_core.verb Level 5 set package 'mavlink' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.772s] colcon.colcon_core.verb DEBUG Building package 'mavlink' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/nvidia/acfly_ws/build/mavlink', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/nvidia/acfly_ws/install/mavlink', 'merge_install': False, 'path': '/home/nvidia/acfly_ws/src/acfly_mavros/mavlink-gbp-release', 'symlink_install': False, 'test_result_base': None}
+[0.772s] colcon.colcon_core.verb Level 5 set package 'mavros_msgs' build argument 'cmake_args' from command line to 'None'
+[0.772s] colcon.colcon_core.verb Level 5 set package 'mavros_msgs' build argument 'cmake_target' from command line to 'None'
+[0.772s] colcon.colcon_core.verb Level 5 set package 'mavros_msgs' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.772s] colcon.colcon_core.verb Level 5 set package 'mavros_msgs' build argument 'cmake_clean_cache' from command line to 'False'
+[0.773s] colcon.colcon_core.verb Level 5 set package 'mavros_msgs' build argument 'cmake_clean_first' from command line to 'False'
+[0.773s] colcon.colcon_core.verb Level 5 set package 'mavros_msgs' build argument 'cmake_force_configure' from command line to 'False'
+[0.773s] colcon.colcon_core.verb Level 5 set package 'mavros_msgs' build argument 'ament_cmake_args' from command line to 'None'
+[0.773s] colcon.colcon_core.verb Level 5 set package 'mavros_msgs' build argument 'catkin_cmake_args' from command line to 'None'
+[0.773s] colcon.colcon_core.verb Level 5 set package 'mavros_msgs' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.773s] colcon.colcon_core.verb DEBUG Building package 'mavros_msgs' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/nvidia/acfly_ws/build/mavros_msgs', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/nvidia/acfly_ws/install/mavros_msgs', 'merge_install': False, 'path': '/home/nvidia/acfly_ws/src/acfly_mavros/mavros/mavros_msgs', 'symlink_install': False, 'test_result_base': None}
+[0.773s] colcon.colcon_core.verb Level 5 set package 'multi_pole_detector' build argument 'cmake_args' from command line to 'None'
+[0.773s] colcon.colcon_core.verb Level 5 set package 'multi_pole_detector' build argument 'cmake_target' from command line to 'None'
+[0.773s] colcon.colcon_core.verb Level 5 set package 'multi_pole_detector' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.773s] colcon.colcon_core.verb Level 5 set package 'multi_pole_detector' build argument 'cmake_clean_cache' from command line to 'False'
+[0.773s] colcon.colcon_core.verb Level 5 set package 'multi_pole_detector' build argument 'cmake_clean_first' from command line to 'False'
+[0.773s] colcon.colcon_core.verb Level 5 set package 'multi_pole_detector' build argument 'cmake_force_configure' from command line to 'False'
+[0.773s] colcon.colcon_core.verb Level 5 set package 'multi_pole_detector' build argument 'ament_cmake_args' from command line to 'None'
+[0.774s] colcon.colcon_core.verb Level 5 set package 'multi_pole_detector' build argument 'catkin_cmake_args' from command line to 'None'
+[0.774s] colcon.colcon_core.verb Level 5 set package 'multi_pole_detector' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.774s] colcon.colcon_core.verb DEBUG Building package 'multi_pole_detector' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/nvidia/acfly_ws/build/multi_pole_detector', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/nvidia/acfly_ws/install/multi_pole_detector', 'merge_install': False, 'path': '/home/nvidia/acfly_ws/src/finding_objects_ws/multi_pole_detector', 'symlink_install': False, 'test_result_base': None}
+[0.774s] colcon.colcon_core.verb Level 5 set package 'pole_detector' build argument 'cmake_args' from command line to 'None'
+[0.774s] colcon.colcon_core.verb Level 5 set package 'pole_detector' build argument 'cmake_target' from command line to 'None'
+[0.774s] colcon.colcon_core.verb Level 5 set package 'pole_detector' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.774s] colcon.colcon_core.verb Level 5 set package 'pole_detector' build argument 'cmake_clean_cache' from command line to 'False'
+[0.774s] colcon.colcon_core.verb Level 5 set package 'pole_detector' build argument 'cmake_clean_first' from command line to 'False'
+[0.774s] colcon.colcon_core.verb Level 5 set package 'pole_detector' build argument 'cmake_force_configure' from command line to 'False'
+[0.774s] colcon.colcon_core.verb Level 5 set package 'pole_detector' build argument 'ament_cmake_args' from command line to 'None'
+[0.774s] colcon.colcon_core.verb Level 5 set package 'pole_detector' build argument 'catkin_cmake_args' from command line to 'None'
+[0.774s] colcon.colcon_core.verb Level 5 set package 'pole_detector' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.774s] colcon.colcon_core.verb DEBUG Building package 'pole_detector' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/nvidia/acfly_ws/build/pole_detector', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/nvidia/acfly_ws/install/pole_detector', 'merge_install': False, 'path': '/home/nvidia/acfly_ws/src/finding_objects_ws/pole_detector', 'symlink_install': False, 'test_result_base': None}
+[0.775s] colcon.colcon_core.verb Level 5 set package 'ring_detector' build argument 'cmake_args' from command line to 'None'
+[0.775s] colcon.colcon_core.verb Level 5 set package 'ring_detector' build argument 'cmake_target' from command line to 'None'
+[0.775s] colcon.colcon_core.verb Level 5 set package 'ring_detector' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.775s] colcon.colcon_core.verb Level 5 set package 'ring_detector' build argument 'cmake_clean_cache' from command line to 'False'
+[0.775s] colcon.colcon_core.verb Level 5 set package 'ring_detector' build argument 'cmake_clean_first' from command line to 'False'
+[0.775s] colcon.colcon_core.verb Level 5 set package 'ring_detector' build argument 'cmake_force_configure' from command line to 'False'
+[0.775s] colcon.colcon_core.verb Level 5 set package 'ring_detector' build argument 'ament_cmake_args' from command line to 'None'
+[0.775s] colcon.colcon_core.verb Level 5 set package 'ring_detector' build argument 'catkin_cmake_args' from command line to 'None'
+[0.775s] colcon.colcon_core.verb Level 5 set package 'ring_detector' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.775s] colcon.colcon_core.verb DEBUG Building package 'ring_detector' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/nvidia/acfly_ws/build/ring_detector', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/nvidia/acfly_ws/install/ring_detector', 'merge_install': False, 'path': '/home/nvidia/acfly_ws/src/finding_objects_ws/ring_detector', 'symlink_install': False, 'test_result_base': None}
+[0.776s] colcon.colcon_core.verb Level 5 set package 'fly_mission' build argument 'cmake_args' from command line to 'None'
+[0.776s] colcon.colcon_core.verb Level 5 set package 'fly_mission' build argument 'cmake_target' from command line to 'None'
+[0.776s] colcon.colcon_core.verb Level 5 set package 'fly_mission' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.776s] colcon.colcon_core.verb Level 5 set package 'fly_mission' build argument 'cmake_clean_cache' from command line to 'False'
+[0.776s] colcon.colcon_core.verb Level 5 set package 'fly_mission' build argument 'cmake_clean_first' from command line to 'False'
+[0.776s] colcon.colcon_core.verb Level 5 set package 'fly_mission' build argument 'cmake_force_configure' from command line to 'False'
+[0.776s] colcon.colcon_core.verb Level 5 set package 'fly_mission' build argument 'ament_cmake_args' from command line to 'None'
+[0.776s] colcon.colcon_core.verb Level 5 set package 'fly_mission' build argument 'catkin_cmake_args' from command line to 'None'
+[0.776s] colcon.colcon_core.verb Level 5 set package 'fly_mission' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.776s] colcon.colcon_core.verb DEBUG Building package 'fly_mission' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/nvidia/acfly_ws/build/fly_mission', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/nvidia/acfly_ws/install/fly_mission', 'merge_install': False, 'path': '/home/nvidia/acfly_ws/src/fly_mission', 'symlink_install': False, 'test_result_base': None}
+[0.777s] colcon.colcon_core.verb Level 5 set package 'libmavconn' build argument 'cmake_args' from command line to 'None'
+[0.777s] colcon.colcon_core.verb Level 5 set package 'libmavconn' build argument 'cmake_target' from command line to 'None'
+[0.777s] colcon.colcon_core.verb Level 5 set package 'libmavconn' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.777s] colcon.colcon_core.verb Level 5 set package 'libmavconn' build argument 'cmake_clean_cache' from command line to 'False'
+[0.777s] colcon.colcon_core.verb Level 5 set package 'libmavconn' build argument 'cmake_clean_first' from command line to 'False'
+[0.777s] colcon.colcon_core.verb Level 5 set package 'libmavconn' build argument 'cmake_force_configure' from command line to 'False'
+[0.777s] colcon.colcon_core.verb Level 5 set package 'libmavconn' build argument 'ament_cmake_args' from command line to 'None'
+[0.777s] colcon.colcon_core.verb Level 5 set package 'libmavconn' build argument 'catkin_cmake_args' from command line to 'None'
+[0.777s] colcon.colcon_core.verb Level 5 set package 'libmavconn' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.777s] colcon.colcon_core.verb DEBUG Building package 'libmavconn' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/nvidia/acfly_ws/build/libmavconn', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/nvidia/acfly_ws/install/libmavconn', 'merge_install': False, 'path': '/home/nvidia/acfly_ws/src/acfly_mavros/mavros/libmavconn', 'symlink_install': False, 'test_result_base': None}
+[0.778s] colcon.colcon_core.verb Level 5 set package 'mavros' build argument 'cmake_args' from command line to 'None'
+[0.778s] colcon.colcon_core.verb Level 5 set package 'mavros' build argument 'cmake_target' from command line to 'None'
+[0.778s] colcon.colcon_core.verb Level 5 set package 'mavros' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.778s] colcon.colcon_core.verb Level 5 set package 'mavros' build argument 'cmake_clean_cache' from command line to 'False'
+[0.778s] colcon.colcon_core.verb Level 5 set package 'mavros' build argument 'cmake_clean_first' from command line to 'False'
+[0.778s] colcon.colcon_core.verb Level 5 set package 'mavros' build argument 'cmake_force_configure' from command line to 'False'
+[0.778s] colcon.colcon_core.verb Level 5 set package 'mavros' build argument 'ament_cmake_args' from command line to 'None'
+[0.778s] colcon.colcon_core.verb Level 5 set package 'mavros' build argument 'catkin_cmake_args' from command line to 'None'
+[0.778s] colcon.colcon_core.verb Level 5 set package 'mavros' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.778s] colcon.colcon_core.verb DEBUG Building package 'mavros' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/nvidia/acfly_ws/build/mavros', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/nvidia/acfly_ws/install/mavros', 'merge_install': False, 'path': '/home/nvidia/acfly_ws/src/acfly_mavros/mavros/mavros', 'symlink_install': False, 'test_result_base': None}
+[0.778s] colcon.colcon_core.verb Level 5 set package 'mavros_extras' build argument 'cmake_args' from command line to 'None'
+[0.779s] colcon.colcon_core.verb Level 5 set package 'mavros_extras' build argument 'cmake_target' from command line to 'None'
+[0.779s] colcon.colcon_core.verb Level 5 set package 'mavros_extras' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.779s] colcon.colcon_core.verb Level 5 set package 'mavros_extras' build argument 'cmake_clean_cache' from command line to 'False'
+[0.779s] colcon.colcon_core.verb Level 5 set package 'mavros_extras' build argument 'cmake_clean_first' from command line to 'False'
+[0.779s] colcon.colcon_core.verb Level 5 set package 'mavros_extras' build argument 'cmake_force_configure' from command line to 'False'
+[0.779s] colcon.colcon_core.verb Level 5 set package 'mavros_extras' build argument 'ament_cmake_args' from command line to 'None'
+[0.779s] colcon.colcon_core.verb Level 5 set package 'mavros_extras' build argument 'catkin_cmake_args' from command line to 'None'
+[0.779s] colcon.colcon_core.verb Level 5 set package 'mavros_extras' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.779s] colcon.colcon_core.verb DEBUG Building package 'mavros_extras' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/nvidia/acfly_ws/build/mavros_extras', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/nvidia/acfly_ws/install/mavros_extras', 'merge_install': False, 'path': '/home/nvidia/acfly_ws/src/acfly_mavros/mavros/mavros_extras', 'symlink_install': False, 'test_result_base': None}
+[0.779s] colcon.colcon_core.executor INFO Executing jobs using 'parallel' executor
+[0.781s] colcon.colcon_parallel_executor.executor.parallel DEBUG run_until_complete
+[0.782s] colcon.colcon_ros.task.cmake.build INFO Building ROS package in '/home/nvidia/acfly_ws/src/acfly_mavros/mavlink-gbp-release' with build type 'cmake'
+[0.782s] colcon.colcon_cmake.task.cmake.build INFO Building CMake package in '/home/nvidia/acfly_ws/src/acfly_mavros/mavlink-gbp-release'
+[0.787s] colcon.colcon_core.plugin_system INFO Skipping extension 'colcon_core.shell.bat': Not used on non-Windows systems
+[0.787s] colcon.colcon_core.shell INFO Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.787s] colcon.colcon_core.shell DEBUG Skip shell extension 'dsv' for command environment
+[0.796s] colcon.colcon_ros.task.ament_cmake.build INFO Building ROS package in '/home/nvidia/acfly_ws/src/acfly_mavros/mavros/mavros_msgs' with build type 'ament_cmake'
+[0.796s] colcon.colcon_cmake.task.cmake.build INFO Building CMake package in '/home/nvidia/acfly_ws/src/acfly_mavros/mavros/mavros_msgs'
+[0.797s] colcon.colcon_core.shell INFO Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.797s] colcon.colcon_core.shell DEBUG Skip shell extension 'dsv' for command environment
+[0.805s] colcon.colcon_ros.task.ament_cmake.build INFO Building ROS package in '/home/nvidia/acfly_ws/src/exploration_planner' with build type 'ament_cmake'
+[0.805s] colcon.colcon_cmake.task.cmake.build INFO Building CMake package in '/home/nvidia/acfly_ws/src/exploration_planner'
+[0.806s] colcon.colcon_core.shell INFO Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.806s] colcon.colcon_core.shell DEBUG Skip shell extension 'dsv' for command environment
+[0.815s] colcon.colcon_ros.task.ament_cmake.build INFO Building ROS package in '/home/nvidia/acfly_ws/src/finding_objects_ws/multi_pole_detector' with build type 'ament_cmake'
+[0.815s] colcon.colcon_cmake.task.cmake.build INFO Building CMake package in '/home/nvidia/acfly_ws/src/finding_objects_ws/multi_pole_detector'
+[0.816s] colcon.colcon_core.shell INFO Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.816s] colcon.colcon_core.shell DEBUG Skip shell extension 'dsv' for command environment
+[0.823s] colcon.colcon_ros.task.ament_cmake.build INFO Building ROS package in '/home/nvidia/acfly_ws/src/finding_objects_ws/pole_detector' with build type 'ament_cmake'
+[0.824s] colcon.colcon_cmake.task.cmake.build INFO Building CMake package in '/home/nvidia/acfly_ws/src/finding_objects_ws/pole_detector'
+[0.824s] colcon.colcon_core.shell INFO Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.824s] colcon.colcon_core.shell DEBUG Skip shell extension 'dsv' for command environment
+[0.832s] colcon.colcon_ros.task.ament_cmake.build INFO Building ROS package in '/home/nvidia/acfly_ws/src/finding_objects_ws/ring_detector' with build type 'ament_cmake'
+[0.832s] colcon.colcon_cmake.task.cmake.build INFO Building CMake package in '/home/nvidia/acfly_ws/src/finding_objects_ws/ring_detector'
+[0.833s] colcon.colcon_core.shell INFO Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.833s] colcon.colcon_core.shell DEBUG Skip shell extension 'dsv' for command environment
+[0.851s] colcon.colcon_core.event_handler.log_command DEBUG Invoking command in '/home/nvidia/acfly_ws/build/mavlink': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/mavlink -- -j8 -l8
+[0.855s] colcon.colcon_core.event_handler.log_command DEBUG Invoking command in '/home/nvidia/acfly_ws/build/mavros_msgs': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/mavros_msgs -- -j8 -l8
+[0.858s] colcon.colcon_core.event_handler.log_command DEBUG Invoking command in '/home/nvidia/acfly_ws/build/exploration_planner': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake /home/nvidia/acfly_ws/src/exploration_planner -DCMAKE_INSTALL_PREFIX=/home/nvidia/acfly_ws/install/exploration_planner
+[0.863s] colcon.colcon_core.event_handler.log_command DEBUG Invoking command in '/home/nvidia/acfly_ws/build/multi_pole_detector': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake /home/nvidia/acfly_ws/src/finding_objects_ws/multi_pole_detector -DCMAKE_INSTALL_PREFIX=/home/nvidia/acfly_ws/install/multi_pole_detector
+[0.866s] colcon.colcon_core.event_handler.log_command DEBUG Invoking command in '/home/nvidia/acfly_ws/build/pole_detector': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake /home/nvidia/acfly_ws/src/finding_objects_ws/pole_detector -DCMAKE_INSTALL_PREFIX=/home/nvidia/acfly_ws/install/pole_detector
+[0.872s] colcon.colcon_core.event_handler.log_command DEBUG Invoking command in '/home/nvidia/acfly_ws/build/ring_detector': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake /home/nvidia/acfly_ws/src/finding_objects_ws/ring_detector -DCMAKE_INSTALL_PREFIX=/home/nvidia/acfly_ws/install/ring_detector
+[1.383s] colcon.colcon_core.event_handler.log_command DEBUG Invoked command in '/home/nvidia/acfly_ws/build/mavlink' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/mavlink -- -j8 -l8
+[1.405s] colcon.colcon_core.event_handler.log_command DEBUG Invoking command in '/home/nvidia/acfly_ws/build/mavlink': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/mavlink
+[1.515s] colcon.colcon_core.shell Level 1 create_environment_hook('mavlink', 'pkg_config_path')
+[1.515s] colcon.colcon_core.shell INFO Creating environment hook '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/hook/pkg_config_path.ps1'
+[1.517s] colcon.colcon_core.shell INFO Creating environment descriptor '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/hook/pkg_config_path.dsv'
+[1.518s] colcon.colcon_core.shell INFO Creating environment hook '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/hook/pkg_config_path.sh'
+[1.528s] colcon.colcon_core.shell Level 1 create_environment_hook('mavlink', 'pkg_config_path_multiarch')
+[1.529s] colcon.colcon_core.shell INFO Creating environment hook '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/hook/pkg_config_path_multiarch.ps1'
+[1.531s] colcon.colcon_core.shell INFO Creating environment descriptor '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/hook/pkg_config_path_multiarch.dsv'
+[1.532s] colcon.colcon_core.shell INFO Creating environment hook '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/hook/pkg_config_path_multiarch.sh'
+[1.533s] colcon.colcon_core.environment Level 1 create_environment_scripts_only(mavlink)
+[1.547s] colcon.colcon_core.environment Level 1 checking '/home/nvidia/acfly_ws/install/mavlink' for CMake module files
+[1.550s] colcon.colcon_core.environment Level 1 checking '/home/nvidia/acfly_ws/install/mavlink' for CMake config files
+[1.553s] colcon.colcon_core.shell Level 1 create_environment_hook('mavlink', 'cmake_prefix_path')
+[1.554s] colcon.colcon_core.shell INFO Creating environment hook '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/hook/cmake_prefix_path.ps1'
+[1.561s] colcon.colcon_core.shell INFO Creating environment descriptor '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/hook/cmake_prefix_path.dsv'
+[1.567s] colcon.colcon_core.shell INFO Creating environment hook '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/hook/cmake_prefix_path.sh'
+[1.570s] colcon.colcon_core.environment Level 1 checking '/home/nvidia/acfly_ws/install/mavlink/lib'
+[1.572s] colcon.colcon_core.environment Level 1 checking '/home/nvidia/acfly_ws/install/mavlink/bin'
+[1.572s] colcon.colcon_core.environment Level 1 checking '/home/nvidia/acfly_ws/install/mavlink/lib/pkgconfig/mavlink.pc'
+[1.572s] colcon.colcon_core.shell Level 1 create_environment_hook('mavlink', 'pkg_config')
+[1.573s] colcon.colcon_core.shell INFO Creating environment hook '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/hook/pkg_config.ps1'
+[1.576s] colcon.colcon_core.shell INFO Creating environment descriptor '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/hook/pkg_config.dsv'
+[1.577s] colcon.colcon_core.shell INFO Creating environment hook '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/hook/pkg_config.sh'
+[1.580s] colcon.colcon_core.environment Level 1 checking '/home/nvidia/acfly_ws/install/mavlink/lib/python3.10/site-packages'
+[1.581s] colcon.colcon_core.environment Level 1 checking '/home/nvidia/acfly_ws/install/mavlink/bin'
+[1.582s] colcon.colcon_core.shell INFO Creating package script '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/package.ps1'
+[1.586s] colcon.colcon_core.shell INFO Creating package descriptor '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/package.dsv'
+[1.588s] colcon.colcon_core.shell INFO Creating package script '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/package.sh'
+[1.594s] colcon.colcon_core.shell INFO Creating package script '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/package.bash'
+[1.596s] colcon.colcon_core.shell INFO Creating package script '/home/nvidia/acfly_ws/install/mavlink/share/mavlink/package.zsh'
+[1.598s] colcon.colcon_core.environment Level 1 create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/mavlink/share/colcon-core/packages/mavlink)
+[1.599s] colcon.colcon_ros.task.ament_cmake.build INFO Building ROS package in '/home/nvidia/acfly_ws/src/acfly_mavros/mavros/libmavconn' with build type 'ament_cmake'
+[1.600s] colcon.colcon_cmake.task.cmake.build INFO Building CMake package in '/home/nvidia/acfly_ws/src/acfly_mavros/mavros/libmavconn'
+[1.600s] colcon.colcon_core.shell INFO Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[1.600s] colcon.colcon_core.shell DEBUG Skip shell extension 'dsv' for command environment
+[1.742s] colcon.colcon_core.event_handler.log_command DEBUG Invoked command in '/home/nvidia/acfly_ws/build/mavlink' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --install /home/nvidia/acfly_ws/build/mavlink
+[1.747s] colcon.colcon_core.event_handler.log_command DEBUG Invoking command in '/home/nvidia/acfly_ws/build/libmavconn': CMAKE_PREFIX_PATH=/home/nvidia/acfly_ws/install/mavlink:/home/nvidia/acfly_ws/install/mavros_extras:/home/nvidia/acfly_ws/install/mavros:/home/nvidia/acfly_ws/install/fly_mission_gps:/home/nvidia/acfly_ws/install/fly_mission:/home/nvidia/acfly_ws/install/mavros_msgs:/home/nvidia/acfly_ws/install/libmavconn:/home/nvidia/ws_orbbec/install/orbbec_description:/home/nvidia/ws_orbbec/install/orbbec_camera:/home/nvidia/ws_orbbec/install/orbbec_camera_msgs:/home/nvidia/ws_livox/install/livox_ros_driver2:/home/nvidia/ws_point/install/pos_link:/home/nvidia/ws_point/install/point_lio:/home/nvidia/ws_point/install/pcl_cloud:/home/nvidia/ws_point/install/ac_link:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake --build /home/nvidia/acfly_ws/build/libmavconn -- -j8 -l8
+[6.200s] colcon.colcon_core.event_handler.log_command DEBUG Invoked command in '/home/nvidia/acfly_ws/build/ring_detector' returned '1': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/nvidia/ws_orbbec/install/gemini_vision:/opt/ros/humble /usr/bin/cmake /home/nvidia/acfly_ws/src/finding_objects_ws/ring_detector -DCMAKE_INSTALL_PREFIX=/home/nvidia/acfly_ws/install/ring_detector
+[6.274s] colcon.colcon_core.environment Level 1 create_environment_scripts_only(ring_detector)
+[6.275s] colcon.colcon_core.environment Level 1 checking '/home/nvidia/acfly_ws/install/ring_detector' for CMake module files
+[6.275s] colcon.colcon_core.environment Level 1 checking '/home/nvidia/acfly_ws/install/ring_detector' for CMake config files
+[6.276s] colcon.colcon_core.environment Level 1 checking '/home/nvidia/acfly_ws/install/ring_detector/bin'
+[6.276s] colcon.colcon_core.environment Level 1 checking '/home/nvidia/acfly_ws/install/ring_detector/lib/pkgconfig/ring_detector.pc'
+[6.277s] colcon.colcon_core.environment Level 1 checking '/home/nvidia/acfly_ws/install/ring_detector/lib/python3.10/site-packages'
+[6.277s] colcon.colcon_core.environment Level 1 checking '/home/nvidia/acfly_ws/install/ring_detector/bin'
+[6.278s] colcon.colcon_core.shell INFO Creating package script '/home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/package.ps1'
+[6.280s] colcon.colcon_core.shell INFO Creating package descriptor '/home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/package.dsv'
+[6.280s] colcon.colcon_core.shell INFO Creating package script '/home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/package.sh'
+[6.281s] colcon.colcon_core.shell INFO Creating package script '/home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/package.bash'
+[6.282s] colcon.colcon_core.shell INFO Creating package script '/home/nvidia/acfly_ws/install/ring_detector/share/ring_detector/package.zsh'
+[6.283s] colcon.colcon_core.environment Level 1 create_file_with_runtime_dependencies(/home/nvidia/acfly_ws/install/ring_detector/share/colcon-core/packages/ring_detector)
+[179.061s] colcon.colcon_parallel_executor.executor.parallel DEBUG closing loop
+[179.061s] colcon.colcon_parallel_executor.executor.parallel DEBUG loop closed
+[179.061s] colcon.colcon_parallel_executor.executor.parallel DEBUG run_until_complete finished with '1'
+[179.061s] colcon.colcon_core.event_reactor DEBUG joining thread
+[179.063s] colcon.colcon_core.event_reactor DEBUG joined thread
+[179.064s] colcon.colcon_core.shell INFO Creating prefix script '/home/nvidia/acfly_ws/install/local_setup.ps1'
+[179.068s] colcon.colcon_core.shell INFO Creating prefix util module '/home/nvidia/acfly_ws/install/_local_setup_util_ps1.py'
+[179.073s] colcon.colcon_core.shell INFO Creating prefix chain script '/home/nvidia/acfly_ws/install/setup.ps1'
+[179.079s] colcon.colcon_core.shell INFO Creating prefix script '/home/nvidia/acfly_ws/install/local_setup.sh'
+[179.081s] colcon.colcon_core.shell INFO Creating prefix util module '/home/nvidia/acfly_ws/install/_local_setup_util_sh.py'
+[179.082s] colcon.colcon_core.shell INFO Creating prefix chain script '/home/nvidia/acfly_ws/install/setup.sh'
+[179.086s] colcon.colcon_core.shell INFO Creating prefix script '/home/nvidia/acfly_ws/install/local_setup.bash'
+[179.087s] colcon.colcon_core.shell INFO Creating prefix chain script '/home/nvidia/acfly_ws/install/setup.bash'
+[179.092s] colcon.colcon_core.shell INFO Creating prefix script '/home/nvidia/acfly_ws/install/local_setup.zsh'
+[179.093s] colcon.colcon_core.shell INFO Creating prefix chain script '/home/nvidia/acfly_ws/install/setup.zsh'
