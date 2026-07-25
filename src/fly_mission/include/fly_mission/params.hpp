@@ -43,8 +43,8 @@ inline constexpr double CIRCLE_MAX_YAW_RATE  = 1.0;    // 环绕时 最大转头
 // ---------------------------------------------------------------------------
 // 到位判定（位置 / yaw 进入容差并持续稳定 N 秒）
 // ---------------------------------------------------------------------------
-inline constexpr double TOL_XY               = 0.07;                  // 水平容差 (m)
-inline constexpr double TOL_Z                = 0.07;                  // 垂直容差 (m)
+inline constexpr double TOL_XY               = 0.10;                  // 水平容差 (m)
+inline constexpr double TOL_Z                = 0.10;                  // 垂直容差 (m)
 inline constexpr double TOL_YAW              = 8.0 * M_PI / 180.0;    // yaw 容差 (rad)
 inline constexpr double SETTLE_DURATION      = 0.3;                   // xyz 稳定时长 (s)
 inline constexpr double SETTLE_DURATION_YAW  = 0.3;                   // yaw 稳定时长 (s)
