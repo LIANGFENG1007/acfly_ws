@@ -103,6 +103,25 @@ public:
             RCLCPP_INFO(get_logger(), "[视觉] 数据源=shm信箱(%s)，不订阅 /cv/target_info", shm::CV_SHM_PATH);
         }
 
+        // ★控制通道横幅★(一眼确认起飞走哪套)
+        if (params::TAKEOFF_POSITION_MODE) {
+            RCLCPP_INFO(get_logger(),
+                "[控制] 起飞段=位置环(打点上去，速度由飞控位置环参数决定，改 MAX_SPEED_Z/KP_Z 无效)；"
+                "起飞后悬停稳定即切回速度环 PD，走航点/找图等照常。");
+        } else {
+            RCLCPP_INFO(get_logger(), "[控制] 全程速度环 PD(起飞也用 PD)。");
+        }
+        // ★预热流开关★：关掉时切 OFFBOARD 前不发任何 setpoint，直接起飞那一拍才开始发。
+        //   若飞控要求切 OFFBOARD 前先有 setpoint 流，会切不进/刚进就退 → 改回 true。
+        if (params::OFFBOARD_PREHEAT) {
+            RCLCPP_INFO(get_logger(), "[控制] OFFBOARD 预热流=开(切模式前发零速度占位)。");
+        } else {
+            RCLCPP_WARN(get_logger(),
+                "[控制] OFFBOARD 预热流=★关★：切 OFFBOARD 前不发任何 setpoint，"
+                "起飞那一拍才开始发。若切不进 OFFBOARD 或一进就退出，"
+                "把 params::OFFBOARD_PREHEAT 改回 true 重编。");
+        }
+
         timer_ = create_wall_timer(
             std::chrono::milliseconds(params::TIMER_PERIOD_MS),
             std::bind(&FlyMissionNode::on_timer, this));
@@ -130,6 +149,10 @@ private:
     bool pole_circle_done() const               { return drone_.pole_circle_done(); }
     void wait_time(double sec)                   { drone_.wait_time(sec); }
     bool is_reached() const                      { return drone_.is_reached(); }
+    // ★找图专用到位判定★：同一套逻辑，只把水平容差换成 params::FF_TOL_XY(0.10，比正常飞行
+    //   TOL_XY=0.15 收紧)——找图要停得准，正常走航点要流畅，两者分开互不影响。
+    //   只在 FINDFIGURE 那个 case 里用它，别的状态一律用上面的 is_reached()。
+    bool is_reached_find() const                 { return drone_.is_reached_tol(params::FF_TOL_XY); }
     // 串口发 ASCII 指令给 Arduino(115200)：arduino_send("LED ON") → "LED ON\n"×5(次数在
     //   params ★Arduino★段)。★阻塞几十ms，只在状态切换处一次性调，别每拍(50Hz)调★。
     //   没插 Arduino → 打告警继续飞，不中断任务。
@@ -319,7 +342,15 @@ private:
                 //   RUN_EXT_WAYPOINTS = 外部发的航点(/mission/waypoints；未收到悬停等，已收到免等直接飞)
                 //   DRILL_RING        = 钻圈(悬停采集环位姿→飞到环前1m对准→穿圈→降落)
                 //   CIRCLE_AROUND     = 绕杆(悬停采集杆位姿→飞到杆前1m对准→绕杆一圈→降落)  ★当前选中★
-                const MissionState next = MissionState::RUN_EXT_WAYPOINTS;    
+                const MissionState next = MissionState::RUN_EXT_WAYPOINTS;
+
+                // ★退出起飞段位置环 → 之后全部改回速度环 PD★
+                //   放在这里(起飞后悬停已 is_reached，飞机基本静止)切换最平稳；
+                //   之后走航点/找图/绕杆/钻圈/寻线全部走原来的 PD，行为与改动前一致。
+                //   放在下面各分支初始化【之前】调，保证无论选哪个后续任务都已退出位置环。
+                //   (tick() 里 EXTERNAL_VEL 分支本就在位置环分支之前 return，所以寻线/探索
+                //    即使忘了清标志也不会被位置环拦住；但其余任务会，故统一在此清。)
+                drone_.exit_takeoff_position_mode();
 
                 // 按所选目标各自初始化(互不干扰)：
                 if (next == MissionState::FOLLOW_LINE) {
@@ -413,7 +444,8 @@ private:
         // ─── 视觉找图：飞向确认到的图形中心(实时刷新)，到点悬停后拉黑，回被打断状态 ───
         case MissionState::FINDFIGURE: {
             double tx, ty;
-            const auto step = find_.tick(is_reached(), tx, ty);
+            // ★用找图专用的收紧容差 FF_TOL_XY(0.10)★，不是正常飞行的 TOL_XY(0.15)。
+            const auto step = find_.tick(is_reached_find(), tx, ty);
             if (step == FindFigure::Step::FLYING) {
                 target_xy_slam(tx, ty);         
             } else {

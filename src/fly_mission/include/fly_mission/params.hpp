@@ -14,7 +14,7 @@ namespace params {
 // ---------------------------------------------------------------------------  
 inline constexpr double MAX_SPEED_XY         = 0.8;    // 水平最大总速度 (m/s)      
 inline constexpr double MAX_SPEED_Z          = 0.6;    // 起飞/升降/降落 垂直最大速度 (m/s)
-inline constexpr double MAX_SPEED_Z_LEVEL    = 0.05;   // 平飞时垂直微调最大速度 (m/s)，限制上下抖动
+inline constexpr double MAX_SPEED_Z_LEVEL    = 0.1;   // 平飞时垂直微调最大速度 (m/s)，限制上下抖动
 inline constexpr double MAX_YAW_RATE         = 0.8;    // 最大转头角速度 (rad/s) 
 
 // ---------------------------------------------------------------------------
@@ -43,7 +43,9 @@ inline constexpr double CIRCLE_MAX_YAW_RATE  = 1.0;    // 环绕时 最大转头
 // ---------------------------------------------------------------------------
 // 到位判定（位置 / yaw 进入容差并持续稳定 N 秒）
 // ---------------------------------------------------------------------------
-inline constexpr double TOL_XY               = 0.15;                  // 水平容差 (m)
+inline constexpr double TOL_XY               = 0.15;                  // ★正常飞行★水平容差 (m)：
+                                                                      //   起飞/走航点/悬停/绕杆等所有动作用它。放宽→到点判定更早、走线更流畅、
+                                                                      //   不为最后几厘米磨蹭。找图不用它，见下面 FF_TOL_XY。
 inline constexpr double TOL_Z                = 0.10;                  // 垂直容差 (m)
 inline constexpr double TOL_YAW              = 8.0 * M_PI / 180.0;    // yaw 容差 (rad)
 inline constexpr double SETTLE_DURATION      = 0.3;                   // xyz 稳定时长 (s)
@@ -60,6 +62,44 @@ inline constexpr double LAND_DONE_REL_HEIGHT = 0.10;   // 高度低于 home_z + 
 inline constexpr int    TIMER_PERIOD_MS      = 20;     // 50Hz
 
 // ---------------------------------------------------------------------------
+// ★★★ OFFBOARD setpoint 预热流 ★★★
+//   false = ★当前★ 不预热：IDLE(任务未启动/已停止) 与 无位姿 时【什么都不发】。
+//           雷达就绪 + 飞手手动切 OFFBOARD → BOOT_CHECK 当拍走到 takeoff()，
+//           从那一拍起才开始发 setpoint（"直接发数据起飞"）。
+//   true  = 预热：上述两种情况每拍发零速度 setpoint 占位(原行为)。
+//
+//   ★关掉的风险★：许多固件(PX4 系)要求【切 OFFBOARD 之前已有 setpoint 流】，
+//   否则拒绝切入、或刚切进去就因"没收到 setpoint"退出 OFFBOARD。症状：
+//       · 飞手切 OFFBOARD 切不进去 / 一进就跳回 POSCTL
+//       · 或解锁后立刻失锁(主控 LOST_DEBOUNCE 判定飞手接管 → 任务中止)
+//   ★真出现以上症状，把这里改回 true 重编即可恢复★。ACFly 是否有此要求需实机确认。
+//
+//   注：任务中止(stop()→IDLE)后也不再发 setpoint，飞控将按其失联保护动作处理。
+// ---------------------------------------------------------------------------
+inline constexpr bool   OFFBOARD_PREHEAT = false;
+
+// ---------------------------------------------------------------------------
+// ★★★ 起飞用位置环（"打点上去"）★★★
+//   true  = 起飞段(TAKEOFF + WAIT_AFTER_TAKEOFF)把【目标位置】直接发给飞控，
+//           由飞控内部位置环飞上去；起飞后悬停稳定 → 切走时自动恢复速度环 PD。
+//           即：起飞"打点上去"，之后走航点/找图/绕杆/钻圈全部照旧用速度环 PD。
+//   false = ★当前★ 全程速度环 PD(起飞也跑 PD)，与加这个开关之前的行为逐位一致。
+//
+//   ★为什么只有起飞用★：起飞是最需要"稳"的一段，交飞控位置环最省心；平飞走航点
+//   用 PD 保留现有调参手感(KP_XY/KD_XY 等)与所有既有功能。
+//
+//   ★哪些参数在起飞段不生效★(它们只喂 PD)：MAX_SPEED_Z / KP_Z / KD_Z / V_EST_ALPHA。
+//     起飞爬升快慢由【飞控自身位置环参数】决定，改这里的 MAX_SPEED_Z 无效。
+//   ★仍然生效★：TOL_XY/TOL_Z + SETTLE_DURATION(到位判定只看实际位姿，与发的是
+//     位置还是速度无关) → 状态机 takeoff()/is_reached() 语义完全不变。
+//
+//   ★前提★：飞控 local 位置估计与 SLAM/camera_init 同源。本机满足——acfly.launch.py
+//   把 /mavros/odometry/out 重映射到 /aft_mapped_to_init，Point-LIO 位姿即飞控的
+//   外部里程计，故可直接发 SLAM 系坐标。若这条链路变了，此开关必须重新评估。
+// ---------------------------------------------------------------------------
+inline constexpr bool   TAKEOFF_POSITION_MODE = false;
+
+// ---------------------------------------------------------------------------
 // ★ 视觉数据通道（shm 信箱，延迟优化第3步）★
 //   true  = 视觉结果从共享内存信箱(/dev/shm/uav_cv_out)读，不再订阅 /cv/target_info——
 //           本机内存直读(纳秒级)，去掉 DDS/rclpy 一段延迟。视觉端(finding_new1.2.1.py)
@@ -74,9 +114,31 @@ inline constexpr bool   USE_SHM_CV           = true;
 //   FF_CONFIRM_FRAMES 帧 → 算术平均出图形中心 → 打断走线飞过去 → 悬停 → 拉黑 →
 //   回被打断状态。中心落在已拉黑圆内则忽略；单次超时则放弃但仍拉黑。
 //   均可运行期 -p ff_* 覆盖（见 find_figure.cpp 构造）。
-//   注：到达图形上方的水平容差【不在此设】——复用上面的 TOL_XY（含稳定计时）。
 // ---------------------------------------------------------------------------
 inline constexpr int    FF_CONFIRM_FRAMES = 6;    // 连续确认帧数：越大越稳(误检难触发)但反应越慢
+// ★同时累计的目标上限★：一画面可能有多个动物，每个各自独立累计确认(互不干扰)。
+//   超过此数的新目标本帧丢弃(防误检爆内存)。设 >= 场地里可能同时看到的目标数。
+inline constexpr int    FF_MAX_ACCUM      = 16;
+// 类别编号 → 名字，★仅用于日志好读★(不参与任何判定)。须与视觉端 shm_class_ids 对应；
+//   对不上只是日志名字不对，不影响功能(判定只用编号本身)。视觉端当前配置：
+//   "monkey:1,peacock:2,tiger:3,wolf:4,elephant:5"
+inline const char* ff_class_name(int id)
+{
+    switch (id) {
+        case 1: return "monkey";
+        case 2: return "peacock";
+        case 3: return "tiger";
+        case 4: return "wolf";
+        case 5: return "elephant";
+        default: return "";      // 未知编号：日志里直接显示编号
+    }
+}
+// ★找图专用水平容差 (m)★：只在【飞向图形中心】那一段生效，比正常飞行 TOL_XY 收紧——
+//   要拍/看清图形得停得更准；而正常走航点用宽的 TOL_XY 图流畅。两者互不影响：
+//   实现方式是找图态改用 drone_.is_reached_tol(FF_TOL_XY)，其余状态照用 is_reached()。
+//   ★必须 <= TOL_XY★(否则找图比正常飞还松，失去收紧的意义)；也别设太小(0.05 以下 SLAM
+//   噪声会让 SETTLE_DURATION 一直被打断→永远判不到位→只能靠 FF_TIMEOUT_SEC 超时收场)。
+inline constexpr double FF_TOL_XY         = 0.10;  // 找图到达容差 (m)：飞到图形中心多近算到
 inline constexpr double FF_ASSOC_DIST     = 0.20;  // 跨帧同一目标的坐标关联阈值 (m)：越小越严(易断累计)，越大越易把相邻目标误当同一个
 inline constexpr double FF_BLACK_RADIUS   = 0.20;  // 拉黑半径 (m)：以图形中心为圆，圆内的再确认目标一律忽略
 inline constexpr double FF_HOVER_SEC      = 0.30;  // 到点悬停时长 (s)

@@ -43,6 +43,10 @@ public:
     //   运动 API
     // ====================================================================
     void takeoff(double altitude_relative_home);
+    // ★退出起飞段的位置环★：起飞后悬停稳定、要切去走航点/找图等之前调一次。
+    //   之后所有动作恢复速度环 PD(与改动前逐位一致)。幂等，多调无副作用。
+    //   params::TAKEOFF_POSITION_MODE=false 时本函数是空操作(全程本就是速度环)。
+    void exit_takeoff_position_mode();
     void land();
     void target_xy_slam(double x_slam, double y_slam);
     void target_xy_body(double dx_body, double dy_body);
@@ -71,6 +75,12 @@ public:
     //   状态查询
     // ====================================================================
     bool is_reached() const;
+    // ★自定水平容差版到位判定★：与 is_reached() 完全同一套逻辑(同稳定计时/同各模式分支)，
+    //   只把【水平容差 TOL_XY】换成传入的 tol_xy。给"某个动作要求比正常飞行更准"的场合用——
+    //   当前用户是视觉找图(FINDFIGURE 用 params::FF_TOL_XY=0.10 收紧，正常走航点仍用 TOL_XY=0.15)。
+    //   z/yaw 容差不变(仍 TOL_Z/TOL_YAW)。稳定计时状态与 is_reached() 共用同一个 settle_*，
+    //   ★同一拍内不要既调 is_reached() 又调 is_reached_tol()★(两者会互相打断对方的稳定计时)。
+    bool is_reached_tol(double tol_xy) const;
     // 绕杆(description_circle_right)整个流程是否结束：DONE(绕完) 或 FAIL(没看到杆放弃) 都算结束。
     //   ★绕杆专用完成判定★：因该原语内部会切 HOLD/MOVE_POSE/CIRCLE 多个子模式，
     //   不能用 is_reached()(那只反映当前子模式)。状态机 case 用这个判整体是否收尾。
@@ -168,6 +178,14 @@ private:
     // ---- land 请求一次性标记 ----
     bool land_requested_ = false;
 
+    // ---- ★起飞段位置环★(params::TAKEOFF_POSITION_MODE) ----
+    //   true = 当前处于"起飞打点上去"阶段，tick() 发位置 setpoint 而非速度。
+    //   由 takeoff() 置真、exit_takeoff_position_mode() 置假(状态机在起飞后悬停稳定时调)。
+    //   ★用显式标志而不是"看 action_mode_ 是不是 TAKEOFF"★：起飞后 WAIT_AFTER_TAKEOFF
+    //   会切成 HOLD，若按 action_mode_ 判就会在"到高度那一瞬间"切回速度环——而那时
+    //   可能还有残余爬升速度，PD 接管会抽一下。用标志则由状态机决定何时切，切换点在悬停稳定后。
+    bool takeoff_pos_mode_ = false;
+
     // ---- 外部速度（EXTERNAL_VEL：探索算法直接给机体系速度）----
     double       ext_v_fwd_    = 0.0;   // 机体前进 (m/s)
     double       ext_v_lat_    = 0.0;   // 机体横向纠偏 (m/s)
@@ -228,6 +246,9 @@ private:
 
     // ---- 工具函数 ----
     void  publish_setpoint(double vx, double vy, double vz, double yaw_rate);
+    // ★位置 setpoint 出口★(起飞段用)：直接发目标位置 x/y/z(SLAM系,m) + 目标 yaw(rad)，
+    //   屏蔽速度/加速度/yaw_rate → 飞控内部位置环飞过去。本程序不算速度、不做 PD 矫正。
+    void  publish_position_setpoint(double x, double y, double z, double yaw);
     double current_yaw() const;
     void  body_to_slam_xy(double dx_body, double dy_body,
                           double& out_x_slam, double& out_y_slam) const;

@@ -4,9 +4,10 @@ ros2 launch livox_ros_driver2 msg_mid360_launch.py
 启动 Point-LIO 算法
 ros2 launch point_lio mapping_mid360.launch.py rviz:=false
 
+/bin/python3 /home/nvidia/ws_opencv/pose.py
+
 启动通信节点
 ros2 launch mavros acfly.launch.py
-/bin/python3 /home/nvidia/ws_opencv/pose.py
 
 启动视觉
 ros2 launch orbbec_camera gemini2.launch.py

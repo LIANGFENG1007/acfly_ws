@@ -239,15 +239,28 @@ bool DroneController::waypoint_blocked_arrived(double wx, double wy) const
 
 void DroneController::tick()
 {
-    // 没有雷达数据 → 发零速度占位（防止OFFBOARD setpoint 流断）
+    // 没有雷达数据 → 不发(OFFBOARD_PREHEAT=true 时才发零速度占位)
+    //   没位姿本就飞不了：BOOT_CHECK 要求 has_pose_ 才往下判 OFFBOARD，
+    //   所以这里不发不影响正常起飞流程。
     if (!has_pose_.load()) {
-        publish_setpoint(0.0, 0.0, 0.0, 0.0);
+        if (params::OFFBOARD_PREHEAT) publish_setpoint(0.0, 0.0, 0.0, 0.0);
         return;
     }
 
-    // IDLE 模式（任务未启动或已停止）：只发零速度占位流，不跑 PD
+    // IDLE 模式（任务未启动 / 已停止）：★不发任何 setpoint★
+    //   按需求(2026-07-28)去掉"OFFBOARD 前的零速度占位预热"——雷达就绪 + 飞手手动切到
+    //   OFFBOARD 后，BOOT_CHECK 当拍就走到 takeoff()，从那一拍起才开始发数据。
+    //   ★这意味着切 OFFBOARD 那一刻本程序还没发过任何 setpoint★：
+    //     · 若飞控要求"切 OFFBOARD 前必须已有 setpoint 流"，它会拒绝切换/立刻退出；
+    //       表现为切不进 OFFBOARD 或刚进就掉出来。真出现这种情况把
+    //       params::OFFBOARD_PREHEAT 改回 true 即可恢复占位流。
+    //     · 任务中止(stop()→IDLE)后同样不再发 → 飞控按其失联保护动作(通常自行降落/
+    //       保持)，本程序不再干预。
     if (action_mode_ == ActionMode::IDLE) {
-        publish_setpoint(0.0, 0.0, 0.0, 0.0);
+        if (params::OFFBOARD_PREHEAT) {
+            // 预热流(可选)：零速度占位，语义=原地不动，仅为满足飞控对 setpoint 流的要求
+            publish_setpoint(0.0, 0.0, 0.0, 0.0);
+        }
         return;
     }
 
@@ -285,6 +298,17 @@ void DroneController::tick()
             const double vy = s * ext_v_fwd_ + c * ext_v_lat_;
             publish_setpoint(vx, vy, vz, ext_yaw_rate_);
         }
+        log_progress();
+        return;
+    }
+
+    // ★★★ 起飞段位置环("打点上去")★★★
+    //   只在起飞段生效：takeoff() 置 takeoff_pos_mode_，状态机在起飞后悬停稳定时调
+    //   exit_takeoff_position_mode() 关掉 → 之后所有动作恢复速度环 PD(逐位同改动前)。
+    //   期间不跑 PD、不做避障(避障是改 PD 追的有效目标，位置环下无从介入；起飞段原地
+    //   垂直上升也不需要)。到位判定 is_reached() 不受影响(只比实际位姿 vs target_*)。
+    if (takeoff_pos_mode_) {
+        publish_position_setpoint(target_x_, target_y_, target_z_, target_yaw_);
         log_progress();
         return;
     }
@@ -471,9 +495,59 @@ void DroneController::publish_setpoint(double vx, double vy, double vz, double y
 }
 
 // ============================================================================
+//   ★位置 setpoint 出口★(起飞段 "打点上去" 用)
+//   直接发目标位置 + 目标 yaw，屏蔽速度/加速度/yaw_rate(与速度环出口正好互补)，
+//   由飞控内部位置环飞过去。本程序在这一段不算速度、不做 PD 矫正。
+//   前提：飞控 local 位置估计与 SLAM/camera_init 同源(见 params 的开关注释)。
+// ============================================================================
+void DroneController::publish_position_setpoint(double x, double y, double z, double yaw)
+{
+    if (!std::isfinite(x) || !std::isfinite(y) ||
+        !std::isfinite(z) || !std::isfinite(yaw)) {
+        RCLCPP_WARN_THROTTLE(node_->get_logger(), *node_->get_clock(), 500,
+            "[位置setpoint] 非有限数 (x=%f y=%f z=%f yaw=%f)，改发当前位姿保持",
+            x, y, z, yaw);
+        // 退化成"保持当前位姿"，绝不把 NaN 发给飞控
+        x = current_pose_.pose.position.x;
+        y = current_pose_.pose.position.y;
+        z = current_pose_.pose.position.z;
+        yaw = current_yaw();
+        if (!std::isfinite(x) || !std::isfinite(y) ||
+            !std::isfinite(z) || !std::isfinite(yaw)) return;
+    }
+
+    mavros_msgs::msg::PositionTarget msg;
+    msg.header.stamp    = node_->now();
+    msg.header.frame_id = "map";
+    msg.coordinate_frame = mavros_msgs::msg::PositionTarget::FRAME_LOCAL_NED;
+    // 只给位置 + yaw
+    msg.type_mask =
+        mavros_msgs::msg::PositionTarget::IGNORE_VX |
+        mavros_msgs::msg::PositionTarget::IGNORE_VY |
+        mavros_msgs::msg::PositionTarget::IGNORE_VZ |
+        mavros_msgs::msg::PositionTarget::IGNORE_AFX |
+        mavros_msgs::msg::PositionTarget::IGNORE_AFY |
+        mavros_msgs::msg::PositionTarget::IGNORE_AFZ |
+        mavros_msgs::msg::PositionTarget::IGNORE_YAW_RATE;
+    msg.position.x = x;
+    msg.position.y = y;
+    msg.position.z = z;
+    msg.yaw        = static_cast<float>(yaw);
+    setpoint_pub_->publish(msg);
+}
+
+// ============================================================================
 //   到位判定：根据 action_mode_ 
 // ============================================================================
+// 对外的默认到位判定：用正常飞行的水平容差 params::TOL_XY。
 bool DroneController::is_reached() const
+{
+    return is_reached_tol(params::TOL_XY);
+}
+
+// 自定水平容差版(实现体)：is_reached() 与 is_reached_tol() 共用这一份逻辑，
+//   唯一差别就是水平容差取传入的 tol_xy(z/yaw 容差与稳定计时完全不变)。
+bool DroneController::is_reached_tol(double tol_xy) const
 {
     if (!has_pose_.load()) return false;
 
@@ -504,7 +578,7 @@ bool DroneController::is_reached() const
         const double dz = current_pose_.pose.position.z - target_z_;
         const double xy = std::sqrt(dx*dx + dy*dy);
         const double z  = std::abs(dz);
-        if (xy > params::TOL_XY || z > params::TOL_Z) {
+        if (xy > tol_xy || z > params::TOL_Z) {   // ★水平容差用传入值★(默认=TOL_XY，找图传 FF_TOL_XY)
             settle_valid_ = false;
             return false;
         }
@@ -524,7 +598,7 @@ bool DroneController::is_reached() const
         const double xy = std::sqrt(dx*dx + dy*dy);
         const double z  = std::abs(dz);
         const double yaw_err = std::abs(wrap_pi(target_yaw_ - current_yaw()));
-        if (xy > params::TOL_XY || z > params::TOL_Z || yaw_err > params::TOL_YAW) {
+        if (xy > tol_xy || z > params::TOL_Z || yaw_err > params::TOL_YAW) {   // ★水平容差用传入值★
             settle_valid_ = false;
             return false;
         }
@@ -694,6 +768,7 @@ void DroneController::stop()
     wait_active_  = false;
     settle_valid_ = false;
     circle_active_ = false;
+    takeoff_pos_mode_ = false;   // 起飞途中中止：退出位置环(IDLE 分支自己会按开关发占位)
     // 复位绕杆子状态机(停采集、回 IDLE)，避免下次 description_circle_right 续用旧态
     pole_phase_ = PoleCirclePhase::IDLE;
     { std::lock_guard<std::mutex> lk(pole_mtx_); pole_collecting_ = false; }
@@ -755,11 +830,27 @@ void DroneController::takeoff(double altitude_relative_home)
     if (action_mode_ != ActionMode::TAKEOFF) {
         reset_for_new_action(settle_valid_, wait_active_);
         action_mode_ = ActionMode::TAKEOFF;
+        // ★进起飞段位置环★("打点上去")：tick() 从此发位置 setpoint。
+        //   由状态机在起飞后悬停稳定时调 exit_takeoff_position_mode() 退出。
+        if (params::TAKEOFF_POSITION_MODE) takeoff_pos_mode_ = true;
     }
     target_x_   = home_x_;
     target_y_   = home_y_;
     target_z_   = home_z_ + altitude_relative_home;
     target_yaw_ = home_yaw_;
+}
+
+// 退出起飞段位置环 → 之后所有动作恢复速度环 PD。幂等。
+void DroneController::exit_takeoff_position_mode()
+{
+    if (!takeoff_pos_mode_) return;      // 幂等：没在位置环(或开关关着)直接返回
+    takeoff_pos_mode_ = false;
+    // ★清掉 PD 的速度估计残留★：起飞段没跑 PD，v_est_* 仍是 odom 回调一直在算的值，
+    //   本身是连续的，所以不用清；但稳定计时要清——切换瞬间重新起算，避免用位置环
+    //   阶段攒下的 settle 直接判"已到位"。
+    settle_valid_ = false;
+    RCLCPP_INFO(node_->get_logger(),
+        "[起飞] 退出位置环 → 之后改用速度环 PD(走航点/找图等照常)");
 }
 
 void DroneController::land()
