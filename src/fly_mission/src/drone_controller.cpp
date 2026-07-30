@@ -404,12 +404,20 @@ void DroneController::compute_velocity_command(
     vy = vy_raw;
 
     // 垂直限速分两档：
-    //   起飞 / 升降 / 降落 → 用大限速 MAX_SPEED_Z，正常爬升下降
-    //   平飞（平移 / 转向 / 悬停 / 环绕）→ 用小限速 MAX_SPEED_Z_LEVEL，只允许微调，避免上下频繁矫正
+    //   起飞 / 升降(MOVE_Z) / 降落 → 用大限速 MAX_SPEED_Z，正常爬升下降
+    //   平飞（平移 / 转向 / 悬停 / 环绕 / 位姿）→ 用小限速 MAX_SPEED_Z_LEVEL，只允许
+    //     微调，避免上下频繁矫正。
+    //   ★MOVE_POSE 也归平飞(2026-07 补)★：它原来漏在名单外，拿的是起飞档 0.6m/s——
+    //     高度误差 0.5m 时垂直速度能冲到 0.30m/s，而同样误差走航点(MOVE_XY)只有 0.10m/s。
+    //     钻圈只用它一小段(升高 DRILL_Z_OFFSET_M=0.3m)所以一直没暴露；★追踪小车是全程
+    //     用 MOVE_POSE★，SLAM 的 z 一飘就被放大成上下窜，故补进来。
+    //     副作用：钻圈那段边飞边升高变慢(只 0.3m，可忽略)。若确实要放开，给 MOVE_POSE
+    //     单独加一个限速参数，不要把整档改回大限速。
     double z_limit = params::MAX_SPEED_Z;
     if (action_mode_ == ActionMode::MOVE_XY ||
         action_mode_ == ActionMode::TURN_YAW ||
         action_mode_ == ActionMode::CIRCLE ||
+        action_mode_ == ActionMode::MOVE_POSE ||
         action_mode_ == ActionMode::HOLD) {
         z_limit = params::MAX_SPEED_Z_LEVEL;
     }
@@ -825,6 +833,68 @@ bool DroneController::request_arm()
     return true;
 }
 
+// ============================================================================
+//   请求切 OFFBOARD（二次起飞用）：每秒最多一次，最多重试 5 次。
+//   已是 OFFBOARD 直接返回成功。返回 true = 还在尝试或已成功；false = 已放弃。
+//   ★调用前必须已有 setpoint 流在发★（见头文件说明），否则飞控会拒绝。
+// ============================================================================
+bool DroneController::request_offboard()
+{
+    if (is_offboard()) return true;                 // 已经是 OFFBOARD
+    if (offb_giveup_) return false;                 // 之前已放弃
+
+    constexpr int    MAX_RETRY        = 5;
+    constexpr double RETRY_INTERVAL_S = 1.0;
+
+    const auto now = node_->now();
+    if (offb_time_valid_ &&
+        (now - offb_last_try_).seconds() < RETRY_INTERVAL_S) {
+        return true;                                // 间隔不到 1s，先不重复发
+    }
+
+    if (offb_retry_count_ >= MAX_RETRY) {
+        RCLCPP_ERROR(node_->get_logger(),
+            "[OFFBOARD] 重试 %d 次仍未切入，放弃"
+            "（飞控多要求切换前已有 setpoint 流，确认 REARM 预热是否在发）", MAX_RETRY);
+        offb_giveup_ = true;
+        return false;
+    }
+
+    offb_last_try_   = now;
+    offb_time_valid_ = true;
+    offb_retry_count_++;
+
+    auto req = std::make_shared<mavros_msgs::srv::SetMode::Request>();
+    req->custom_mode = "OFFBOARD";
+    set_mode_client_->async_send_request(req,
+        [this](rclcpp::Client<mavros_msgs::srv::SetMode>::SharedFuture fut) {
+            try {
+                auto resp = fut.get();
+                if (resp->mode_sent) {
+                    RCLCPP_INFO(node_->get_logger(), "[OFFBOARD] 切换请求已被飞控接受");
+                } else {
+                    RCLCPP_WARN(node_->get_logger(), "[OFFBOARD] 飞控拒绝切换，将重试");
+                }
+            } catch (const std::exception& e) {
+                RCLCPP_WARN(node_->get_logger(), "[OFFBOARD] 服务异常：%s", e.what());
+            }
+        });
+    RCLCPP_INFO(node_->get_logger(),
+        "[OFFBOARD] 发送切换请求（第 %d/%d 次）", offb_retry_count_, MAX_RETRY);
+    return true;
+}
+
+// 复位解锁 / 切 OFFBOARD 的重试计数（二次起飞前调），详见头文件说明。
+void DroneController::reset_arm_offboard_retry()
+{
+    arm_retry_count_  = 0;
+    arm_giveup_       = false;
+    arm_time_valid_   = false;
+    offb_retry_count_ = 0;
+    offb_giveup_      = false;
+    offb_time_valid_  = false;
+}
+
 void DroneController::takeoff(double altitude_relative_home)
 {
     if (action_mode_ != ActionMode::TAKEOFF) {
@@ -1085,7 +1155,13 @@ bool DroneController::pole_circle_tick()
 
 void DroneController::wait_time(double seconds)
 {
-    if (action_mode_ != ActionMode::HOLD || !wait_active_) {
+    // ★重新起算的三种情况★(与 target_xy_slam/target_z_slam 同一套"入参变了就重新派活"约定)：
+    //   ① 不在 HOLD(从别的动作切进来)  ② 上一段等待已收尾  ③ ★时长和正在跑的那段不同★
+    //   ③ 很关键：两个【相邻状态】各自 wait_time(不同秒数) 时(如 WAIT_AFTER_TAKEOFF 的 0.5s
+    //   紧接 HOVER_3S 的 3s)，若只按 ①② 判，第二段会命中"幂等"分支而【不更新 wait_until_】
+    //   → 沿用上一段早已到期的计时 → is_reached() 当拍即真 → 那段等待被整个跳过。
+    if (action_mode_ != ActionMode::HOLD || !wait_active_ ||
+        std::abs(wait_seconds_ - seconds) > 1e-9) {
         // 切到 HOLD：锁定当前位置 + 当前 yaw + 启动计时
         action_mode_ = ActionMode::HOLD;
         target_x_    = current_pose_.pose.position.x;
@@ -1093,10 +1169,11 @@ void DroneController::wait_time(double seconds)
         target_z_    = current_pose_.pose.position.z;
         target_yaw_  = current_yaw();
         wait_until_  = node_->now() + rclcpp::Duration::from_seconds(seconds);
+        wait_seconds_ = seconds;
         wait_active_ = true;
         settle_valid_ = false;
     }
-    // 重复调用：不重置计时（幂等）
+    // 用【同一个时长】重复调用：不重置计时（幂等，状态机每拍无脑调即可）
 }
 
 // ============================================================================

@@ -102,6 +102,9 @@ public:
     }
     const std::string& mode_string() const { return current_state_.mode; }
     bool has_pose() const      { return has_pose_.load(); }
+    // 当前 SLAM 高度 (m)：给"进某状态时锁定当前高度"的场合用(如追踪小车锁高)。
+    //   无位姿时返回 0，调用方应先用 has_pose() 判过。
+    double current_z() const   { return current_pose_.pose.position.z; }
     ActionMode action_mode() const { return action_mode_; }
 
     std::string progress_string() const;
@@ -112,6 +115,20 @@ public:
     // 请求飞控解锁。非阻塞，每秒发一次。
     // 返回 false 表示放弃；返回 true 表示尝试 / 成功
     bool request_arm();
+
+    // ★请求切 OFFBOARD★(二次起飞用)。非阻塞，每秒最多发一次，最多 5 次。
+    //   返回 false=已放弃；true=还在尝试 / 已是 OFFBOARD。
+    //   ★与第一次起飞的区别★：BOOT_CHECK 是【等飞手手动切】OFFBOARD，本函数是【程序自己切】——
+    //   落地上锁后飞控模式已变成 AUTO.LAND，二次起飞没人再去拨遥控器，只能程序请求。
+    //   ★前提★：调用前必须【已经在发 setpoint 流】。多数飞控要求切 OFFBOARD 之前先有
+    //   setpoint，否则拒绝切入 / 刚切进就退出。故状态机 REARM 里先调 takeoff() 把流起来、
+    //   预热一小段再调本函数(此时尚未解锁，飞机不会动)。
+    bool request_offboard();
+
+    // ★复位"解锁 / 切 OFFBOARD"的重试计数★(二次起飞前调一次)。
+    //   第一次起飞已经用掉若干次重试(甚至可能置了 giveup 标志)，不复位则二次起飞剩余
+    //   次数不足、或直接被旧的 giveup 判定为失败。幂等。
+    void reset_arm_offboard_retry();
 
     // 主动停止：把 action_mode 设回 IDLE，后续 tick 只发零速度，不再跑 PD
     void stop();
@@ -168,6 +185,9 @@ private:
     // ---- wait_time 计时 ----
     rclcpp::Time wait_until_;
     bool         wait_active_ = false;
+    // 正在跑的那段等待的【时长】：用来识别"相邻状态各自 wait_time 但秒数不同"→ 需重新起算，
+    //   否则第二段会沿用上一段已到期的计时而被整段跳过(详见 wait_time 实现注释)。
+    double       wait_seconds_ = -1.0;
 
     // ---- body 系增量命令缓存（保证 target_*_body 重复调用幂等）----
     double body_dx_cmd_   = 0.0;
@@ -239,6 +259,12 @@ private:
     bool         arm_giveup_      = false;
     bool         arm_time_valid_  = false;
     rclcpp::Time arm_last_try_;
+
+    // ---- 切 OFFBOARD 重试(二次起飞用，与解锁各自独立计数) ----
+    int          offb_retry_count_ = 0;
+    bool         offb_giveup_      = false;
+    bool         offb_time_valid_  = false;
+    rclcpp::Time offb_last_try_;
 
     // ---- 到位"持续稳定"计时 ----
     mutable bool          settle_valid_ = false;

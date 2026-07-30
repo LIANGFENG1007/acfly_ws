@@ -76,7 +76,7 @@ inline constexpr int    TIMER_PERIOD_MS      = 20;     // 50Hz
 //
 //   注：任务中止(stop()→IDLE)后也不再发 setpoint，飞控将按其失联保护动作处理。
 // ---------------------------------------------------------------------------
-inline constexpr bool   OFFBOARD_PREHEAT = false;
+inline constexpr bool   OFFBOARD_PREHEAT = true;
 
 // ---------------------------------------------------------------------------
 // ★★★ 起飞用位置环（"打点上去"）★★★
@@ -223,6 +223,49 @@ inline constexpr double AVOID_OBSTACLE_TTL_S  = 0.50;   // 障碍时效(s)：超
 inline constexpr double AVOID_MAX_RADIUS      = 1.00;   // 半径>此的拟合直接丢(坏拟合/把墙当大圆)；通用障碍防御
 inline constexpr int    AVOID_BEZIER_SAMPLES  = 20;     // 贝塞尔弧长采样段数(前瞻点定位精度)
 inline constexpr double AVOID_ARRIVE_SLACK_M  = 0.4;   // ★航点被杆占时的放宽到达★：航点在杆膨胀圈内，且飞机已到"杆边缘+此"内→算到达、推进下一点(越大越早判到达、离杆越远越安全)
+
+
+// ---------------------------------------------------------------------------
+// ★ 小车雷达追踪（TrackCar / TRACK_CAR 状态）★  ← 追踪调参都在这一段
+//   场地里另有一台雷达装在地面小车上，跑自己【独立的一套 SLAM】，位姿发在
+//   /aft_mapped_to_init2(nav_msgs/Odometry，与飞机的 /aft_mapped_to_init 同格式)。
+//
+//   ★为什么不能直接把收到的坐标当目标飞★：两套 SLAM 各自以【自己初始化的位置】
+//   为原点，所以话题里报的是"小车雷达在【小车自己的】SLAM 系(记作 B 系)的坐标"，
+//   而飞机的所有 target_* 原语吃的是"飞机 SLAM 系(记作 A 系)的坐标"。两者差一个
+//   原点平移。两台雷达【摆放朝向一致】(用户保证) ⇒ 两系坐标轴平行、只差平移：
+//
+//       p_A = p_B + CAR_ORIGIN_IN_DRONE_SLAM
+//
+//   其中 CAR_ORIGIN_IN_DRONE_SLAM = 【小车雷达初始化位置】在飞机 A 系下的坐标，
+//   也就是下面这两个数——这是本功能唯一需要现场标定的量。
+//
+//   ★怎么量这两个数★(在两套 SLAM 都启动后、小车还没动之前)：
+//     方法1(推荐)：让小车停在起飞点旁边，量它相对飞机雷达的【前/左】距离。
+//       A 系 +x = 飞机雷达初始化时的机头方向，+y = 左。
+//       例：小车停在飞机正前方 2m、左 0.5m → CAR_ORIGIN_X=2.0, CAR_ORIGIN_Y=0.5
+//     方法2：两套 SLAM 都起好、小车未动时，读一次两个话题的当前位置，相减：
+//       ros2 topic echo /aft_mapped_to_init  --field pose.pose.position -n 1   # 得 pA0
+//       ros2 topic echo /aft_mapped_to_init2 --field pose.pose.position -n 1   # 得 pB0(应≈0)
+//       CAR_ORIGIN = pA0(飞机当时位置) + 量出的"小车相对飞机的偏移" - pB0
+//     ★量错的后果★：飞机会稳定地跟在"真实小车 + 偏移误差"处——误差多少就偏多少，
+//     且不会自己收敛(没有任何闭环能纠正它)。先小车不动、看飞机停的位置对不对再放跑。
+//
+//   ★偏航★：同样只差平移不差旋转，所以小车的 yaw 可【直接】当飞机的目标 yaw 用，
+//   不需要任何换算(前提仍是两台雷达摆放朝向一致；若差一个固定角，改 CAR_YAW_OFFSET_DEG)。
+// ---------------------------------------------------------------------------
+// ★小车雷达初始化位置在【飞机 SLAM 系】下的坐标 (m)★ ← ★现场标定，改这里★
+inline constexpr double CAR_ORIGIN_X = 0.82;   // A 系 x (前为正)
+inline constexpr double CAR_ORIGIN_Y = -0.39;   // A 系 y (左为正)
+// 两台雷达安装朝向的固定角差 (度)：小车 yaw + 此 = 飞机目标 yaw。
+//   摆放一致就填 0。若发现飞机机头总比小车偏固定角度，把那个角填进来。
+inline constexpr double CAR_YAW_OFFSET_DEG = 0.0;
+// 数据超时 (s)：连续这么久没收到 /aft_mapped_to_init2 → 判"没有新数据"，
+//   悬停在最后一个目标点等它回来(不拿旧坐标硬飞)。收到新数据自动恢复追踪。
+inline constexpr double CAR_DATA_TIMEOUT_S = 1.0;
+// 追踪时是否跟随小车的 z：false=★当前★锁住进入追踪时的高度(小车在地上跑，它的 z
+//   对飞机没意义)；true=保持固定相对高差(小车上下坡时飞机跟着起伏)。
+inline constexpr bool   CAR_TRACK_Z = false;
 
 
 // ---------------------------------------------------------------------------

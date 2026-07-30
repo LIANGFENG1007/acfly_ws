@@ -27,6 +27,7 @@ add_executable(fly_mission_node
   src/line_follower.cpp
   src/ring_driller.cpp
   src/avoidance.cpp
+  src/car_tracker.cpp
 )
 
 ament_target_dependencies(fly_mission_node

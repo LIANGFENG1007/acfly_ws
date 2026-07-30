@@ -366,6 +366,50 @@
     }
 说明：本状态不被视觉找图打断(不在 find_figure_active_state 里)，进入时也不调 find_.enable()。
 
+----------------------------------------------------------------------------
+流程：二次起飞（落地→地面等触发→再起飞）★当前主用★
+功能说明：一条完整流程，占 7 个状态，中间【真的落地上锁】，之后由程序自己切 OFFBOARD
+          + 重新解锁再飞。顺序：
+            ① HOVER_3S       起飞后悬停 3s                      wait_time(3.0)
+            ② GO_FORWARD     飞到 SLAM (1,0)                    target_xy_slam(1.0, 0.0)
+            ③ LAND_THEN_WAIT 第一次降落(触底+上锁) → drone_.stop() 回 IDLE 停发 setpoint
+            ④ WAIT_TRIGGER   ★地面待机★等 /mission/takeoff_again
+            ⑤ REARM          起 setpoint 流 → 切 OFFBOARD → 解锁
+            ⑥ TAKEOFF_AGAIN  爬升到 1m
+            ⑦ GO_HOME        飞回 SLAM 原点 (0,0) → LAND → FINISHED
+          坐标全是 SLAM/camera_init【绝对】系，原点 = SLAM 初始化点(≈第一次起飞点)。
+
+★触发命令(就是这条，可重复发)★：
+    ros2 topic pub --once /mission/takeoff_again std_msgs/msg/Bool "{data: true}"
+    · 收到【一次】就锁定并起飞；★重复发一律忽略★，不会二次触发(用户可连发防丢包)。
+    · data=false 不算触发(防误发)。
+    · ★任何时刻发都收得到★(订阅从程序启动就在)：起飞前/飞行途中发 → 落地后不等待、
+      立刻进 REARM 起飞；落地后发 → 当拍触发。想要"人到位再飞"就落地后再发。
+
+★为什么二次起飞需要额外机制(改动点，勿删)★：
+  1) 失锁检测白名单 lost_check_active_state()：LAND_THEN_WAIT / WAIT_TRIGGER / REARM
+     这三个状态本来就【未解锁或非 OFFBOARD】，若不放行，0.5s 去抖一到就被误判成
+     "飞手接管" → drone_.stop() + FINISHED，二次起飞永远走不到。
+  2) drone_.request_offboard()：第一次起飞的 OFFBOARD 是【飞手手动拨】的，落地后没人
+     再去拨 → 程序自己请求。★切之前必须已有 setpoint 流★，故 REARM 先调 takeoff()
+     把流起来、预热 0.5s 再请求(此时未解锁，桨不转、飞机不动)。
+  3) drone_.reset_arm_offboard_retry()：解锁/切模式的重试计数第一次起飞已用掉，
+     不复位则二次起飞可用次数不足、或被旧 giveup 标志直接判失败。
+  4) REARM 首拍 drone_.capture_home() 把【落地点】记为新 home：takeoff() 飞的是 home
+     正上方，不重记会拿第一次的 home(原点) 当目标 → 边爬升边横拉，贴地拖行。
+     (⑦"飞回原点"用 target_xy_slam(0,0) 绝对坐标，不受 home 影响。)
+     若此刻没有雷达位姿，REARM 会原地等 SLAM 恢复，不会盲飞。
+
+★改这条流程的常用点★：
+    悬停时长   → HOVER_3S 的 wait_time(3.0)
+    前进目标点 → GO_FORWARD 的 target_xy_slam(1.0, 0.0)
+    返回目标点 → GO_HOME    的 target_xy_slam(0.0, 0.0)
+    起飞高度   → HOVER 前的 takeoff(1.0) 与 TAKEOFF_AGAIN 的 takeoff(1.0)(两次可不同)
+    触发话题名 → 构造里 "/mission/takeoff_again"
+★注意★：相邻两个状态都用 wait_time 但秒数不同时是安全的——wait_time 已按"时长变了就
+    重新起算"处理(同 target_xy_slam 的入参变了就重新派活)。若沿用旧版"只按 HOLD+
+    wait_active 判"的实现，第二段会沿用上一段已到期的计时而被整段跳过。
+
 ============================================================================
  三、检测 / 状态查询（BOOT_CHECK 与通用判定用）
 ============================================================================
@@ -379,10 +423,13 @@
   drone_.stop()              —— 停止：action_mode 设回 IDLE，只发零速占位
   is_reached()               —— 当前动作是否到位(见各动作说明；含稳定计时)
 
-BOOT_CHECK 范例(检测链)：
+BOOT_CHECK 现状(检测链 + ★两声蜂鸣 + 等启动指令★)：
     case MissionState::BOOT_CHECK:
         if (!drone_.is_connected()) break;             // 等飞控连接
         if (!drone_.has_pose()) break;                 // 等雷达位姿
+        if (!beep_sent_) { arduino_send("BEEP"); beep_sent_ = true; }      // ★BEEP①★就绪提示
+        if (!start_recv_) break;                       // ★等启动指令 /mission/start★
+        if (!beep2_sent_) { arduino_send("BEEP"); beep2_sent_ = true; }    // ★BEEP②★收到指令
         if (!drone_.is_offboard()) break;              // 等飞手切 OFFBOARD
         if (!drone_.is_armed()) {                      // 自动解锁
             if (!drone_.request_arm()) state_ = MissionState::FINISHED;
@@ -391,6 +438,20 @@ BOOT_CHECK 范例(检测链)：
         drone_.capture_home();                         // 记 home
         state_ = MissionState::TAKEOFF;
         break;
+
+★任务启动指令频道 /mission/start (std_msgs/Int32)★
+  时序：飞控+雷达就绪 → BEEP① → 【等指令】→ BEEP② → 等飞手拨 OFFBOARD → 解锁 → 起飞
+  发送命令(按 1s 1 次持续发，防丢包)：
+      ros2 topic pub -r 1 /mission/start std_msgs/msg/Int32 "{data: 1}"
+  · ★只认 data==1★，其他值(含 0)一律忽略，防误发。
+  · ★收到一次即锁定★(start_recv_)：持续发的后续消息全部丢弃，不会重复触发、也不刷日志。
+  · ★可以提前发★：订阅从程序启动就在，飞控/雷达还没就绪时发也会被记住，
+    等 BEEP① 一响就直接往下走(不会漏)。
+  · 等待期间【尚未解锁、也还没到 OFFBOARD 检查】→ 桨不转，可安全长时间等；
+    每 3s 打一次提示，把发送命令直接打在日志里(不用记)。
+  · 两声蜂鸣各自只发一次(beep_sent_/beep2_sent_)——arduino_send 一次阻塞几十 ms，
+    ★绝不能每拍(50Hz)调★，否则拖垮主循环。
+  · 没插 Arduino → 只打告警，任务照常继续(蜂鸣器不是必需件)。
 
 ============================================================================
  三·五、全局避障（贝塞尔绕杆，跨状态生效，非状态机 case）
@@ -430,19 +491,30 @@ BOOT_CHECK 范例(检测链)：
 ============================================================================
  四、当前状态机顺序（fly_mission_node.cpp 现状，供对照）
 ============================================================================
-  BOOT_CHECK → TAKEOFF → WAIT_AFTER_TAKEOFF → (到位时按所选方式各自初始化) → 五选一：
-    ├─ RUN_WAYPOINTS  或  RUN_EXT_WAYPOINTS ──(走完)──► LAND → FINISHED   ★当前选中: RUN_WAYPOINTS★
+  BOOT_CHECK(BEEP①→等/mission/start→BEEP②→等OFFBOARD→解锁) → TAKEOFF(1.5m)
+    → WAIT_AFTER_TAKEOFF(0.5s) → (到位时按所选方式各自初始化) → 六选一：
+    ├─ HOVER_3S ★当前选中★ ──► TRACK_CAR (悬停3s → ★一直追踪小车雷达、不退出、不降落★)
+    │     └─ 另有一条不再接入的旧支：GO_FORWARD → LAND_THEN_WAIT → WAIT_TRIGGER
+    │        → REARM → TAKEOFF_AGAIN → GO_HOME → LAND (二次起飞流程，case 都还在，
+    │        把 HOVER_3S 出口的 state_ 改回 GO_FORWARD 即可恢复)
+    ├─ RUN_WAYPOINTS  或  RUN_EXT_WAYPOINTS ──(走完)──► LAND → FINISHED
     │     └─ 途中 FindFigure 确认到图形 → 打断进 FINDFIGURE → 处理完回原走线状态
     ├─ FOLLOW_LINE ──(连续1s丢线)──► LAND → FINISHED   (寻线不被找图打断)
     ├─ DRILL_RING ──(环前对准→悬停→穿到环后→悬停 / 没看到环)──► LAND → FINISHED
     └─ CIRCLE_AROUND ──(采杆→杆前1m对准→绕杆一圈 / 没看到杆)──► LAND → FINISHED
 
-  ★切换起飞后任务★：改 WAIT_AFTER_TAKEOFF 出口那一行 state_ =
-      RUN_WAYPOINTS      写死航点表(waypoints.hpp)，起飞后直接飞     (init: find_.enable()+wp_loaded_=false)  ★当前选中★
-      RUN_EXT_WAYPOINTS  外部发航点(/mission/waypoints)，先悬停等再飞  (init: 同上，起飞前收到则预装载)
-      FOLLOW_LINE        视觉寻线(沿黑线，横向纠偏)                  (init: drone_.enter_exploration()锁高 + lf_.begin())
-      DRILL_RING         钻圈(采环位姿→环前1m对准→悬停→穿到环后1m→悬停→降落) (init: rd_.begin())
-      CIRCLE_AROUND      绕杆(采杆位姿→杆前1m对准→绕杆一圈→降落)     (init: 无，首次调 description_circle_right() 内部起采集)  ★当前选中★
+  ★切换起飞后任务★：改 WAIT_AFTER_TAKEOFF 出口那一行 const MissionState next =
+      HOVER_3S           二次起飞流程(见"二、特殊动作"末尾那条)               (init: 无，不开找图不装航点)  ★当前选中★
+      RUN_WAYPOINTS      写死航点表(waypoints.hpp)，起飞后直接飞              (init: find_.enable()+wp_loaded_=false)
+      RUN_EXT_WAYPOINTS  外部发航点(/mission/waypoints)，先悬停等再飞          (init: 同上，起飞前收到则预装载)
+      FOLLOW_LINE        视觉寻线(沿黑线，横向纠偏)                           (init: drone_.enter_exploration()锁高 + lf_.begin())
+      DRILL_RING         钻圈(采环位姿→环前1m对准→悬停→穿到环后1m→悬停→降落)  (init: rd_.begin())
+      CIRCLE_AROUND      绕杆(采杆位姿→杆前1m对准→绕杆一圈→降落)              (init: 无，首次调 description_circle_right() 内部起采集)
 
-  已定义但当前未接入顺序的：EXPLORATION(及各 target_* 原语可随时插状态用)。
+  ★两处降落状态的区别★：
+      LAND            降落完 → FINISHED(任务真结束)
+      LAND_THEN_WAIT  降落完 → WAIT_TRIGGER(地面待机等二次起飞)，★仅二次起飞流程用★
+
+  已定义但当前未接入顺序的：EXPLORATION(状态机里只有 case、没有任何地方给 state_ 赋这个值，
+  即当前不可达；要用得自己把 next 或某个出口改成它)。各 target_* 原语可随时插状态用。
 ============================================================================
