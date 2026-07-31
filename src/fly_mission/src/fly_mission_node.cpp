@@ -54,6 +54,11 @@ enum class MissionState {
                           //   ★追上判定★：水平距离≤CATCH_DIST 累计 CATCH_HOLD_SEC → 转 LOCK_DROP
     LOCK_DROP,            // 【视觉锁定投掷】用 shm 的 dx/dy 精确锁定，★全程保持追踪高度★；
                           //   hypot(dx,dy)≤DROP_DIST → 发 DIANCI → 多锁 DROP_HOLD_SEC → 返航
+
+    // ───── 纯雷达投掷链(params::RADAR_DROP_MODE=true 时走这条，不用视觉) ─────
+    RADAR_DESCEND,        // 【纯雷达·边追边降】追小车(x 偏后 RD_OFS_X)同时降到 RD_DROP_H_REL
+    RADAR_DROP,           // 【纯雷达·判稳投掷】水平稳住 RD_STABLE_SEC 秒 → 投掷 → 爬升
+    RADAR_CLIMB,          // 【纯雷达·投后爬升】爬到 RD_RETURN_H_REL 再返航
     RETURN_HOME_DROP,     // 【投掷后返航】以当前高度飞回 (0,0) → 降落
 
     // ───── 第二段任务：降落到移动平台 → 再起飞 → 回起点 ─────
@@ -292,6 +297,9 @@ private:
         case MissionState::HOVER_3S:           return "HOVER_3S";
         case MissionState::TRACK_CAR:          return "TRACK_CAR";
         case MissionState::LOCK_DROP:          return "LOCK_DROP";
+        case MissionState::RADAR_DESCEND:      return "RADAR_DESCEND";
+        case MissionState::RADAR_DROP:         return "RADAR_DROP";
+        case MissionState::RADAR_CLIMB:        return "RADAR_CLIMB";
         case MissionState::RETURN_HOME_DROP:   return "RETURN_HOME_DROP";
         case MissionState::TRACK_CAR2:         return "TRACK_CAR2";
         case MissionState::TRACK_LAND:         return "TRACK_LAND";
@@ -329,8 +337,11 @@ private:
         case MissionState::TRACK_CAR2:
             return udp_tlm::ST_TRACK;
 
-        // ── 3 投掷：视觉锁定 + 投掷 ──
+        // ── 3 投掷：视觉锁定 + 投掷；纯雷达链的三个阶段也都算"投掷中" ──
         case MissionState::LOCK_DROP:
+        case MissionState::RADAR_DESCEND:
+        case MissionState::RADAR_DROP:
+        case MissionState::RADAR_CLIMB:
             return udp_tlm::ST_DROP;
 
         // ── 4 降落：投掷后返航、以及所有降落动作 ──
@@ -400,6 +411,32 @@ private:
         }
     }
 
+    // ★把"小车雷达位置"换算成"第二段的降落目标点"★(SLAM 系)。
+    //   偏移 PLAT_OFS_X/Y 定义在【小车机体系】(车头为 X 正、左为 Y 正)，这里用小车
+    //   当前 yaw 旋转到 SLAM 系再加上去 —— 所以★小车转弯时降落点跟着车身转★，
+    //   始终保持在"车身后方 12cm"这个物理位置。若不旋转(直接在 SLAM 系加偏移)，
+    //   小车一转弯降落点就跑到车侧面去了。
+    //   ★只给第二段降落用★：第一段追踪/投掷要的是"目标正上方"，不加偏移。
+    void car_land_target(double cx, double cy, double cyaw_deg,
+                         double& out_x, double& out_y) const
+    {
+        const double yaw = cyaw_deg * M_PI / 180.0;
+        const double c = std::cos(yaw), s = std::sin(yaw);
+        out_x = cx + c * params::PLAT_OFS_X - s * params::PLAT_OFS_Y;
+        out_y = cy + s * params::PLAT_OFS_X + c * params::PLAT_OFS_Y;
+    }
+    // ★纯雷达投掷的水平目标★ = 小车雷达位置 + 车身系偏移 RD_OFS_X/Y(随车头旋转)。
+    //   与 car_land_target 同一套旋转数学，只是用不同的偏移常量(投掷点在车后 50cm，
+    //   降落点在车后 12cm)。分开两个函数而不共用带参数的版本：两处语义不同，
+    //   共用容易在改一处时误伤另一处。
+    void radar_drop_target(double cx, double cy, double cyaw_deg,
+                           double& out_x, double& out_y) const
+    {
+        const double yaw = cyaw_deg * M_PI / 180.0;
+        const double c = std::cos(yaw), s = std::sin(yaw);
+        out_x = cx + c * params::RD_OFS_X - s * params::RD_OFS_Y;
+        out_y = cy + s * params::RD_OFS_X + c * params::RD_OFS_Y;
+    }
     // 航点被杆占、靠不近时判定"已尽力到达"(放宽到达半径)，供走线状态推进下一点，避免卡死/切邻格。
     bool waypoint_blocked_arrived(double wx, double wy) const { return drone_.waypoint_blocked_arrived(wx, wy); }
 
@@ -968,7 +1005,32 @@ private:
                         tx, ty, tyaw, d_xy, catch_timer_);
                 }
 
-                if (catch_timer_ >= params::CATCH_HOLD_SEC) {
+                if (catch_timer_ >= params::CATCH_HOLD_SEC &&
+                    params::RADAR_DROP_MODE) {
+                    // ★★★ 纯雷达投掷链 ★★★(完全不用视觉)
+                    //   先边追边降到 RD_DROP_H_REL，再判稳投掷。
+                    rd_z_ = drone_.current_z();      // 下降起点 = 当前高度
+                    rd_tick_valid_    = false;       // 下降积分从下一拍起算
+                    rd_start_         = now();       // 下降段超时起算
+                    rd_start_valid_   = true;
+                    rd_stable_valid_  = false;
+                    drop_sent_        = false;
+                    drop_hold_valid_  = false;
+                    // ★放开垂直限速★：MOVE_POSE 默认被平飞档 0.1m/s 限死，
+                    //   不放开的话 RD_DESCEND_SPD(0.4) 根本跑不起来(与落平台同一坑)。
+                    //   ★离开纯雷达链的每条路径都必须复位★(见各状态出口 + stop() 兜底)。
+                    drone_.set_plat_descend_mode(true);
+                    state_ = MissionState::RADAR_DESCEND;
+                    RCLCPP_INFO(get_logger(),
+                        "[追上] 累计 %.1fs ≥ %.1fs → ★纯雷达投掷模式★"
+                        "(边追边降 %.2fm→离起飞点%.2fm @%.2fm/s；"
+                        "水平目标=小车后方%.2fm[随车头旋转]，y/yaw 正常跟随；"
+                        "到高度后稳 %.1fs 即投)",
+                        catch_timer_, params::CATCH_HOLD_SEC,
+                        rd_z_ - drone_.home_z(), params::RD_DROP_H_REL,
+                        params::RD_DESCEND_SPD, -params::RD_OFS_X,
+                        params::RD_STABLE_SEC);
+                } else if (catch_timer_ >= params::CATCH_HOLD_SEC) {
                     // ★直接转视觉锁定★：★不降高★，全程保持追踪高度(2026-08 需求变更)。
                     //   lock_z_ 锁住此刻的高度，之后 LOCK_DROP 全程下发它保持不变。
                     //   ★为什么锁住而不是每拍取 current_z★：每拍取当前高度会让目标 z
@@ -1064,12 +1126,15 @@ private:
                 //   同步，重算会把目标点一路往前推(正反馈)。换算已在 shm 消费处做完并冻结。
                 target_pose_slam(lock_tgt_x_, lock_tgt_y_, lock_z_, tgt_yaw_deg);
 
-                // ★投掷判定距离要加前置补偿 DROP_LEAD_X★(见 params 说明)：
-                //   投掷物带着飞机前向速度、机构可能有前抛角 → 落点系统性偏前。
-                //   把 dx 减去补偿量再判距离 = "目标还在前方 DROP_LEAD_X 时就提前投"。
+                // ★投掷判定距离要加落点补偿 DROP_LEAD_X / DROP_LEAD_Y★(见 params 说明)：
+                //   投掷物带着飞机速度、机构有前抛角/侧向偏置、相机光轴不正 →
+                //   落点有系统性偏差(实测偏前 + 偏左)。把 dx/dy 各减去对应补偿量再判距离，
+                //   等价于"把判定中心从目标正上方挪到 (LEAD_X, LEAD_Y) 处"，
+                //   使投掷时机提前/推后到刚好能抵消偏差。
                 //   ★注意只用于投掷时机判定★——上面 target_pose_slam 用的仍是未补偿的
-                //   lock_tgt_(飞机照旧往目标正上方飞)，所以飞机不会停在偏前的位置。
-                const double d_cv = std::hypot(lock_dx_ - params::DROP_LEAD_X, lock_dy_);
+                //   lock_tgt_(飞机照旧往目标正上方飞)，所以飞机不会停在偏心的位置。
+                const double d_cv = std::hypot(lock_dx_ - params::DROP_LEAD_X,
+                                               lock_dy_ - params::DROP_LEAD_Y);
                 //   未补偿的真实偏差，仅用于日志对照(看飞机实际对得准不准)
                 const double d_raw = std::hypot(lock_dx_, lock_dy_);
 
@@ -1086,18 +1151,19 @@ private:
                     drop_hold_valid_ = true;
                     RCLCPP_INFO(get_logger(),
                         "[投掷] 补偿后距离 %.3fm ≤ %.2fm → 已发 \"%s\"；"
-                        "(实际偏差 dx=%.3f dy=%.3f 未补偿距离 %.3fm，前置补偿 %.2fm)"
-                        "保持高度 %.2fm，再锁定 %.1fs 后返航",
+                        "(实际偏差 dx=%.3f dy=%.3f 未补偿距离 %.3fm；"
+                        "补偿 前后%+.2f 左右%+.2f) 保持高度 %.2fm，再锁定 %.1fs 后返航",
                         d_cv, params::DROP_DIST, params::DROP_CMD,
-                        lock_dx_, lock_dy_, d_raw, params::DROP_LEAD_X,
+                        lock_dx_, lock_dy_, d_raw,
+                        params::DROP_LEAD_X, params::DROP_LEAD_Y,
                         lock_z_, params::DROP_HOLD_SEC);
                 } else if (!drop_sent_) {
                     RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 500,
-                        "[锁定] dx=%.3f dy=%.3f | 补偿后距离 %.3fm(阈值 %.2fm，"
-                        "前置补偿 %.2fm；未补偿 %.3fm) | 高度 %.2fm(离起飞点 %.2fm) "
-                        "yaw=%.1f°%s",
+                        "[锁定] dx=%.3f dy=%.3f | 补偿后距离 %.3fm(阈值 %.2fm；"
+                        "补偿 前后%+.2f 左右%+.2f；未补偿 %.3fm) | "
+                        "高度 %.2fm(离起飞点 %.2fm) yaw=%.1f°%s",
                         lock_dx_, lock_dy_, d_cv, params::DROP_DIST,
-                        params::DROP_LEAD_X, d_raw,
+                        params::DROP_LEAD_X, params::DROP_LEAD_Y, d_raw,
                         lock_z_, lock_z_ - drone_.home_z(), tgt_yaw_deg,
                         car_ok ? "" : "(雷达yaw无数据，保持机头)");
                 }
@@ -1162,7 +1228,8 @@ private:
                     cv_ok ? "可用" : "不可用",
                     car_ok ? "有数据" : "无数据",
                     // 与投掷判定同一口径(补偿后)，便于对照"差多少没投上"
-                    cv_ok ? std::hypot(lock_dx_ - params::DROP_LEAD_X, lock_dy_) : -1.0,
+                    cv_ok ? std::hypot(lock_dx_ - params::DROP_LEAD_X,
+                                       lock_dy_ - params::DROP_LEAD_Y) : -1.0,
                     params::DROP_DIST, params::DROP_LEAD_X, params::DROP_HOLD_SEC);
             }
 
@@ -1196,6 +1263,199 @@ private:
                 state_ = MissionState::LAND;
             }
             break;
+
+        // ═══════════════════════════════════════════════════════════════
+        //  【纯雷达·边追边降】RADAR_DESCEND  (params::RADAR_DROP_MODE=true 时走这条)
+        //
+        //  水平：目标 = 小车雷达位置 + 【车身后方 RD_OFS_X】(随小车 yaw 旋转)。
+        //        y 不加偏移、yaw 直接跟小车 —— 即需求里的"y/yaw 正常矫正"。
+        //  高度：从进入时高度按 RD_DESCEND_SPD 匀速降到 (起飞点 + RD_DROP_H_REL)。
+        //  ★完全不看视觉★：本链一行都不碰 lock_*(视觉)那套变量。
+        //
+        //  ★两条出口★：
+        //    · 正常：目标高度降到底 且 实际高度进 RD_H_TOL → RADAR_DROP
+        //    · 兜底：RD_DESCEND_TIMEOUT_S 超时 → 也进 RADAR_DROP(高度可能没到位，
+        //      但不该无限期悬着；判稳阶段仍会正常工作，只是投掷高度偏高)
+        // ═══════════════════════════════════════════════════════════════
+        case MissionState::RADAR_DESCEND: {
+            const rclcpp::Time now_t = now();
+            const double floor_z = drone_.home_z() + params::RD_DROP_H_REL;
+
+            // ── 1) 目标高度匀速下降 ──
+            if (rd_tick_valid_) {
+                const double dt = (now_t - rd_tick_).seconds();
+                if (dt > 0.0 && dt < 0.5) {      // dt 异常(卡顿/时间跳变)时本拍不降
+                    rd_z_ -= params::RD_DESCEND_SPD * dt;
+                    if (rd_z_ < floor_z) rd_z_ = floor_z;
+                }
+            }
+            rd_tick_ = now_t;
+            rd_tick_valid_ = true;
+
+            // ── 2) 水平/偏航：追小车(x 偏后)，高度用上面算的 rd_z_ ──
+            double cx, cy, cz, cyaw;
+            if (car_.latest(cx, cy, cz, cyaw)) {
+                double tx, ty;
+                radar_drop_target(cx, cy, cyaw, tx, ty);   // 加车身后方偏移
+                target_pose_slam(tx, ty, rd_z_, cyaw);     // yaw 直接跟小车
+                RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 500,
+                    "[雷达降] 雷达@(%.2f,%.2f)→投掷点@(%.2f,%.2f)[车后%.2fm] "
+                    "高度 %.2f→%.2fm 实际 %.2fm(离起飞点 %.2fm) 水平差 %.2fm",
+                    cx, cy, tx, ty, -params::RD_OFS_X,
+                    rd_z_, floor_z, drone_.current_z(),
+                    drone_.current_z() - drone_.home_z(),
+                    std::hypot(tx - drone_.current_x(), ty - drone_.current_y()));
+            } else {
+                // 雷达没数据：水平锁住当前位置，★高度继续降★(高度不依赖小车数据)
+                target_pose_slam(drone_.current_x(), drone_.current_y(),
+                                 rd_z_, drone_.current_yaw_deg());
+                RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000,
+                    "[雷达降] 小车雷达无数据 → 水平锁住当前位置，高度继续降到 %.2fm",
+                    floor_z);
+            }
+
+            // ── 3) 高度到位(或超时) → 转判稳投掷 ──
+            const bool tgt_at   = (rd_z_ <= floor_z + 1e-6);
+            const bool real_at  = std::fabs(drone_.current_z() - floor_z) <= params::RD_H_TOL;
+            const bool timeout  = params::RD_DESCEND_TIMEOUT_S > 0.0 && rd_start_valid_ &&
+                                  (now_t - rd_start_).seconds() > params::RD_DESCEND_TIMEOUT_S;
+            if ((tgt_at && real_at) || timeout) {
+                if (timeout && !(tgt_at && real_at)) {
+                    RCLCPP_WARN(get_logger(),
+                        "[雷达降] ★超时 %.0fs 未降到位★(目标 %.2fm 实际 %.2fm)"
+                        " → 仍进入判稳投掷，投掷高度将偏高",
+                        params::RD_DESCEND_TIMEOUT_S, floor_z, drone_.current_z());
+                    rd_z_ = drone_.current_z();   // 钉在当前高度，别再往下追不到的目标压
+                }
+                rd_stable_valid_ = false;
+                rd_start_        = now_t;         // 判稳总超时重新起算
+                rd_start_valid_  = true;
+                state_ = MissionState::RADAR_DROP;
+                RCLCPP_INFO(get_logger(),
+                    "[雷达降] 高度到位(%.2fm，离起飞点 %.2fm) → ★开始判稳★"
+                    "(水平≤%.2fm 持续 %.1fs 即投；总超时 %.0fs 无条件投)",
+                    drone_.current_z(), drone_.current_z() - drone_.home_z(),
+                    params::RD_STABLE_TOL, params::RD_STABLE_SEC,
+                    params::RD_DROP_TIMEOUT_S);
+            }
+            break;
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        //  【纯雷达·判稳投掷】RADAR_DROP
+        //
+        //  ★高度不再变★：保持 rd_z_(= 进入时的投掷高度)。
+        //  判稳：水平与投掷点距离 ≤RD_STABLE_TOL 且 高度仍在 RD_H_TOL 内，
+        //        连续 RD_STABLE_SEC 秒 → 投掷。中途跑出容差 → 计时清零重算
+        //        (这里要求【连续】稳住，与追上判定的"只暂停不清零"不同 ——
+        //         投掷要的是"此刻确实稳"，断断续续的稳不算)。
+        //  ★两种投掷触发★，之后收尾相同(锁 DROP_HOLD_SEC → 爬升 → 返航)：
+        //    · 正常：稳住 RD_STABLE_SEC
+        //    · 兜底：RD_DROP_TIMEOUT_S 到点 → ★无条件投★(小车乱跑/标定偏也要收场)
+        // ═══════════════════════════════════════════════════════════════
+        case MissionState::RADAR_DROP: {
+            const rclcpp::Time now_t = now();
+            const double floor_z = drone_.home_z() + params::RD_DROP_H_REL;
+
+            double cx, cy, cz, cyaw;
+            const bool car_ok = car_.latest(cx, cy, cz, cyaw);
+            double d_xy = 1e9;
+            if (car_ok) {
+                double tx, ty;
+                radar_drop_target(cx, cy, cyaw, tx, ty);
+                target_pose_slam(tx, ty, rd_z_, cyaw);
+                d_xy = std::hypot(tx - drone_.current_x(), ty - drone_.current_y());
+            } else {
+                // 雷达没数据：锁住当前位置保持高度(不拿过期目标飞)，判稳自然不满足
+                target_pose_slam(drone_.current_x(), drone_.current_y(),
+                                 rd_z_, drone_.current_yaw_deg());
+                rd_stable_valid_ = false;
+                RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000,
+                    "[雷达投] 小车雷达无数据 → 原地保持，判稳暂停(靠总超时兜底)");
+            }
+
+            // ── 判稳：水平 + 高度都在容差内才累计 ──
+            const bool h_ok  = std::fabs(drone_.current_z() - floor_z) <= params::RD_H_TOL;
+            const bool xy_ok = car_ok && d_xy <= params::RD_STABLE_TOL;
+            if (!drop_sent_ && xy_ok && h_ok) {
+                if (!rd_stable_valid_) {
+                    rd_stable_start_ = now_t;
+                    rd_stable_valid_ = true;
+                }
+                const double held = (now_t - rd_stable_start_).seconds();
+                RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 300,
+                    "[雷达投] 稳住中 水平%.3f≤%.2f 高度%.2f → %.2f/%.1fs",
+                    d_xy, params::RD_STABLE_TOL, drone_.current_z(),
+                    held, params::RD_STABLE_SEC);
+                if (held >= params::RD_STABLE_SEC) {
+                    drop_sent_ = true;                    // 先置位：只触发一次
+                    arduino_send_async(params::DROP_CMD); // 非阻塞(飞行中不能阻塞)
+                    drop_hold_until_ = now_t + rclcpp::Duration::from_seconds(params::DROP_HOLD_SEC);
+                    drop_hold_valid_ = true;
+                    RCLCPP_INFO(get_logger(),
+                        "[雷达投] ★稳住 %.1fs → 投掷★ 已发 \"%s\"(水平差 %.3fm，"
+                        "高度 %.2fm)；锁定 %.1fs 后爬升到离起飞点 %.2fm 再返航",
+                        held, params::DROP_CMD, d_xy, drone_.current_z(),
+                        params::DROP_HOLD_SEC, params::RD_RETURN_H_REL);
+                }
+            } else if (!drop_sent_) {
+                rd_stable_valid_ = false;                 // 跑出容差 → 重新计时
+                RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
+                    "[雷达投] 未稳住(水平%.3f/%.2f%s 高度%.2f%s) 重新计时",
+                    d_xy, params::RD_STABLE_TOL, xy_ok ? "✓" : "✗",
+                    drone_.current_z(), h_ok ? "✓" : "✗");
+            }
+
+            // ── 兜底：判稳总超时 → 无条件投 ──
+            if (!drop_sent_ && params::RD_DROP_TIMEOUT_S > 0.0 && rd_start_valid_ &&
+                (now_t - rd_start_).seconds() > params::RD_DROP_TIMEOUT_S) {
+                drop_sent_ = true;
+                arduino_send_async(params::DROP_CMD);
+                drop_hold_until_ = now_t + rclcpp::Duration::from_seconds(params::DROP_HOLD_SEC);
+                drop_hold_valid_ = true;
+                RCLCPP_WARN(get_logger(),
+                    "[雷达投] ★总超时 %.0fs 未稳住 → 无条件投掷★ 已发 \"%s\""
+                    "(当时水平差 %.3fm，雷达%s)；锁定 %.1fs 后爬升返航",
+                    params::RD_DROP_TIMEOUT_S, params::DROP_CMD,
+                    car_ok ? d_xy : -1.0, car_ok ? "有数据" : "无数据",
+                    params::DROP_HOLD_SEC);
+            }
+
+            // ── 投掷后锁定 DROP_HOLD_SEC → 转爬升 ──
+            if (drop_sent_ && drop_hold_valid_ && now_t >= drop_hold_until_) {
+                rd_climb_yaw_ = drone_.current_yaw_deg();   // 冻结朝向，爬升途中不转头
+                state_ = MissionState::RADAR_CLIMB;
+                RCLCPP_INFO(get_logger(),
+                    "[雷达投] 追加锁定 %.1fs 完成 → 爬升到离起飞点 %.2fm",
+                    params::DROP_HOLD_SEC, params::RD_RETURN_H_REL);
+            }
+            break;
+        }
+
+        // ─── 【纯雷达·投后爬升】爬到 RD_RETURN_H_REL 再返航 ───
+        //   ★为什么要先爬升★：投掷高度只有 1m，低空长距离飞回起点容易刮到东西。
+        //   水平保持在【当前位置】(不追小车了，投都投完了)，只改高度。
+        case MissionState::RADAR_CLIMB: {
+            const double target_z = drone_.home_z() + params::RD_RETURN_H_REL;
+            // 水平锁住进入时的位置：不能每拍传 current_x/y，否则位置误差恒 0 = 不控水平
+            if (!rd_climb_valid_) {
+                rd_climb_x_ = drone_.current_x();
+                rd_climb_y_ = drone_.current_y();
+                rd_climb_valid_ = true;
+            }
+            target_pose_slam(rd_climb_x_, rd_climb_y_, target_z, rd_climb_yaw_);
+            if (is_reached()) {
+                // ★复位垂直限速★：纯雷达链结束，恢复平飞档(否则后续 MOVE_POSE 会上下窜)
+                drone_.set_plat_descend_mode(false);
+                return_z_   = drone_.current_z();
+                return_yaw_ = drone_.current_yaw_deg();
+                RCLCPP_INFO(get_logger(),
+                    "[雷达投] 已爬到 %.2fm(离起飞点 %.2fm) → 飞回起点 (0,0)",
+                    drone_.current_z(), drone_.current_z() - drone_.home_z());
+                state_ = MissionState::RETURN_HOME_DROP;
+            }
+            break;
+        }
 
         // ─── ② 飞到 SLAM 系 (1,0)：高度/朝向保持 ─────────────────
         case MissionState::GO_FORWARD:
@@ -1320,18 +1580,25 @@ private:
 
         // ─── ⑦ 飞回 SLAM 原点 (0,0) → 降落收尾 ──────────────────
         // ═══════════════════════════════════════════════════════════════
-        //  【二段追踪】TRACK_CAR2 —— 与 TRACK_CAR 行为相同，只有两点不同：
+        //  【二段追踪】TRACK_CAR2 —— 与 TRACK_CAR 行为相同，只有三点不同：
         //    ① 追上确认时长用 ★CATCH_HOLD_SEC_2★(21s) 而非 CATCH_HOLD_SEC
         //    ② 追上后转 TRACK_LAND(边追边降)，而不是 LOCK_DROP(投掷)
-        //  单独建一个状态而不复用 TRACK_CAR：两段的出口和时长都不同，共用会互相干扰。
+        //    ③ ★目标点加降落安装偏移 PLAT_OFS_X/Y★(降落台面不在雷达正下方)，
+        //       偏移随小车 yaw 旋转 —— 详见 car_land_target()。第一段不加。
+        //  单独建一个状态而不复用 TRACK_CAR：两段的出口/时长/偏移都不同，共用会互相干扰。
         // ═══════════════════════════════════════════════════════════════
         case MissionState::TRACK_CAR2: {
             constexpr double CAR_LOST_HOLD_SEC = 3600.0;   // 同 TRACK_CAR：丢数据就悬停等
 
-            double tx, ty, tz, tyaw;
-            if (car_.latest(tx, ty, tz, tyaw)) {
+            double cx, cy, tz, tyaw;
+            if (car_.latest(cx, cy, tz, tyaw)) {
+                // ★降落目标 = 小车雷达位置 + 机体系偏移(随车头方向旋转)★
+                double tx, ty;
+                car_land_target(cx, cy, tyaw, tx, ty);
                 target_pose_slam(tx, ty, tz, tyaw);
 
+                // 追上判定用【偏移后的目标点】：要确认的是"能稳定停在降落点上方"，
+                //   而不是"能停在雷达上方"——后者差 12cm，降落时就落偏了。
                 const double d_xy = std::hypot(tx - drone_.current_x(),
                                                ty - drone_.current_y());
                 const rclcpp::Time now_t = now();
@@ -1346,8 +1613,11 @@ private:
                     // 与第一段同口径：跑出距离只暂停累加，不清零
                     catch_tick_valid_ = false;
                     RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
-                        "[二段追踪] 小车@(%.2f,%.2f) 距离 %.2fm(未追上，已累计 %.1fs)",
-                        tx, ty, d_xy, catch_timer_);
+                        "[二段追踪] 雷达@(%.2f,%.2f) → 降落点@(%.2f,%.2f)"
+                        "[偏移 前后%+.2f 左右%+.2f 随车头%.0f°旋转] "
+                        "距离 %.2fm(未追上，已累计 %.1fs)",
+                        cx, cy, tx, ty, params::PLAT_OFS_X, params::PLAT_OFS_Y,
+                        tyaw, d_xy, catch_timer_);
                 }
 
                 if (catch_timer_ >= params::CATCH_HOLD_SEC_2) {
@@ -1528,13 +1798,19 @@ private:
             plat_tick_valid_ = true;
 
             // ── 2) 水平/偏航：继续跟小车；高度用上面算的 plat_z_ ──
-            double tx, ty, tz, tyaw;
-            if (car_.latest(tx, ty, tz, tyaw)) {
+            //   ★水平目标要加降落安装偏移★(与 TRACK_CAR2 同一套)：降落台面不在雷达
+            //   正下方(实测在雷达后方 12cm)，直接飞雷达坐标正上方会落偏甚至掉出台面。
+            //   偏移随小车 yaw 旋转，小车转弯时降落点跟着车身转。
+            double cx, cy, tz, tyaw;
+            if (car_.latest(cx, cy, tz, tyaw)) {
+                double tx, ty;
+                car_land_target(cx, cy, tyaw, tx, ty);
                 target_pose_slam(tx, ty, plat_z_, tyaw);
                 RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 500,
-                    "[边追边降] 小车@(%.2f,%.2f) 目标高度 %.2fm 实际 %.2fm"
-                    "(离起飞点 %.2fm) 水平差 %.2fm",
-                    tx, ty, plat_z_, cur_z, cur_z - drone_.home_z(),
+                    "[边追边降] 雷达@(%.2f,%.2f)→降落点@(%.2f,%.2f)[偏移 前后%+.2f 左右%+.2f] "
+                    "目标高度 %.2fm 实际 %.2fm(离起飞点 %.2fm) 水平差 %.2fm",
+                    cx, cy, tx, ty, params::PLAT_OFS_X, params::PLAT_OFS_Y,
+                    plat_z_, cur_z, cur_z - drone_.home_z(),
                     std::hypot(tx - drone_.current_x(), ty - drone_.current_y()));
             } else {
                 // 雷达没数据：水平锁住当前位置，★高度继续降★(高度不依赖小车数据)
@@ -1735,6 +2011,18 @@ private:
     double       return_yaw_ = 0.0;         // 返航朝向(度，进入返航时冻结，途中不主动转头)
     rclcpp::Time lock_start_;               // 进入 LOCK_DROP 的时刻(锁定总超时用)
     bool         lock_start_valid_ = false;
+
+    // ---- 纯雷达投掷链(RADAR_DROP_MODE=true)。★与 lock_* 视觉那套完全independent★ ----
+    double       rd_z_ = 0.0;                // 目标高度(SLAM 绝对 z)：降到 home+RD_DROP_H_REL
+    rclcpp::Time rd_tick_;                   // 上一拍时刻(按时间差积分下降量)
+    bool         rd_tick_valid_ = false;
+    rclcpp::Time rd_start_;                  // 段起始时刻(下降段/判稳段各自复用)
+    bool         rd_start_valid_ = false;
+    rclcpp::Time rd_stable_start_;           // "稳住"开始的时刻
+    bool         rd_stable_valid_ = false;
+    double       rd_climb_x_ = 0.0, rd_climb_y_ = 0.0;   // 爬升段锁住的水平位置
+    double       rd_climb_yaw_ = 0.0;                    // 爬升段冻结的朝向
+    bool         rd_climb_valid_ = false;
 
     // ---- 第二段任务：降落到移动平台 ----
     bool         mission2_done_ = false;    // ★第二段是否已跑过★：LAND 靠它判断

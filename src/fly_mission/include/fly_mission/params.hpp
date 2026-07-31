@@ -15,7 +15,7 @@ namespace params {
 inline constexpr double MAX_SPEED_XY         = 0.8;    // 水平最大总速度 (m/s)      
 inline constexpr double MAX_SPEED_Z          = 0.6;    // 起飞/升降/降落 垂直最大速度 (m/s)
 inline constexpr double MAX_SPEED_Z_LEVEL    = 0.1;   // 平飞时垂直微调最大速度 (m/s)，限制上下抖动
-inline constexpr double MAX_YAW_RATE         = 0.8;    // 最大转头角速度 (rad/s) 
+inline constexpr double MAX_YAW_RATE         = 1.8;    // 最大转头角速度 (rad/s) 
 
 // ---------------------------------------------------------------------------
 // PD 位置控制增益
@@ -25,7 +25,7 @@ inline constexpr double KP_XY                = 0.8;    // 水平 P
 inline constexpr double KD_XY                = 0.20;   // 水平 D
 inline constexpr double KP_Z                 = 0.6;    // 垂直 P（调小，减少激进矫正）
 inline constexpr double KD_Z                 = 0.20;   // 垂直 D（加大阻尼，抑制上下抖动）
-inline constexpr double KP_YAW               = 0.6;    // yaw 误差 → yaw_rate
+inline constexpr double KP_YAW               = 0.7;    // yaw 误差 → yaw_rate
 
 // 位置差分估速度低通滤波系数（0~1）：
 //   v_est = α * inst_v + (1-α) * v_est
@@ -328,8 +328,8 @@ inline constexpr int    CMD_UDP_PORT  = 9871;
 // 追上判定距离 (m)：飞机与小车的【水平】距离(不含高度差)小于此，开始累加追上时间
 inline constexpr double CATCH_DIST        = 0.50;
 // 追上确认时长 (s)：累计在 CATCH_DIST 内达此时长 → 认为"真的追上了"，切视觉锁定
-inline constexpr double CATCH_HOLD_SEC    = 15.0;
-
+inline constexpr double CATCH_HOLD_SEC    = 2.0;
+ 
 // ───────────────────────────────────────────────────────────────────────────
 //  ★★★ 以下三个"下降"参数当前【已停用】★★★(需求 2026-08：全程保持一个高度)
 //    锁定/投掷阶段的高度 = 判定追上那一刻的实际高度，锁死不变，不再降到某个目标值。
@@ -371,9 +371,41 @@ inline constexpr double DROP_DIST         = 0.10;
 //     · 静止时也偏前 → 是机构前抛角/相机光轴不正，本值就是主要修正手段
 //     · 静止时准、移动时才偏 → 是速度效应，本值按常用追踪速度标定
 //       (速度变化大时补偿不可能对所有速度都准，取常用工况即可)
-inline constexpr double DROP_LEAD_X       = 0.10;
+inline constexpr double DROP_LEAD_X       = 0.30;
+
+// ★★★ 投掷落点【横向】补偿 (m) ★★★ —— 与上面 DROP_LEAD_X 完全同一套机制，
+//   只是作用在 dy(左右)而不是 dx(前后)。判定距离变成：
+//       hypot(dx - DROP_LEAD_X, dy - DROP_LEAD_Y)
+//
+//   ★符号约定★：dy ★向左为正★(视觉端 shm_dy_sign=1.0，注释明确"左为正")。
+//   ★符号与"落点偏哪边"【相同】★(与直觉相反，下面有推导)：
+//     · 落点偏【左】 → 本值填【正数】   ← ★当前情况：实测偏左 20cm → 填 +0.20★
+//     · 落点偏【右】 → 本值填【负数】
+//     · 落点准       → 填 0
+//
+//   ★推导(别凭直觉，容易反)★：设投掷瞬间的视觉横偏是 dy，落点相对目标的横向偏差
+//   记作 E(左正)。已知"正对目标(dy=0)投时 E=+0.20(偏左)"，而投掷物会跟着飞机
+//   相对目标的位置走，所以 E = -dy + 0.20。
+//   要 E=0 ⇒ dy = +0.20 ⇒ ★必须在"目标位于飞机左侧 20cm"时触发投掷★。
+//   判定式 hypot(dx-LEAD_X, dy-LEAD_Y) 的中心在 dy=LEAD_Y，
+//   所以 LEAD_Y = +0.20。
+//   直观理解：飞机继续往目标飞的过程中，投掷物本来会落在目标左边；那就干脆
+//   ★早一点、在飞机还没越过目标(目标仍在左前方)时就投★，让那个左偏刚好把
+//   投掷物送到目标上。
+//
+//   ★横向偏差的来源★(与前向不同)：相机横向安装偏移、光轴左右不正、
+//   投掷机构侧向偏置、或飞机带侧滑速度。同样是系统性偏差，可以固定补偿。
+//
+//   ★只影响投掷时机判定，不影响飞行目标点★(同 DROP_LEAD_X)——飞机仍然往
+//   dx/dy=0 (目标正上方)飞，不会停在偏心的位置。
+//
+//   ★实测校验法★(比推符号可靠)：改完飞一次，看落点是否居中。
+//     · 若偏得更厉害了(20cm → 40cm) → 符号反了，取相反数
+//     · 若变成偏右 → 补过头，减小绝对值
+inline constexpr double DROP_LEAD_Y       = 0.0;   // 实测落点偏左 20cm → 填 +0.20
+
 // 投掷后额外锁定时长 (s)：发完 DIANCI 再原地锁定这么久(等投掷物真的离机)，然后返航
-inline constexpr double DROP_HOLD_SEC     = 3.0;
+inline constexpr double DROP_HOLD_SEC     = 2.0;
 // ★★★ 锁定后"必投"倒计时 (s) ★★★
 //   ★语义(需求 2026-08)★：从【切入 LOCK_DROP 那一刻】起算，到点【无条件投掷】——
 //     · 视觉能不能看见   —— 不管
@@ -391,7 +423,7 @@ inline constexpr double DROP_HOLD_SEC     = 3.0;
 //   ★调参提示★：给视觉留出对准时间即可。太短 → 还没对准就强投(落点偏)；
 //   太长 → 视觉真死时白等。4s 是"够视觉试几十帧、又不至于久等"的折中。
 //   设 <=0 = 关闭必投(不建议：会退回"可能永久悬停"的老问题)。
-inline constexpr double LOCK_TIMEOUT_SEC  = 6.0;
+inline constexpr double LOCK_TIMEOUT_SEC  = 8.0;
 
 // 锁定阶段视觉数据超时 (s)：shm 里 dx/dy 超过这么久没更新 → 视觉数据判为不可用
 //   (不拿旧 dx/dy 硬飞)。超时后不投掷，改按下面的回退策略继续跟。
@@ -417,6 +449,55 @@ inline constexpr double LOCK_CV_TIMEOUT_S = 0.5;
 inline constexpr double LOCK_CV_FALLBACK_S = 3.0;
 // 投掷用的 Arduino 指令字符串(经串口发给 Arduino，会自动补 \n)
 inline constexpr const char* DROP_CMD     = "DIANCI";
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  ★★★ 纯雷达投掷模式(不用视觉) ★★★
+//
+//  true  = ★纯雷达投掷★：完全不看 shm 视觉的 dx/dy，只用小车雷达(UDP)定位。
+//          流程(接在 TRACK_CAR 判定追上之后)：
+//            RADAR_DESCEND  边追边降：以 RD_DESCEND_SPD 降到 RD_DROP_H_REL 高度；
+//                           水平目标 = 小车位置 + 【车身后方 RD_OFS_X】(随车头旋转)；
+//                           y 与 yaw 正常跟随小车(不加偏移)
+//            RADAR_DROP     到高度后开始判稳：水平误差 ≤RD_STABLE_TOL 且高度到位，
+//                           连续 RD_STABLE_SEC 秒 → ★直接投掷★(发 DIANCI)
+//                           → 锁定 DROP_HOLD_SEC → 爬回 RD_RETURN_H_REL
+//                           → 飞回起点 (0,0) → 降落
+//  false = 原来的视觉锁定投掷(LOCK_DROP，用 shm 的 dx/dy 精确对准)。
+//
+//  ★两条链完全独立★：纯雷达链不碰 lock_* 那套视觉变量，视觉链也不受影响，
+//  改这个开关不会互相污染。
+// ═══════════════════════════════════════════════════════════════════════════
+inline constexpr bool   RADAR_DROP_MODE   = true;
+
+// 下降速率 (m/s)：目标高度按这个速率匀速往下走。
+//   ★注意★：MOVE_POSE 默认被平飞档 MAX_SPEED_Z_LEVEL(0.1m/s) 限死，所以本状态
+//   会调 set_plat_descend_mode(true) 把垂直限速放开到本值(与落平台同一机制)。
+inline constexpr double RD_DESCEND_SPD    = 0.4;
+// 投掷高度 (m，★相对起飞点★)：降到这个高度就停止下降、开始判稳准备投掷。
+inline constexpr double RD_DROP_H_REL     = 1.0;
+// ★水平目标相对小车雷达的偏移 (m，小车机体系，车头为 X 正 / 左为 Y 正)★
+//   需求：投掷点在目标【后方 50cm】→ RD_OFS_X = -0.50。
+//   ★随小车 yaw 旋转★(与落平台的 PLAT_OFS_* 同一套 car_land_target 机制)，
+//   所以小车转弯时投掷点始终保持在车身后方，不会跑到侧面。
+//   y 方向不加偏移(需求：y 正常矫正) → RD_OFS_Y = 0。
+inline constexpr double RD_OFS_X          = -0.25;
+inline constexpr double RD_OFS_Y          =  0.0;
+// 判稳的水平容差 (m)：飞机与【偏移后的投掷点】水平距离小于此值才算"稳住了"。
+//   比 DROP_DIST(视觉用的 0.10) 放宽——雷达定位精度不如视觉，要求太严会一直凑不满。
+inline constexpr double RD_STABLE_TOL     = 0.20;
+// 判稳持续时长 (s)：水平进容差 + 高度到位，连续这么久 → 投掷。
+inline constexpr double RD_STABLE_SEC     = 2.0;
+// 高度到位容差 (m)：|实际高度 - RD_DROP_H_REL| 小于此值算高度到位。
+inline constexpr double RD_H_TOL          = 0.15;
+// 投掷后爬回的高度 (m，相对起飞点)：投完先爬到这个高度再返航(避免低空长距离飞行)。
+inline constexpr double RD_RETURN_H_REL   = 1.5;
+// ★下降段超时 (s)★：这么久还没降到投掷高度 → 不再等，直接进判稳阶段
+//   (高度可能因载重/风降不到位，但不该无限期悬着)。
+inline constexpr double RD_DESCEND_TIMEOUT_S = 4.0;
+// ★判稳总超时 (s)★：进入判稳后这么久还没凑满 RD_STABLE_SEC → ★无条件投掷★。
+//   与视觉链的 LOCK_TIMEOUT_SEC 同思路：小车乱跑/雷达标定偏时也要能把动作做完。
+inline constexpr double RD_DROP_TIMEOUT_S = 6.0;
 
 
 // ---------------------------------------------------------------------------
@@ -550,7 +631,7 @@ inline constexpr double PLAT_TOUCH_VZ      = 0.10;
 //   ⇒ ★这 1.5 秒里飞机一直用推力轻压着平台★，平台在动时可能被拖行一小段。
 //     已确认可接受(2026-08 决定)。若日后觉得压太久：优先缩短本值(滑窗承担去抖，
 //     本值不必再重复去抖)；不要把滑窗缩太短，那会让噪声重新放大。
-inline constexpr double PLAT_TOUCH_HOLD_S  = 1.0;
+inline constexpr double PLAT_TOUCH_HOLD_S  = 0.5;
 // 目标高度相对"接触时高度"最多再往下压多少 (m)：给 PD 制造持续向下的动力。
 //   目标压到 (进入下降时高度 - 一直减) 但不会低于 (接触判定时的实际高度 - 此值)，
 //   避免无限往下压导致推力饱和、把平台压坏或把飞机顶翻。
@@ -563,6 +644,35 @@ inline constexpr double PLAT_DESCEND_SPD   = 0.2;
 inline constexpr double PLAT_DESCEND_TIMEOUT_S = 40.0;
 // 落到平台后的等待时长 (s)：等满就自己重新起飞(不需要任何指令)。
 inline constexpr double PLAT_WAIT_SEC      = 5.0;
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  ★★★ 降落点相对小车雷达的安装偏移 (m) ★★★
+//   ★为什么需要★：小车雷达装在小车上的某个位置，而降落台面中心不一定就在雷达
+//   正下方。雷达报的是【雷达自己】的位置，飞机若直接飞到那个坐标正上方，就会
+//   落在偏离台面中心的地方(甚至掉出台面)。
+//
+//   ★当前实测★：降落目标在小车雷达【后方 12cm】处 → PLAT_OFS_X = -0.12
+//
+//   ★坐标系：小车【机体系】，随小车 yaw 一起转★
+//     · X 轴 = 小车车头方向，向前为正 → 后方就是负数
+//     · Y 轴 = 小车左侧为正
+//   代码里会用小车当前 yaw 把这个偏移旋转到 SLAM 系再加到目标点上，
+//   所以★小车转弯时偏移点跟着转★(始终保持在车身后方 12cm)，这才是物理正确的。
+//   若写成"SLAM 系固定偏移"，小车一转弯降落点就跑到车侧面去了。
+//
+//   ★只作用于第二段降落(TRACK_CAR2 / TRACK_LAND)★：
+//   第一段的追踪(TRACK_CAR)和投掷(LOCK_DROP)★不加这个偏移★——那两段要的是
+//   "飞到目标正上方投东西"，与降落台面的位置无关。
+//
+//   ★怎么标定★：让小车静止，飞机按第二段流程降落一次，量飞机落点与台面中心
+//   的偏差(在【小车车身】坐标里量，不是场地坐标)：
+//     · 落点偏车头方向 → PLAT_OFS_X 减小(更负)
+//     · 落点偏车尾方向 → PLAT_OFS_X 增大
+//     · 落点偏车身左侧 → PLAT_OFS_Y 减小(更负)
+//     · 落点偏车身右侧 → PLAT_OFS_Y 增大
+// ═══════════════════════════════════════════════════════════════════════════
+inline constexpr double PLAT_OFS_X = -0.6;   // 雷达后方 12cm(车头为正 → 后方为负)
+inline constexpr double PLAT_OFS_Y =  0.0;    // 横向暂无偏移(实测再调)
 
 // ---------------------------------------------------------------------------
 inline constexpr bool   TLM_ENABLE        = true;             // 总开关
