@@ -20,6 +20,7 @@
 //      一次性动作(如到点后开灯)没问题；不要每拍(50Hz)都调。
 // ============================================================================
 
+#include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -46,14 +47,31 @@ public:
     bool send(const std::string& text, int times = 1, int gap_ms = 20)
     {
         if (fd_ < 0 && !open_port()) return false;
+        // ★先把非阻塞队列排空★：两条发送路径共用同一个 fd，若队列里还有字节没发完
+        //   就直插新指令，两者的字节会在串口上交错 → Arduino 收到乱码。
+        //   这里最多阻塞几毫秒(队列本就很小)，而 send() 本身就是阻塞版、只在非飞行
+        //   阶段用，可以接受。
+        for (int guard = 0; guard < 100 && !txq_.empty(); ++guard) {
+            if (pump() == 0) usleep(1000);
+        }
         const std::string line = text + "\n";
         for (int i = 0; i < times; ++i) {
             if (i > 0 && gap_ms > 0) usleep(static_cast<useconds_t>(gap_ms) * 1000);
             const char* p = line.data();
             size_t left = line.size();
+            int eagain_guard = 0;
             while (left > 0) {                       // write 可能写一半(信号打断)，写完为止
                 const ssize_t n = ::write(fd_, p, left);
                 if (n < 0) {
+                    // ★fd 是 O_NONBLOCK 打开的(pump() 需要)，所以 EAGAIN 只是"内核 TX
+                    //   缓冲暂时满"，★不是设备故障，绝不能关 fd★——否则会把一个好的
+                    //   串口关掉、下次还要再等 2s boot。等一下重试即可。
+                    //   EINTR 同理(被信号打断)。只有真错误才关闭重开。
+                    if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+                        if (++eagain_guard > 200) return false;   // ~200ms 还写不进去：放弃本条
+                        usleep(1000);                             // 1ms 后重试
+                        continue;
+                    }
                     ::close(fd_); fd_ = -1;          // 设备被拔等：关掉，下次 send 重试重开
                     return false;
                 }
@@ -66,10 +84,85 @@ public:
 
     bool ok() const { return fd_ >= 0; }
 
+    // ========================================================================
+    //  ★非阻塞发送★(给 50Hz 控制循环里的时敏场合用，如投掷 DIANCI)
+    //
+    //  为什么需要：上面的 send() 是阻塞的——重发间隔 usleep(5×20ms) + tcdrain +
+    //  首次 open 还有 2s boot 等待，合计可达 80ms~2s。在 OFFBOARD 飞行中调用会让
+    //  主循环停转、setpoint 流中断，飞控可能判"没收到 setpoint"而退出 OFFBOARD。
+    //
+    //  怎么做：queue() 只把字节塞进内部缓冲(纳秒级返回)，由每拍调的 pump() 用
+    //  ★非阻塞 write★ 一点点发出去。串口 115200 下 "DIANCI\n"×5 = 35 字节，
+    //  内核 TX 缓冲(通常 4KB)一次就吃下，实际几拍内发完。
+    //
+    //  用法：
+    //      ser.queue("DIANCI", 5);     // 状态机里调，立即返回
+    //      ...每拍...
+    //      ser.pump();                 // 把缓冲里的字节往外写(非阻塞)
+    //
+    //  ★首次 open 的 2s boot 等待怎么办★：queue() 和 pump() 【都不会 open 串口】——
+    //  open_port() 里有 boot_wait(默认2s)的 usleep，在飞行中卡 2s 会中断 setpoint 流。
+    //  ⇒ 串口必须在【非飞行阶段】由阻塞版 send() 打开好。本工程 BOOT_CHECK 的 BEEP①
+    //    正好承担这个角色(那时未解锁、桨不转，卡 2s 无害)。
+    //  ⇒ 若 BEEP① 时串口没插上，则本次飞行 queue() 的指令都发不出去(只打告警)，
+    //    ★但绝不会卡住控制循环★ —— 这是刻意的取舍：宁可少发一条指令，不冒失控风险。
+    // ========================================================================
+
+    // 把指令排入发送队列(自动补 \n，重复 times 次)。★立即返回，不阻塞★。
+    //   返回 false = 队列满(丢弃本次)。队列很小是刻意的：命令类指令不该积压。
+    bool queue(const std::string& text, int times = 1)
+    {
+        const std::string line = text + "\n";
+        for (int i = 0; i < times; ++i) {
+            if (txq_.size() + line.size() > kTxQueueMax) return false;   // 满了：丢弃
+            txq_ += line;
+        }
+        return true;
+    }
+
+    // 每拍调一次：把队列里的字节用非阻塞 write 尽量发出去。
+    //   返回本次实际写出的字节数(0 = 没东西可发 / 串口没开 / 内核缓冲满)。
+    //   ★绝不阻塞★：O_NONBLOCK + 不 tcdrain + 不 usleep。
+    size_t pump()
+    {
+        if (txq_.empty()) return 0;
+        if (fd_ < 0) {
+            // ★这里绝不 open★：open_port() 内含 boot_wait(默认2s)的 usleep —— 打开 USB
+            //   串口会拉 DTR 复位 Arduino，必须等它 bootloader 重启，否则首批指令全丢。
+            //   但 pump() 是【飞行中每拍调】的，一旦在这里卡 2s，50Hz 主循环停转 100 拍、
+            //   setpoint 流中断 → 飞控可能退出 OFFBOARD。★宁可不发指令，也不能卡主循环★。
+            //   触发场景：BEEP① 那次 open 失败(没插板子)，之后飞行中才插上 —— 概率低但
+            //   后果严重。串口的打开统一交给非飞行阶段的阻塞 send()(BOOT_CHECK 的 BEEP
+            //   正好承担这个角色)。
+            txq_.clear();          // 丢掉积压，避免无限增长(串口通了以后 queue 还能再来)
+            return 0;
+        }
+        const ssize_t n = ::write(fd_, txq_.data(), txq_.size());
+        if (n < 0) {
+            // EAGAIN(内核缓冲满) → 保留队列，下拍再写；其它错误 → 关闭重开
+            if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                ::close(fd_); fd_ = -1;
+            }
+            return 0;
+        }
+        txq_.erase(0, static_cast<size_t>(n));
+        return static_cast<size_t>(n);
+    }
+
+    // 队列里还剩多少字节没发出去(诊断用)。
+    size_t pending() const { return txq_.size(); }
+
 private:
+    static constexpr size_t kTxQueueMax = 512;   // 够放十几条指令；超了说明串口不通
+    std::string txq_;                            // 待发字节队列
+
     bool open_port()
     {
-        fd_ = ::open(dev_.c_str(), O_RDWR | O_NOCTTY);
+        // ★O_NONBLOCK★：pump() 的非阻塞发送依赖它——否则内核 TX 缓冲满时 write
+        //   会挂住整个控制循环。对阻塞版 send() 无影响：它写的量极小(几十字节)，
+        //   缓冲几乎不可能满；真满了 write 返回 EAGAIN(<0)，send 按写失败处理并重开，
+        //   最坏情况是丢一条指令(BEEP 之类)，不会卡飞行。
+        fd_ = ::open(dev_.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
         if (fd_ < 0) return false;
 
         termios tio{};

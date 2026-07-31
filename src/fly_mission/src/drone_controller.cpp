@@ -421,6 +421,16 @@ void DroneController::compute_velocity_command(
         action_mode_ == ActionMode::HOLD) {
         z_limit = params::MAX_SPEED_Z_LEVEL;
     }
+    // ★落移动平台的"边追边降"要单独放开垂直限速★(2026-08)：
+    //   那一段用的是 MOVE_POSE(边跟小车边降)，会命中上面的平飞档 0.1m/s ——
+    //   后果有两个：① 从 1.5m 降到平台要十几秒；② 实际降速永远达不到
+    //   plat_descending_ 要求的门槛 → ★接触检测永不启用 → 永不锁桨★
+    //   (这正是"落到平台了却不锁桨"的原因之一)。
+    //   所以给它一个专用限速，而不是把整个 MOVE_POSE 档改回大限速——
+    //   追踪小车平飞时仍然需要 0.1m/s 的小限速来抑制 SLAM z 抖动。
+    if (plat_descend_mode_) {
+        z_limit = params::PLAT_DESCEND_SPD;
+    }
     vz = clamp_abs(vz_raw, z_limit);
 
     // yaw：用 P 把误差变成 yaw_rate
@@ -777,6 +787,12 @@ void DroneController::stop()
     settle_valid_ = false;
     circle_active_ = false;
     takeoff_pos_mode_ = false;   // 起飞途中中止：退出位置环(IDLE 分支自己会按开关发占位)
+    // ★落平台下降模式也必须复位★：它把 MOVE_POSE 的垂直限速从平飞档 0.1m/s 放开到
+    //   PLAT_DESCEND_SPD(0.4)。若在 TRACK_LAND 期间失锁/中止，状态机跳走了但这个标志
+    //   还留着 true → 之后所有 MOVE_POSE(追踪小车、视觉锁定)都用大限速，
+    //   SLAM 的 z 一飘就被放大成上下窜(这正是当初把 MOVE_POSE 归入平飞档的原因)。
+    //   状态机的两个正常出口各自也会复位，这里是兜底：任何中止路径都盖到。
+    plat_descend_mode_ = false;
     // 复位绕杆子状态机(停采集、回 IDLE)，避免下次 description_circle_right 续用旧态
     pole_phase_ = PoleCirclePhase::IDLE;
     { std::lock_guard<std::mutex> lk(pole_mtx_); pole_collecting_ = false; }
@@ -786,6 +802,46 @@ void DroneController::stop()
 //   请求解锁：每秒最多发一次，最多重试 5 次。已解锁则直接返回成功。
 //   返回 true = 还在尝试或已成功；false = 已放弃
 // ============================================================================
+// ★主动上锁(disarm)★：给"降到平台上方设定高度就落下去"用——不走 AUTO.LAND，
+//   因为 AUTO.LAND 期间飞控自己控高、不再跟踪移动平台，平台一跑就落到地上了。
+//   ★危险性★：上锁瞬间螺旋桨停转，飞机自由落体。调用方必须确认真的贴近平台了
+//   (高度阈值要小)。误在半空调用 = 摔机。
+//   与 request_arm 的区别：不做重试计数(上锁失败就重试到成功为止，不该"放弃")。
+bool DroneController::request_disarm()
+{
+    if (!current_state_.armed) return true;         // 已经上锁
+
+    constexpr double RETRY_INTERVAL_S = 0.5;        // 比解锁更急，间隔给短些
+    const auto now = node_->now();
+    if (disarm_time_valid_ &&
+        (now - disarm_last_try_).seconds() < RETRY_INTERVAL_S) {
+        return true;                                // 间隔不到，先不重复发
+    }
+    disarm_last_try_   = now;
+    disarm_time_valid_ = true;
+    ++disarm_try_count_;
+
+    auto req = std::make_shared<mavros_msgs::srv::CommandBool::Request>();
+    req->value = false;                             // ★false = 上锁★
+    arming_client_->async_send_request(req,
+        [this](rclcpp::Client<mavros_msgs::srv::CommandBool>::SharedFuture fut) {
+            try {
+                auto resp = fut.get();
+                if (resp->success) {
+                    RCLCPP_INFO(node_->get_logger(), "[上锁] 飞控已确认上锁");
+                } else {
+                    RCLCPP_WARN(node_->get_logger(),
+                        "[上锁] 飞控拒绝（result=%u），将重试", resp->result);
+                }
+            } catch (const std::exception& e) {
+                RCLCPP_WARN(node_->get_logger(), "[上锁] 服务异常：%s", e.what());
+            }
+        });
+    RCLCPP_WARN(node_->get_logger(),
+        "[上锁] ★发送主动上锁请求★（第 %d 次）—— 桨将停转", disarm_try_count_);
+    return true;
+}
+
 bool DroneController::request_arm()
 {
     if (current_state_.armed) return true;          // 已经解锁

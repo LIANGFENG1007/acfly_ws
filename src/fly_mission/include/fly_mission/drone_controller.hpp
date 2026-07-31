@@ -42,6 +42,18 @@ public:
     // ====================================================================
     //   运动 API
     // ====================================================================
+    // ★主动上锁★：给"降到移动平台上方就落下去"用(不走 AUTO.LAND——那会让飞控
+    //   自己控高、不再跟踪移动的平台)。★上锁即桨停、飞机自由落体★，
+    //   调用方必须先确认真的贴近平台(高度阈值取小)。每 0.5s 重试一次直到成功。
+    bool request_disarm();
+
+    // ★落平台"边追边降"模式★：置 true 时垂直限速改用 params::PLAT_DESCEND_SPD，
+    //   而不是平飞档 MAX_SPEED_Z_LEVEL(0.1m/s)。
+    //   ★为什么需要★：边追边降用的是 MOVE_POSE，会命中平飞小限速 →
+    //   降得极慢，且实际降速永远达不到接触检测的启用门槛 → ★永不锁桨★。
+    //   ★进 TRACK_LAND 时置 true，离开(上锁成功/超时返航)必须置 false★，
+    //   否则之后所有 MOVE_POSE(追踪/锁定)都会用大限速，SLAM z 一抖就上下窜。
+    void set_plat_descend_mode(bool on) { plat_descend_mode_ = on; }
     void takeoff(double altitude_relative_home);
     // ★退出起飞段的位置环★：起飞后悬停稳定、要切去走航点/找图等之前调一次。
     //   之后所有动作恢复速度环 PD(与改动前逐位一致)。幂等，多调无副作用。
@@ -105,6 +117,16 @@ public:
     // 当前 SLAM 高度 (m)：给"进某状态时锁定当前高度"的场合用(如追踪小车锁高)。
     //   无位姿时返回 0，调用方应先用 has_pose() 判过。
     double current_z() const   { return current_pose_.pose.position.z; }
+    // 当前 SLAM 水平坐标 (m)：给"算与目标的距离""把机体系偏移换算成 SLAM 目标点"用。
+    //   无位姿时返回 0，调用方应先用 has_pose() 判过。
+    double current_x() const   { return current_pose_.pose.position.x; }
+    double current_y() const   { return current_pose_.pose.position.y; }
+    // 当前偏航 (度)：给"锁定时保持机头朝向"等场合用(内部 current_yaw() 是弧度)。
+    double current_yaw_deg() const { return current_yaw() * 180.0 / M_PI; }
+    // 起飞点(home)的 SLAM 高度：给"把绝对高度换算成相对起飞点的高度"用，
+    //   如日志里打 current_z() - home_z() = 离起飞地面多高。
+    //   ★capture_home() 之前调没有意义★(返回 0)，调用方须在起飞后用。
+    double home_z() const      { return home_z_; }
     ActionMode action_mode() const { return action_mode_; }
 
     std::string progress_string() const;
@@ -259,6 +281,14 @@ private:
     bool         arm_giveup_      = false;
     bool         arm_time_valid_  = false;
     rclcpp::Time arm_last_try_;
+    // 主动上锁(request_disarm)的重试节流。★不设"放弃"上限★：上锁失败必须一直重试，
+    //   放弃 = 飞机在平台上方一直悬停不落，比多试几次糟糕得多。
+    int          disarm_try_count_  = 0;
+    bool         disarm_time_valid_ = false;
+    rclcpp::Time disarm_last_try_;
+    // 落平台"边追边降"模式：true 时垂直限速用 PLAT_DESCEND_SPD 而非平飞档。
+    //   见 set_plat_descend_mode()。★必须离开该状态时复位★。
+    bool         plat_descend_mode_ = false;
 
     // ---- 切 OFFBOARD 重试(二次起飞用，与解锁各自独立计数) ----
     int          offb_retry_count_ = 0;
