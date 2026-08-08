@@ -113,6 +113,8 @@ public:
                                dd("band_clear_cnt", static_cast<double>(params::BAND_CLEAR_CNT))));
         replan_period_ = dd("replan_period_s", params::REPLAN_PERIOD_S);
         replan_dev_    = dd("replan_dev_m",    params::REPLAN_DEV_M);
+        // 目标失效检测：承诺目标邻域此半径内已无未扫大格 → 放弃承诺改投别处。0=关闭
+        target_stale_r_ = dd("target_stale_r", params::TARGET_STALE_R);
 
         viz_          = declare_parameter<bool>("viz", true);
 
@@ -542,11 +544,27 @@ private:
             std::hypot(scan_target.x - explore_target_.x,
                        scan_target.y - explore_target_.y) > commit_target_tol_;
 
-        // 目标几乎没动 且 旧折线仍无碰撞 → 直接续用，连 A* 都不搜(最省、最稳，绝不翻边)。
-        if (have_commit && !target_moved && old_clear) {
+        // ★目标失效(2026-08)★：承诺目标【邻域内已无任何未扫大格】→ 这条承诺已无信息可拿。
+        //   成因：飞向目标的途中，机载视野(FOV 100°/3m)常常早就把那片扫完了；但承诺/迟滞
+        //   只看"目标动没动、路撞不撞"，从不问"这个目标还值不值得去"，于是飞机咬着一个
+        //   零收益的点一路飞到跟前 —— 正是"明明已覆盖、还在往前走"的直接原因。
+        //   失效即【绕过下面两道迟滞闸】立刻改投新目标(见 stale 在两处的短路)。
+        //   ★半径口径★：看邻域而非仅目标格自身。仿真(6 场景, 主指标=达 90% 覆盖用时)：
+        //     基线 281.0s | 仅看目标格 283.3s(无改善,3 场景更慢) | 邻域 R=1.0m 242.3s(-13.8%,全面更快)
+        //     R=2.0m 反而 293.3s —— 半径过大会过早放弃仍有价值的目标。故取 R=1.0m。
+        const bool target_stale = have_commit &&
+            !gsnap.has_gain_within(explore_target_, target_stale_r_);
+
+        // 目标几乎没动 且 旧折线仍无碰撞 且 目标仍有收益 → 直接续用，连 A* 都不搜(最省、最稳，绝不翻边)。
+        if (have_commit && !target_moved && old_clear && !target_stale) {
             plan_pending_ = false;
             last_plan_time_ = now();   // 续命，避免下一拍又因 age 触发重搜
             return;
+        }
+        if (target_stale) {
+            RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1500,
+                "目标失效(邻域 %.1fm 内已无未扫格) (%.2f,%.2f) → 放弃承诺，改投 (%.2f,%.2f)",
+                target_stale_r_, explore_target_.x, explore_target_.y, scan_target.x, scan_target.y);
         }
 
         GlobalResult gr = plan_global_path(cur, scan_target, obs, ggcfg_, yaw_);  // ★机头锥★：起点段只朝机头延伸
@@ -555,8 +573,11 @@ private:
             //   给旧路/新路各打分(score_path: 剩余弧长=时间效益, 最小障碍边距=安全性)，新路需
             //   【更安全≥safety_gain】且/或【更快≥time_gain】(require_both 控制"且/或")才换，否则续用旧路。
             //   关键：左右横跳的两条路是 near-tie(几乎等长、等安全)→两项都达不到阈值→不换→根除横跳。
-            //   例外：旧折线已被挡(old_clear=false 会撞) 或 旧路快走完(剩余<前瞻) → 跳过评估直接采纳(安全/进度优先)。
-            if (old_clear) {
+            //   例外：旧折线已被挡(old_clear=false 会撞)、旧路快走完(剩余<前瞻)、
+            //         或【旧目标已失效(扫完了)】→ 跳过评估直接采纳(安全/进度优先)。
+            //   ★target_stale 必须在这里也短路★：否则失效目标虽被识别，却仍可能因
+            //   "新路不够安全/不够快"被这道闸打回、继续咬着零收益目标飞 —— 修了等于没修。
+            if (old_clear && !target_stale) {
                 const PathScore so = score_path(cur, explore_raw_, obs, ggcfg_);   // 旧路(剩余段)
                 const PathScore sn = score_path(cur, gr.path,      obs, ggcfg_);   // 新路
                 const bool exhausted = so.length < global_lookahead_;             // 旧路快走完→无可咬死，放行换路
@@ -1058,6 +1079,9 @@ private:
     double        done_coverage_, goal_tol_, v_est_alpha_;
     double        goal_stop_v_, kp_goal_, kd_goal_, v_goal_max_;
     double        replan_period_ = 0.7, replan_dev_ = 0.5;
+    // 目标失效判定邻域半径 (m)：承诺目标此半径内已无未扫大格 → 该目标已无信息可拿，
+    //   立刻放弃承诺改投别处(消除"已覆盖还在往前飞")。实际值由 params::TARGET_STALE_R 覆盖。
+    double        target_stale_r_ = 1.00;
     bool          viz_;
 
     // ---- 雷达感知配置 ----
