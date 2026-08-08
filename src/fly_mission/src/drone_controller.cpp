@@ -788,7 +788,7 @@ void DroneController::stop()
     circle_active_ = false;
     takeoff_pos_mode_ = false;   // 起飞途中中止：退出位置环(IDLE 分支自己会按开关发占位)
     // ★落平台下降模式也必须复位★：它把 MOVE_POSE 的垂直限速从平飞档 0.1m/s 放开到
-    //   PLAT_DESCEND_SPD(0.4)。若在 TRACK_LAND 期间失锁/中止，状态机跳走了但这个标志
+    //   PLAT_DESCEND_SPD(0.2)。若在 TRACK_LAND 期间失锁/中止，状态机跳走了但这个标志
     //   还留着 true → 之后所有 MOVE_POSE(追踪小车、视觉锁定)都用大限速，
     //   SLAM 的 z 一飘就被放大成上下窜(这正是当初把 MOVE_POSE 归入平飞档的原因)。
     //   状态机的两个正常出口各自也会复位，这里是兜底：任何中止路径都盖到。

@@ -1,16 +1,82 @@
 ============================================================================
  fly_mission 状态机 · 函数调用速查表
 ============================================================================
- 用途：忘了某个动作在状态机(on_timer 的 switch)里怎么写时，翻这里照抄。
+ 用途：忘了某个动作在状态机里怎么写时，翻这里照抄。
  说明：
    - 这是【纯文档】，不参与编译。改它不影响程序。
-   - 每个动作给出：功能说明 / 传入参数 / 在 case 里的调用方式(可直接抄改)。
+   - 每个动作给出：功能说明 / 传入参数 / 可直接抄改的调用方式。
    - 坐标系：SLAM/camera_init 系，原点=起飞点。yaw 单位见各条(度/弧度)。
-   - 通用套路：动作函数每拍调用(把目标写进控制器)，再用 is_reached() 判到位跳下一状态。
-     is_reached() 的"到位"含【持续稳定 SETTLE_DURATION 秒】(params.hpp)，即自带停顿。
-   - 真实函数签名在：
-       colcon_ws/src/fly_mission/include/fly_mission/drone_controller.hpp
-       colcon_ws/src/fly_mission/src/fly_mission_node.cpp (private 转发/组合区)
+   - 通用套路：动作函数每拍调用(把目标写进控制器)，再用 is_reached() 判到位跳转。
+     is_reached() 的"到位"含【持续稳定 SETTLE_DURATION(0.3s) 秒】，即自带停顿。
+   - 主循环 50Hz(TIMER_PERIOD_MS=20)。
+
+ ★★★ 代码结构(2026-08 拆分后，改状态机必读) ★★★
+   include/fly_mission/
+     mission_state.hpp       状态枚举 MissionState + 三张映射表的声明
+     fly_mission_node.hpp    节点类声明：运动转发(inline) + 各 step_xxx() 声明 + 成员
+   src/
+     fly_mission_node.cpp    构造(话题/UDP/遥测) + on_timer 派发 + main
+     mission_state.cpp       状态名 / 遥测码 / 两个白名单(纯函数)
+     mission_step_basic.cpp  检测·起飞分岔·探索·走线·找图·钻圈·绕杆·降落
+     mission_step_track.cpp  追踪小车·视觉锁定投掷·纯雷达投掷链·投后返航
+     mission_step_plat.cpp   落移动平台·平台待机/起飞·二次起飞流程
+     mission_io.cpp          Arduino / shm 视觉信箱 / UDP 命令 / 遥测上报
+
+   ★写法约定★：on_timer 的 switch 里【每个 case 只有几行】——调一个 step_xxx()、
+     判到位、切状态。实际逻辑放进 step_xxx()。switch 是"流程目录"，能一眼看完
+     全流程；改动作细节则去对应 step_xxx()。
+   ★简单动作可以直接写在 case 里★(见 GO_FORWARD / GO_HOME)，不必非开函数。
+     逻辑超过十几行、或要存跨拍状态(计时器/冻结坐标)才值得抽出去。
+
+============================================================================
+ 〇、改状态机的三种情形
+============================================================================
+
+--- 情形1：换"起飞后跑哪个任务"(最常改，改一行) ---
+  文件：src/mission_step_basic.cpp 的 step_wait_after_takeoff()
+      const MissionState next = MissionState::EXPLORATION;   ← 改这一行
+  ★这行赋值是唯一权威★，别信别处注释里的"当前选中"标注。
+  可选值(各分支所需初始化就在它下面的 if/else if 里，已写好，选谁自动走那支)：
+      EXPLORATION        自主探索(算法给速度，扫完→降落)          ★当前★
+      HOVER_3S           悬停3s → 追踪小车 → 投掷 → 返航
+      RUN_WAYPOINTS      写死航点表(waypoints.hpp)，逐点飞
+      RUN_EXT_WAYPOINTS  外部发航点(/mission/waypoints)
+      FOLLOW_LINE        视觉寻线(沿黑线)
+      DRILL_RING         钻圈
+      CIRCLE_AROUND      绕杆
+      GO_FORWARD         二次起飞链(飞到前方→降落→等命令→再起飞)
+
+--- 情形2：改动作参数(高度/时长/坐标) ---
+  这些字面量刻意留在 src/fly_mission_node.cpp 的 switch 里，一眼能看到：
+      起飞高度      takeoff(1.5)
+      起飞后悬停    wait_time(0.5)
+      探索终点      exploration(7.0, 4.0)
+      追车前悬停    wait_time(3.0)
+      前进目标点    target_xy_slam(1.0, 0.0)
+      返航目标点    target_xy_slam(0.0, 0.0)
+  ★第二段起飞高度不在这里★：在 mission_step_plat.cpp 的 REARM_TAKEOFF_Z
+    (REARM / PLAT_TAKEOFF / TAKEOFF_AGAIN 三处共用一个常量，改一处即可；
+     原来是三处字面量，改漏一处会边爬升边横拉)。
+
+--- 情形3：加一个新状态(四步) ---
+  1) mission_state.hpp   枚举里加一项
+  2) mission_state.cpp   state_name() 补一行(漏了显示"?"，不崩)；
+                         telemetry_status() 按需归类(漏了监控端显示0，不影响飞行)
+  3) fly_mission_node.hpp  private 区声明 void step_xxx();
+  4) 对应 mission_step_*.cpp 写实现，fly_mission_node.cpp 的 switch 里接上：
+         case MissionState::SPIN_AFTER_DROP:
+             target_yaw_body(180.0);
+             if (is_reached()) state_ = MissionState::RETURN_HOME_DROP;
+             break;
+
+  ★★★ 两个容易踩的坑 ★★★
+  ① mission_state.cpp 的 lost_check_active_state()：
+     新状态若会【未解锁 或 非 OFFBOARD】(落地/地面待机/自己切模式/主动上锁)，
+     必须加进排除列表。否则 0.5s 去抖一到就被判成"飞手接管"→ stop()+FINISHED，
+     那条流程永远走不到(二次起飞当年就栽在这)。
+  ② find_figure_active_state()：只有走航点的状态才允许被视觉找图打断。
+  ③ 要跨拍记状态就在 fly_mission_node.hpp 尾部加成员，跟着现有习惯配一个
+     _valid_ 标志(rclcpp::Time 没有"未初始化"状态，直接比会拿到垃圾值)。
 
 ============================================================================
  一、位移 / 转向原语（都走 PD，到位判定同一套）
@@ -76,13 +142,13 @@
 传入参数：dyaw_deg —— 偏航变化量 (度, 正=逆时针/左转)。
 调用方式：
     case MissionState::TURN_LEFT_90:
-        target_yaw_body(90.0);             // 左转 90° 
+        target_yaw_body(90.0);             // 左转 90°
         if (is_reached()) state_ = MissionState::下一个状态;
         break;
 
 ----------------------------------------------------------------------------
 函数：target_pose_slam(x, y, z, yaw_deg)   ★一次到位：同时控制 x/y/z/yaw★
-功能说明：  切 MOVE_POSE 模式；is_reached() 判 xyz 与 yaw 全部进容差且持续稳定。
+功能说明：切 MOVE_POSE 模式；is_reached() 判 xyz 与 yaw 全部进容差且持续稳定。
           区别于 target_xy_slam(只 xy、锁 z/yaw)、target_yaw_slam(只 yaw、锁 xy/z)——
           那些是"分步"，这个是"一次到位同时动"。钻圈飞到环正前方并对准就用它。
 传入参数：x,y —— 目标绝对坐标 (SLAM系, m)；z —— 目标绝对高度 (SLAM系, m)；
@@ -103,7 +169,7 @@
 传入参数：z —— 相对起飞点的目标高度 (m)。
 调用方式：
     case MissionState::TAKEOFF:
-        takeoff(1.0);                      // 起飞到离地 1m
+        takeoff(1.5);                      // 起飞到离地 1.5m
         if (is_reached()) {
             RCLCPP_INFO(get_logger(), "[起飞] 完成");
             state_ = MissionState::WAIT_AFTER_TAKEOFF;
@@ -111,14 +177,18 @@
         break;
 
 ----------------------------------------------------------------------------
-函数：land()
+函数：land()  /  step_land()
 功能说明：请求 AUTO.LAND 降落。is_reached() 在【触底 + 已上锁】时为真。
-传入参数：无。
-调用方式：
-    case MissionState::LAND:
+          拆分后包了个 step_land()(mission_step_basic.cpp)：调 land() 并返回
+          is_reached()，让 LAND 的 case 只写"去哪"的分岔。
+调用方式(直接用 land)：
+    case MissionState::LAND_SIMPLE:
         land();
-        if (is_reached()) {
-            RCLCPP_INFO(get_logger(), "[降落] 完成");
+        if (is_reached()) state_ = MissionState::FINISHED;
+        break;
+调用方式(当前 LAND 的写法)：
+    case MissionState::LAND:
+        if (step_land()) {                 // true = 已触底且上锁
             state_ = MissionState::FINISHED;
         }
         break;
@@ -126,6 +196,7 @@
 ----------------------------------------------------------------------------
 函数：wait_time(sec)
 功能说明：在当前位置悬停等待 sec 秒(锁定当前 xyz + yaw)。重复调用不重置计时(幂等)。
+          ★入参变了就重新起算★，所以相邻两个状态都用 wait_time 但秒数不同是安全的。
 传入参数：sec —— 等待时长 (s)。
 调用方式：
     case MissionState::WAIT_AFTER_TAKEOFF:
@@ -134,48 +205,55 @@
         break;
 
 ----------------------------------------------------------------------------
-函数：arduino_send(text) / arduino_send(text, times)
-功能说明：打开串口(params::ARDUINO_DEV, 115200, 8N1)把 ASCII 指令发给 Arduino，
-          自动补换行("LED ON"→"LED ON\n")，默认重发 ARDUINO_SEND_TIMES(5) 次防丢
-          (Arduino 端重复收到同指令应幂等，如 LED ON 收 5 次还是开)。
+函数：arduino_send(text[, times])        ★阻塞版，只在非飞行阶段用★
+      arduino_send_async(text[, times])  ★非阻塞版，飞行中必须用这个★
+功能说明：串口(params::ARDUINO_DEV, 115200, 8N1)发 ASCII 指令给 Arduino，
+          自动补换行("BEEP"→"BEEP\n")，默认重发 ARDUINO_SEND_TIMES(5) 次防丢。
           ★没插 Arduino/设备名不对：只打告警，任务照飞，绝不中断★。
-          串口首次使用才打开且全程保持(打开动作会复位 Arduino，等 ARDUINO_BOOT_WAIT_S
-          后才发首条)。参数在 params.hpp ★Arduino 串口指令★段；实现 arduino_serial.hpp。
-传入参数：text —— ASCII 指令内容(不用带\n)；times —— 可省，重发次数(默认 params 的 5)。
-★注意★：发一次阻塞几十 ms(5次×20ms 间隔)——只在【状态切换/到点】处一次性调，
-        ★不要放在每拍都执行的位置(50Hz 会拖垮主循环)★。
+          实现在 mission_io.cpp；底层 arduino_serial.hpp。
+两个版本的区别(★选错会退出 OFFBOARD★)：
+    arduino_send        阻塞：usleep 5×20ms + tcdrain ≈ 80ms。会让主循环停转、
+                        setpoint 流中断，飞控可能判"没收到 setpoint"退出 OFFBOARD。
+                        ⇒ 只在 BOOT_CHECK 这种【还没起飞】的阶段用(顺便把串口打开)。
+    arduino_send_async  非阻塞：只把字节排进队列(纳秒级返回)，由 on_timer 每拍
+                        arduino_.pump() 写出。★飞行中(投掷等)一律用这个★。
+                        代价：不知道有没有真发成功(队列满/串口不通只打告警)。
+★两者都不要放在每拍执行的位置★：阻塞版会拖垮主循环；异步版会把队列灌满。
+  正确做法是在"状态切换/到点"处一次性调，或用 xxx_sent_ 标志保证只发一次。
+当前实际用到的指令：
+    "BEEP"                 BOOT_CHECK 的两声提示音(阻塞版)
+    params::DROP_CMD       投掷机构，当前值 "DIANCI"(异步版)
 调用方式：
     case MissionState::某状态:
         target_xy_slam(3.0, 2.0);
         if (is_reached()) {
-            arduino_send("LED ON");            // 到点让 Arduino 开灯(发5次)
-            state_ = MissionState::下一个状态;  // 立即切走→天然只发一轮
+            arduino_send_async(params::DROP_CMD);   // 到点投掷(飞行中→异步版)
+            state_ = MissionState::下一个状态;       // 立即切走→天然只发一轮
         }
         break;
 配套：Arduino 端 loop 里 Serial.readStringUntil('\n') 按行收、比对指令字符串执行。
-      设备名(本真机)：已用 udev 固定为 /dev/tty_module_A(→ttyCH341USB0)，params::ARDUINO_DEV
-      已设为此值；换口只需改 params.hpp 后重编 fly_mission。串口权限已在 dialout 组(免 sudo)。
+      设备名已用 udev 固定为 /dev/tty_module_A；换口改 params.hpp 后重编。
+      串口权限已在 dialout 组(免 sudo)。
 
       ── 串口离线测试(不进 ROS/不起飞，测的是同一份 arduino_serial.hpp) ──
-      工具在 test_tools/。两种测法：
-      (A) 真板子(已插)：直接发
+      工具在 test_tools/(★不在 CMakeLists 里，手工编译★)。两种测法：
+      (A) 真板子(已插)：
             cd ~/acfly_ws/src/fly_mission/test_tools
+            g++ -std=c++17 -I ../include arduino_send_test.cpp -o arduino_send_test
             ./arduino_send_test /dev/tty_module_A                 # 默认发 "LED ON" ×5
-            ./arduino_send_test /dev/tty_module_A "LED OFF"       # 改内容
-            ./arduino_send_test /dev/tty_module_A "LED ON" 3      # 改内容+次数
-          (第1参=设备,第2参=内容默认"LED ON",第3参=次数默认5;打开后先等2s让板复位)
-      (B) 无板子(假 Arduino,用虚拟串口 pty)：
+            ./arduino_send_test /dev/tty_module_A "DIANCI"        # 改内容
+            ./arduino_send_test /dev/tty_module_A "DIANCI" 3      # 改内容+次数
+          (打开后先等 2s 让板子复位——打开串口的 DTR 脉冲会复位 Arduino)
+      (B) 无板子(假 Arduino，虚拟串口 pty)：
             终端A: python3 test_tools/fake_arduino.py   → 打印 "假串口 = /dev/pts/N"
             终端B: ./arduino_send_test /dev/pts/N       → 终端A应打出收到的行
-      ★测试工具与飞控 fly_mission_node 都会独占串口,勿同时跑★。
-      改测试默认内容:test_tools/arduino_send_test.cpp 的 "LED ON",改后重编:
-            g++ -std=c++17 -I ../include arduino_send_test.cpp -o arduino_send_test
+      ★测试工具与 fly_mission_node 都会独占串口，勿同时跑★。
 
 ----------------------------------------------------------------------------
 函数：description_circle_right()   ★无参·绕杆环绕(自带采集→接近→环绕子状态机)★
 功能说明：不传参。内部三阶段自动推进：
           ① 原地悬停订阅 /pole_detector/center 攒 POLE_CIRCLE_COLLECT_FRAMES 帧，
-             对 杆水平轴心(x,y)+半径 取平均(半径>POLE_CIRCLE_MAX_RADIUS 判非杆放弃)。
+             对 杆水平轴心(x,y)+半径 取平均。
           ② 飞到"距杆表面 POLE_CIRCLE_STANDOFF_M 米"处(=距杆心 杆半径+standoff)，
              边转边动、机头朝杆、★只飞 xy，z 锁进入时高度★。
           ③ 以杆心为圆心、②的接近半径为半径，绕杆环绕 POLE_CIRCLE_SWEEP_DEG 度
@@ -185,336 +263,518 @@
 ★完成判定★：用 pole_circle_done()(绕完 或 没看到杆放弃都算结束)，★不是 is_reached()★——
           该原语内部会切 HOLD/MOVE_POSE/CIRCLE 多个子模式，is_reached() 只反映当前子模式。
           需要区分"绕完/失败"可再看 drone_.pole_circle_failed()。
+★已知不一致(待修)★：params.hpp 的 POLE_CIRCLE_MAX_RADIUS 注释说"半径>此值判非杆
+          放弃"，但★代码里从未检查过这个参数★。把墙/大柱子当细杆时会用错误半径绕圈。
 前提：pole_detector_node 在跑、包围盒框住了杆、有 /pole_detector/center 输出(含第5位 radius)。
-调用方式：
+调用方式(当前 case，实现在 mission_step_basic.cpp 的 step_circle_around())：
     case MissionState::CIRCLE_AROUND:
-        description_circle_right();               // 无参，每拍调一次即可
-        if (pole_circle_done()) {                 // ★用它判整体完成，别用 is_reached()★
-            RCLCPP_INFO(get_logger(), "[绕杆] 完成");
-            state_ = MissionState::下一个状态;
-        }
+        step_circle_around();
         break;
+    // step_circle_around() 内部：
+    //     description_circle_right();           // 每拍推进子状态机
+    //     if (!pole_circle_done()) return;      // ★用它判整体完成★
+    //     state_ = MissionState::LAND;
 
 ----------------------------------------------------------------------------
-状态：EXPLORATION（自主探索，速度由 exploration_planner 算法给）
+状态：EXPLORATION（自主探索，速度由 exploration_planner 算法给）★当前主用★
 功能说明：进探索(锁高 + 发一次终点给算法)，之后每拍把算法算出的机体系速度转发给
           控制器执行；算法报告扫完(explore_done_) → 降落。
+          实现：mission_step_basic.cpp 的 exploration(gx, gy)。
 传入参数：exploration(gx, gy) 的 gx,gy = 探索终点 (SLAM 系)。
 调用方式：
     case MissionState::EXPLORATION:
-        exploration(7.0, 4.5);             // 探索终点 (SLAM 系)，改这里即可
+        exploration(7.0, 4.0);             // 探索终点 (SLAM 系)，改这里即可
         if (explore_done_) {
             RCLCPP_INFO(get_logger(), "[探索] 算法报告完成，准备降落");
             state_ = MissionState::LAND;
         }
         break;
-说明：exploration() 内部首拍调 drone_.enter_exploration() 锁高 + 发终点，
-      之后 if(ext_cmd_valid_) drone_.set_velocity_body(...) 逐拍转发算法速度。
-      需要算法节点 exploration_planner_node 一起跑并发 /exploration/cmd_vel。
+说明：exploration() 内部首拍调 drone_.enter_exploration() 锁高 + 发终点到
+      /exploration/goal，之后逐拍 drone_.set_velocity_body(...) 转发算法速度。
+      ★只转发【新鲜】的速度★(EXPLORE_CMD_TIMEOUT_S=0.5s)：算法停发就停止转发，
+      让控制器看门狗(0.3s)接管保高悬停。★勿改回只判 ext_cmd_valid_★——那是
+      一次性锁存标志，只判它会让飞机带着最后一条速度一直飞下去。
+★前提★：exploration_planner_node 必须一起跑并发 /exploration/cmd_vel。
+★注意★：退出条件只有"算法报告完成"，★没有超时兜底★——算法节点挂了飞机会
+      悬停保高直到电池耗尽(不会乱飞，但也不会自己降落)。
+★场地边界与终点是分开配的★：终点在本文件的 exploration(7.0, 4.0)；
+      场地边界 FIELD_MIN/MAX_X/Y 在 exploration_planner/include/.../params.hpp。
+      换场地要两边都改。
+
+★★★ 当前终点 (7.0, 4.0) 有撞墙风险，上机前请确认 ★★★
+  FIELD_MAX_X = 7.0 就是【x 方向那面墙的位置】，所以终点 x=7.0 正好压在墙上。
+  探索阶段是安全的：A* 栅格把距边界 < GLOBAL_WALL_MARGIN(0.60m) 的格子设为禁入，
+  飞机不会贴墙飞。
+  但【归航阶段不受这个保护】：探索报完成后转归航，pd_follow_path() 在飞机距终点
+  小于 global_lookahead_(0.60m) 时会把 carrot 直接换成【真终点】，PD 就一路朝
+  x=7.0 推；而完成判定要求飞机进到终点 GOAL_TOL_XY(0.10m) 以内才发
+  /exploration/finished。也就是说飞机必须飞到【离墙 10cm】才算完成。
+  另外 obstacle_map 会主动丢弃贴墙的点云(墙不当障碍物，只靠 A* 栅格边界管)，
+  所以归航时没有任何避障逻辑会拦住它。
+  ⇒ 建议终点至少内缩 WALL_MARGIN(1.0m)：x 取 6.0 以内(退一步至少 6.4，即
+    GLOBAL_WALL_MARGIN)。y=4.0 距 FIELD_MAX_Y(5.0) 有 1.0m，这个方向没问题。
+  ⇒ 若终点确实够不到，症状是：探索扫完后飞机一直悬在终点附近不降落
+    (finished 永不发布，主控 EXPLORATION 没有超时兜底)。。
 
 ----------------------------------------------------------------------------
-走线·三种方式（三选一，各自封闭）★当前主用★
-  在 WAIT_AFTER_TAKEOFF 到位处改一行 state_ 即可切换：
-      state_ = MissionState::RUN_WAYPOINTS;      // 写死航点表
-      state_ = MissionState::RUN_EXT_WAYPOINTS;  // 外部发航点
-      state_ = MissionState::FOLLOW_LINE;        // 视觉寻线(沿黑线)
+走线·三种方式（三选一，各自封闭）
+  在 step_wait_after_takeoff() 里改 next 即可切换：
+      next = MissionState::RUN_WAYPOINTS;      // 写死航点表
+      next = MissionState::RUN_EXT_WAYPOINTS;  // 外部发航点
+      next = MissionState::FOLLOW_LINE;        // 视觉寻线(沿黑线)
   RUN_WAYPOINTS/RUN_EXT_WAYPOINTS 都【自带航点装载】——首拍用 wp_loaded_ 标志装一次；
-  且都可被视觉找图打断，回来接着走剩下的点(进度在 runner_ 里，不丢；打断仅在
-  wp_loaded_=true 即"真正开始飞航点后"才触发)。FOLLOW_LINE 走机体系速度、不打断。
-  ★注意★：选 FOLLOW_LINE 时 WAIT_AFTER_TAKEOFF 出口必须调 drone_.enter_exploration()
-    (锁当前高度为保持高度 + 切 EXTERNAL_VEL)，否则 explore_z_ 停在 0 → 保高把飞机往
-    地面压→越飞越低。选航点方式则不需要(它们走 target_xy_slam，自带 target_z_)。
+  且都可被视觉找图打断，回来接着走剩下的点(进度在 runner_ 里，不丢)。
+  FOLLOW_LINE 走机体系速度、不打断。
+  ★三个分支所需的初始化 step_wait_after_takeoff() 里都写好了★，改 next 即可，
+    不用自己补 enter_exploration()/lf_.begin()/find_.enable()。
 
 --- 方式1：RUN_WAYPOINTS（写死航点表，起飞后直接飞） ---
 功能说明：首拍 runner_.reset_default() 装入 waypoints.hpp 的 WAYPOINTS，之后逐点飞，
-          到一个点(is_reached，含稳定停顿)就下一个，走完 → LAND。不额外 wait_time。
+          到一个点(is_reached，含稳定停顿)就下一个，走完 → LAND。
 传入参数：无(航点写死在 waypoints.hpp，改那张表即可)。
 调用方式：
     case MissionState::RUN_WAYPOINTS:
-        if (!wp_loaded_) {
-            runner_.reset_default();           // 装入写死航点表
-            wp_loaded_ = true;
-        } else if (runner_.done()) {
-            state_ = MissionState::LAND;
-        } else {
-            const auto& wp = runner_.current();
-            target_xy_slam(wp.x, wp.y);        // 幂等飞当前航点
-            if (is_reached()) runner_.advance();
-        }
+        step_run_waypoints();              // 实现在 mission_step_basic.cpp
         break;
 
 --- 方式2：RUN_EXT_WAYPOINTS（外部发航点，起飞后先悬停等再飞） ---
-功能说明：未收到航点前 wait_time 悬停等 /mission/waypoints；收到 → set_waypoints 装载
-          → 逐点飞 → 走完 LAND。等待与飞行都在这一个状态里(靠 wp_loaded_ 分两阶段)。
-          ★recv_ 从程序启动就全程后台监听(独立 Reentrant 组 + MultiThreadedExecutor)★：
-          谁在任何时刻发都收得到。故【起飞前就发】→ WAIT_AFTER_TAKEOFF 出口已预装载
-          (wp_loaded_=true) → 进本状态跳过悬停、立即飞；【起飞后才发】→ 悬停等收到再飞。
-传入参数：无。外部用一条消息发全部航点(见下)。
+功能说明：未收到航点前 wait_time 悬停等 /mission/waypoints；收到 → 装载 → 逐点飞
+          → 走完 LAND。等待与飞行都在这一个状态里(靠 wp_loaded_ 分两阶段)。
+          ★recv_ 从程序启动就全程后台监听(独立 Reentrant 组)★：谁在任何时刻发都
+          收得到。故【起飞前就发】→ step_wait_after_takeoff() 已预装载 → 进本状态
+          跳过悬停、立即飞；【起飞后才发】→ 悬停等收到再飞。
 发送方式(别人怎么发，一条命令发全部)：
     ros2 topic pub --once /mission/waypoints std_msgs/msg/Float64MultiArray "{data: [3.0, 7.0, 4.0, 6.0, 0.0, 0.0]}"
-    → data 按 [x1,y1, x2,y2, ...] 排，依次飞 (3,7)→(4,6)→(0,0)。SLAM 系，高度固定1m。只接收一次。
+    → data 按 [x1,y1, x2,y2, ...] 排，依次飞 (3,7)→(4,6)→(0,0)。SLAM 系。只接收一次。
 调用方式：
     case MissionState::RUN_EXT_WAYPOINTS:
-        if (!wp_loaded_) {
-            wait_time(1.0);                    // 悬停等(幂等)
-            if (recv_.has_waypoints()) {
-                runner_.set_waypoints(recv_.take());
-                wp_loaded_ = true;
-            }
-        } else if (runner_.done()) {
-            state_ = MissionState::LAND;
-        } else {
-            const auto& wp = runner_.current();
-            target_xy_slam(wp.x, wp.y);
-            if (is_reached()) runner_.advance();
-        }
+        step_run_ext_waypoints();
         break;
-配套：进入走线状态前(WAIT_AFTER_TAKEOFF 到位处)置 wp_loaded_ = false；同处若 recv_
-      已收到则当场 set_waypoints + wp_loaded_=true(起飞前发的免等待，起飞后直接飞)。
 
 --- 方式3：FOLLOW_LINE（视觉寻线，沿黑线飞） ---
-功能说明：机头【不转】(yaw=0)，前进(x)与横向(y)用【同一套 PD】(KP_LAT/KD_LAT/MAX_V_LAT)贴回黑线上。
-          前进 v_fwd = KP_LAT*line_x_滤波 + KD_LAT*d(line_x)/dt，钳到[-MAX_V_LAT, +MAX_V_LAT]：
-            ★line_x>0 前进、line_x<0 后退(支持倒着寻线)★；横向线也能像纵向一样稳定跟踪。
-          横向误差 = line_y(前视点左右偏移，左为正)；横向 PD 同式：v_lat = KP_LAT*line_y_滤波 + KD_LAT*d(line_y)/dt。
-          连续 LF_TIMEOUT_SEC(1s)无有效线 → 降落。复杂逻辑在 LineFollower 类；参数在 params.hpp ★视觉寻线★段。
-传入参数：无(视觉话题喂)。★进入前必须 drone_.enter_exploration() 锁高，否则掉高★。
+功能说明：机头【不转】(yaw=0)，前进(x)与横向(y)用【同一套 PD】(LF_KP_LAT/KD_LAT/MAX_V_LAT)。
+          ★line_x>0 前进、line_x<0 后退(支持倒着寻线)★；横向线也能像纵向一样跟踪。
+          连续 LF_TIMEOUT_SEC 无有效线 → 降落。参数在 params.hpp ★视觉寻线★段。
+          ★注意 line_follower.hpp 文件头描述的是已废弃的方案(说用 atan2 转机头)★，
+            实现是 x/y 同款 PD + yaw_rate 恒 0，成员注释才是对的。
+传入参数：无(视觉喂)。进入前的 enter_exploration() 锁高已由 step_wait_after_takeoff() 做。
 调用方式：
-    // 进入(WAIT_AFTER_TAKEOFF 到位处)：
-    drone_.enter_exploration();   // 锁当前高度 + 切 EXTERNAL_VEL（不调会越飞越低）
-    lf_.begin();                  // 起算无线超时
-    state_ = MissionState::FOLLOW_LINE;
-
-    // 本态 case：
-    case MissionState::FOLLOW_LINE: {
-        if (lf_.timed_out()) { state_ = MissionState::LAND; break; }   // 丢线1s→降落
-        double vf, vl, yr;
-        lf_.compute(vf, vl, yr);          // vf=前进(line_x纯P,可负=后退), vl=横向纠偏, yr=0
-        drone_.set_velocity_body(vf, vl, yr);
+    case MissionState::FOLLOW_LINE:
+        if (lf_.timed_out()) {             // 丢线超时→降落
+            state_ = MissionState::LAND;
+            break;
+        }
+        step_follow_line();                // 算速度并下发
         break;
-    }
-配套：不开找图(与寻线共用 /cv/target_info 话题)；横向方向反了就给 line_follower.cpp
-      cmd_vlat_ 那行 kp/kd 前加负号(★倒着走时横向符号可能要反，实测若越纠越偏就翻★)。
-      调参：晃→调大 lf_kd_lat/调小 lf_y_alpha；回线慢→调大 lf_kp_lat。
-
+调参：晃→调大 LF_KD_LAT/调小 LF_Y_ALPHA；回线慢→调大 LF_KP_LAT。
+      横向方向反了就给 line_follower.cpp 的 kp/kd 前加负号(倒着走时可能要反)。
 
 ----------------------------------------------------------------------------
-状态：FINDFIGURE（视觉找图，打断走线飞过去看）★当前主用★
+状态：FINDFIGURE（视觉找图，打断走线飞过去看）
 功能说明：由 FindFigure 后台确认到图形后打断走线进入本态：飞向图形中心(实时刷新)，
           到点悬停后拉黑该区域，回到【被打断前的状态】继续。超时则放弃但仍拉黑。
-          本态不由固定顺序进入，而是 switch 之前的"打断检查"切进来。
-传入参数：无。图形坐标由 /cv/target_info 提供，参数在 params.hpp ★视觉找图★段。
-调用方式(本态的 case)：
-    case MissionState::FINDFIGURE: {
-        double tx, ty;
-        const auto step = find_.tick(is_reached(), tx, ty);
-        if (step == FindFigure::Step::FLYING) {
-            target_xy_slam(tx, ty);            // 飞向(实时)图形中心
-        } else {                               // DONE：完成/超时 → 回被打断状态
-            state_ = state_before_find_;
-        }
+          本态不由固定顺序进入，而是 check_find_figure_interrupt() 切进来。
+传入参数：无。图形坐标由视觉给(shm 或 /cv/target_info)，参数在 params.hpp ★视觉找图★段。
+调用方式：
+    case MissionState::FINDFIGURE:
+        step_find_figure();                // 实现在 mission_step_basic.cpp
         break;
-    }
-打断检查(放在 switch(state_) 之前)：
-    if (find_figure_active_state(state_) &&    // 仅 RUN_WAYPOINTS / RUN_EXT_WAYPOINTS
-        wp_loaded_ &&                          // 且已真正开始飞航点(悬停等待期不打断)
-        state_ != MissionState::FINDFIGURE &&
-        find_.has_pending())
-    {
-        state_before_find_ = state_;           // 记下被打断的状态
-        find_.begin();
-        state_ = MissionState::FINDFIGURE;
-    }
-启用时机：起飞稳定后(WAIT_AFTER_TAKEOFF 到位)调 find_.enable() 才开始收帧。
+打断检查：在 switch【之前】调 check_find_figure_interrupt()(已接好，无需改)。
+          它内部判 find_figure_active_state(state_) && wp_loaded_ && find_.has_pending()。
+启用时机：step_wait_after_takeoff() 选航点分支时调 find_.enable() 才开始收帧。
+★用收紧容差★：本态用 is_reached_find()(FF_TOL_XY=0.10)，不是正常飞行的 TOL_XY(0.15)。
 
 ----------------------------------------------------------------------------
-状态：DRILL_RING（钻圈：飞到圆环正前方并对准）★独立可调用状态★
-功能说明：进入后【原地悬停】订阅 /ring_detector/center 攒够 DRILL_COLLECT_FRAMES 帧
-          (默认15，可在 params.hpp 改)，对 环心xyz + 环面朝向 取平均算出环心。动作序列(均正对
-          环面、目标高度=环心z+DRILL_Z_OFFSET_M[当前0.30m，补雷达装在机身上方、使机身中心穿环心]，
-          MOVE_POSE 边飞边转升高)：飞到"环前 DRILL_STANDOFF_M 米
-          (默认1m)"对准 → 悬停 DRILL_HOVER_SEC 秒(默认0.5s) → 穿过圈飞到"环后 DRILL_STANDOFF_M
-          米" → 悬停 DRILL_HOVER_SEC 秒 → 降落。
+状态：DRILL_RING（钻圈：飞到圆环正前方并对准 → 穿圈）
+功能说明：进入后【原地悬停】订阅 /ring_detector/center 攒够 DRILL_COLLECT_FRAMES 帧，
+          对 环心xyz + 环面朝向 取平均算出环心。动作序列(均正对环面、目标高度=
+          环心z+DRILL_Z_OFFSET_M，MOVE_POSE 边飞边转升高)：
+          飞到"环前 DRILL_STANDOFF_M 米"对准 → 悬停 DRILL_HOVER_SEC 秒 → 穿过圈飞到
+          "环后 DRILL_STANDOFF_M 米" → 悬停 → 降落。
           采集超 DRILL_COLLECT_TIMEOUT_S 秒仍不足 DRILL_MIN_FRAMES 帧 → 判没看到环、降落。
-          飞行动作全由 drone_ 现成 API 执行(悬停 wait_time / 对准 target_pose_slam)，
-          位姿计算与阶段推进在 RingDriller 类(ring_driller.hpp/.cpp)。参数在 params.hpp ★钻圈★段。
 输入话题：/ring_detector/center (std_msgs/Float64MultiArray)
-          data=[x, y, z, yaw_error_deg, ring_yaw_deg]；本状态用 x,y,z(环心) 与 ring_yaw_deg(环面朝向)。
-          ★前提★：ring_detector_node 要在跑，且包围盒(box_*)框住了圆环、有 /ring_detector/center 输出。
-进入方式：起飞稳定后(WAIT_AFTER_TAKEOFF 到位处)调 rd_.begin() 起采集，再置 state_ = DRILL_RING。
-          (进入方式见"四、当前状态机顺序"——WAIT_AFTER_TAKEOFF 出口 next 改成 DRILL_RING 即可。)
-调用方式(本态的 case)：
-    case MissionState::DRILL_RING: {
-        double tx, ty, tz, tyaw;
-        const auto step = rd_.tick(is_reached(), tx, ty, tz, tyaw);
-        switch (step) {
-            case RingDriller::Step::COLLECTING:                       // 悬停攒帧
-                wait_time(params::DRILL_COLLECT_TIMEOUT_S);
-                break;
-            case RingDriller::Step::APPROACHING:                     // 边飞边转升高飞向当前段(环前对准→穿到环后)
-                target_pose_slam(tx, ty, tz, tyaw);
-                break;
-            case RingDriller::Step::HOVERING:                        // 到位悬停(环前/环后各0.5s)
-                wait_time(params::DRILL_HOVER_SEC);
-                break;
-            case RingDriller::Step::DONE:                            // 完成→降落
-            case RingDriller::Step::FAILED:                          // 没看到环→降落
-                state_ = MissionState::LAND;
-                break;
-        }
+          data=[x, y, z, yaw_error_deg, ring_yaw_deg]；用 x,y,z(环心) 与 ring_yaw_deg。
+          ★前提★：ring_detector_node 在跑、包围盒(box_*)框住了圆环。
+进入方式：step_wait_after_takeoff() 把 next 改成 DRILL_RING(那里已含 rd_.begin())。
+调用方式：
+    case MissionState::DRILL_RING:
+        step_drill_ring();                 // 实现在 mission_step_basic.cpp
         break;
-    }
-说明：本状态不被视觉找图打断(不在 find_figure_active_state 里)，进入时也不调 find_.enable()。
+    // step_drill_ring() 内部按 rd_.tick() 返回的 Step 分派：
+    //   COLLECTING → wait_time(DRILL_COLLECT_TIMEOUT_S)   悬停攒帧
+    //   APPROACHING→ target_pose_slam(tx,ty,tz,tyaw)      边飞边转升高
+    //   HOVERING   → wait_time(DRILL_HOVER_SEC)           到位悬停
+    //   DONE/FAILED→ state_ = LAND
+说明：本状态不被视觉找图打断，进入时也不调 find_.enable()。
+
+============================================================================
+ 二·五、追踪小车 + 投掷（第一段任务链）
+   实现全在 src/mission_step_track.cpp。这一整段旧版速查表没有，2026-08 补。
+============================================================================
+
+--- 链路总览(从 HOVER_3S 起) ---
+  HOVER_3S  悬停3s  =>  TRACK_CAR  追上(累计 CATCH_HOLD_SEC)  =>  两条分岔：
+    [RADAR_DROP_MODE=true  当前]  RADAR_DESCEND => RADAR_DROP => RADAR_CLIMB =>
+    [RADAR_DROP_MODE=false     ]  LOCK_DROP                                  =>
+                                                        RETURN_HOME_DROP => LAND
 
 ----------------------------------------------------------------------------
-流程：二次起飞（落地→地面等触发→再起飞）★当前主用★
-功能说明：一条完整流程，占 7 个状态，中间【真的落地上锁】，之后由程序自己切 OFFBOARD
-          + 重新解锁再飞。顺序：
-            ① HOVER_3S       起飞后悬停 3s                      wait_time(3.0)
-            ② GO_FORWARD     飞到 SLAM (1,0)                    target_xy_slam(1.0, 0.0)
-            ③ LAND_THEN_WAIT 第一次降落(触底+上锁) → drone_.stop() 回 IDLE 停发 setpoint
-            ④ WAIT_TRIGGER   ★地面待机★等 /mission/takeoff_again
-            ⑤ REARM          起 setpoint 流 → 切 OFFBOARD → 解锁
-            ⑥ TAKEOFF_AGAIN  爬升到 1m
-            ⑦ GO_HOME        飞回 SLAM 原点 (0,0) → LAND → FINISHED
-          坐标全是 SLAM/camera_init【绝对】系，原点 = SLAM 初始化点(≈第一次起飞点)。
+状态：TRACK_CAR（追踪小车雷达，一直追不退出）
+功能说明：每拍问 car_ 要"小车现在在飞机 SLAM 系的哪里"，直接喂 target_pose_slam
+          (MOVE_POSE 一次到位原语，每拍重下新目标即为实时追踪)。
+          注意：不判 is_reached()。追踪是持续行为，到位了也要继续跟着小车动。
+          高度：CAR_TRACK_Z=false(当前) 时 car_ 返回的 z 恒为进入时锁定的高度。
+数据来源：小车雷达跑【独立的一套 SLAM】，位姿经 UDP 9870 传来(CAR_USE_UDP=true)。
+          必须每拍 car_.poll()(已在 on_timer 开头，无需改)——UDP 没有回调线程，
+          不主动收就永远没数据，car_.latest() 恒 false，飞机只会悬停。
+          CAR_ORIGIN_X/Y 是开环标定量：量错多少就稳定偏多少。建议先让小车不动、
+          确认飞机停在它正上方再放跑。
+追上判定：水平距离(不含高度差) <= CATCH_DIST 累计达 CATCH_HOLD_SEC。
+          跑出距离只暂停累加、不清零(允许断断续续凑满)。要改成"必须连续保持"
+          就在 step_track_car() 的 else 分支里加 catch_timer_ = 0.0。
+丢数据时：wait_time(CAR_LOST_HOLD_SEC=3600) 锁住当前位姿。
+          不能"什么都不做"——那样 target_ 仍是最后收到的小车位置，PD 会继续朝
+          那个过期点冲。
+调用方式：
+    case MissionState::TRACK_CAR:
+        step_track_car();
+        break;
 
-★触发命令(就是这条，可重复发)★：
-    ros2 topic pub --once /mission/takeoff_again std_msgs/msg/Bool "{data: true}"
-    · 收到【一次】就锁定并起飞；★重复发一律忽略★，不会二次触发(用户可连发防丢包)。
-    · data=false 不算触发(防误发)。
-    · ★任何时刻发都收得到★(订阅从程序启动就在)：起飞前/飞行途中发 → 落地后不等待、
-      立刻进 REARM 起飞；落地后发 → 当拍触发。想要"人到位再飞"就落地后再发。
+----------------------------------------------------------------------------
+状态：LOCK_DROP（视觉锁定投掷，RADAR_DROP_MODE=false 时走这条）
+功能说明：用 shm 信箱的 dx/dy(机体系，前+/左+)换算成 SLAM 绝对目标点精确锁定，
+          对准到 DROP_DIST 以内就投。高度全程保持 lock_z_(进入时冻结)不变。
+关键设计：换算在 consume_shm_cv()(mission_io.cpp)里做完并【冻结】，本状态只取用。
+          绝不能在状态机里每拍用"当前位置 + 旧 dx/dy"重算——视觉写 50Hz、状态机
+          读 50Hz 但不同步，读不到新帧的那些拍会拿已移动过的位置配旧偏移，
+          把目标点一路往前推(正反馈)，飞机越冲越远。
+视觉数据分三级(丢帧不等于放弃)：
+    新鲜(<=LOCK_CV_TIMEOUT_S)      用 dx/dy 精确锁定 + 可投掷
+    短暂丢(~LOCK_CV_FALLBACK_S)    原地锁住等它回来(不投)
+    长时间丢(>LOCK_CV_FALLBACK_S)  回退小车雷达定位继续跟上，仍不投；
+                                   视觉恢复自动切回精确锁定
+    为什么要回退：小车会跑，视觉丢了原地干等的话小车早开走、再也看不见=死等。
+两种投掷触发(哪个先到算哪个)，之后收尾路径完全相同：
+    提前投：视觉对准到 DROP_DIST 以内
+    必投：  进入本状态起 LOCK_TIMEOUT_SEC 到点，无条件投掷
+            这段代码刻意放在所有 if/else 分支【之外】，与数据状态完全无关——
+            视觉看不见/视觉进程死了/雷达接管中，一律照投(纯挂钟计时)。
+            否则视觉一死就会永久悬停到电池耗尽。
+落点补偿：投掷判定距离要减去 DROP_LEAD_X / DROP_LEAD_Y(投掷物带飞机速度、机构有
+          前抛角、相机光轴不正造成的系统性偏差)。只用于投掷时机判定，飞机照旧
+          往目标正上方飞，不会停在偏心位置。
+调用方式：
+    case MissionState::LOCK_DROP:
+        step_lock_drop();
+        break;
 
-★为什么二次起飞需要额外机制(改动点，勿删)★：
-  1) 失锁检测白名单 lost_check_active_state()：LAND_THEN_WAIT / WAIT_TRIGGER / REARM
-     这三个状态本来就【未解锁或非 OFFBOARD】，若不放行，0.5s 去抖一到就被误判成
-     "飞手接管" → drone_.stop() + FINISHED，二次起飞永远走不到。
-  2) drone_.request_offboard()：第一次起飞的 OFFBOARD 是【飞手手动拨】的，落地后没人
-     再去拨 → 程序自己请求。★切之前必须已有 setpoint 流★，故 REARM 先调 takeoff()
-     把流起来、预热 0.5s 再请求(此时未解锁，桨不转、飞机不动)。
+----------------------------------------------------------------------------
+状态：RADAR_DESCEND / RADAR_DROP / RADAR_CLIMB（纯雷达投掷链，当前走这条）
+功能说明：完全不用视觉，一行都不碰 lock_* 那套变量。RADAR_DROP_MODE=true 时启用。
+  RADAR_DESCEND  边追边降：水平 = 小车雷达位置 + 车身后方 RD_OFS_X(随小车 yaw 旋转)，
+                 y 不加偏移、yaw 直接跟小车。高度从进入时按 RD_DESCEND_SPD 匀速
+                 降到 (起飞点 + RD_DROP_H_REL)。
+                 出口：目标与实际高度都到位 => RADAR_DROP
+                       RD_DESCEND_TIMEOUT_S 超时 => 也进 RADAR_DROP(投掷高度偏高)
+  RADAR_DROP     判稳投掷：水平与投掷点距离 <=RD_STABLE_TOL 且高度在 RD_H_TOL 内，
+                 连续 RD_STABLE_SEC 秒 => 投掷。中途跑出容差就清零重算
+                 (这里要求【连续】稳住，与追上判定的"只暂停不清零"不同)。
+                 兜底：RD_DROP_TIMEOUT_S 到点无条件投。
+  RADAR_CLIMB    投后爬升到 RD_RETURN_H_REL 再返航(投掷高度只有 1m，低空长距离
+                 飞回起点容易刮到东西)。水平锁住进入时位置，只改高度。
+垂直限速：进入本链时会 drone_.set_plat_descend_mode(true) 放开垂直限速，
+          否则 MOVE_POSE 被平飞档 MAX_SPEED_Z_LEVEL(0.1m/s) 限死，
+          RD_DESCEND_SPD 根本跑不起来(与落平台同一个坑)。
+          离开本链的每条路径都必须复位(RADAR_CLIMB 出口已复位，stop() 里还有兜底)。
+调用方式：
+    case MissionState::RADAR_DESCEND:  step_radar_descend();  break;
+    case MissionState::RADAR_DROP:     step_radar_drop();     break;
+    case MissionState::RADAR_CLIMB:    step_radar_climb();    break;
+
+----------------------------------------------------------------------------
+状态：RETURN_HOME_DROP（投掷后返航）
+功能说明：以进入时冻结的 return_z_ / return_yaw_ 飞回 (0,0)，到位 => LAND。
+为什么用 target_pose_slam 而不是 target_xy_slam：后者不碰 target_z_，高度靠
+          "上一次谁设的"延续，是隐式依赖。把位置+高度+朝向一次写全，语义明确。
+为什么 yaw 要冻结：每拍传 current_yaw_deg() 会让 yaw 误差恒 0 = 等于不控偏航，
+          机头会随气流慢慢转过去而没人纠正。同理高度也不能每拍取 current_z。
+调用方式：
+    case MissionState::RETURN_HOME_DROP:
+        step_return_home_drop();
+        break;
+
+============================================================================
+ 二·六、第二段任务：降落到移动平台（MISSION2_ENABLE 控制）
+   实现全在 src/mission_step_plat.cpp。旧版速查表没有这一段，2026-08 补。
+============================================================================
+
+总开关：params.hpp 的 MISSION2_ENABLE，当前 = false。
+  false  第一段 LAND 到位后直接进 FINISHED(任务真结束)
+  true   第一段 LAND 到位后 drone_.stop() 进 WAIT_TRIGGER 地面待机，
+         等第二段启动命令。注意：这种情况下飞机落地后程序不退出，
+         日志会一直刷"地面待机中，等命令 2"。
+         只想"起飞=>任务=>降落=>结束"的流程，这里必须是 false。
+
+--- 链路(MISSION2_ENABLE=true 时) ---
+  LAND(第一段) => WAIT_TRIGGER 等命令2 => REARM 自解锁 => TAKEOFF_AGAIN 爬升
+    => TRACK_CAR2 二段追踪 => TRACK_LAND 边追边降(主动上锁) => PLAT_WAIT 平台待机
+    => PLAT_TAKEOFF 平台起飞 => TAKEOFF_AGAIN => GO_HOME => LAND => FINISHED
+
+----------------------------------------------------------------------------
+状态：TRACK_CAR2（二段追踪）
+功能说明：与 TRACK_CAR 行为相同，只有两点不同：
+          确认时长用 CATCH_HOLD_SEC_2(而非 CATCH_HOLD_SEC)；
+          追上后转 TRACK_LAND(边追边降)，而不是投掷。
+          不加任何安装偏移，直接飞到小车雷达正上方。
+调用方式：
+    case MissionState::TRACK_CAR2:
+        step_track_car2();
+        break;
+
+----------------------------------------------------------------------------
+状态：TRACK_LAND（边追边降，到平台上方主动上锁）
+功能说明：目标高度按 PLAT_DESCEND_SPD 匀速往下压，水平/偏航仍用小车雷达实时跟踪。
+          不判水平是否对准——对准与否都在降。
+为什么不用 AUTO.LAND：AUTO.LAND 期间飞控自己控高且不再跟踪移动平台，平台一跑
+          飞机就落到地上了。所以必须自己控高 + 自己判断落到了。
+
+怎么判断"落到平台上了"：高度闸门 + 接触检测，两道条件都要满足
+  闸门 PLAT_DISARM_MAX_H_REL：离起飞点高于这条线【绝不上锁】。
+       比较的是 (current_z - home_z)，所以雷达每次启动原点在哪都无所谓。
+       这是安全底线：速度判定万一误判，只要还在高处就锁不了桨。
+  接触检测：目标高度持续下压，同时看实际高度还降不降。
+       还在降 => 悬在空中，继续压
+       降不动了(降速 < PLAT_TOUCH_VZ)连续 PLAT_TOUCH_HOLD_S 秒 => 被平台托住 => 上锁
+  另有 plat_descending_ 门控：必须先真的降起来过(降速超过 PLAT_DESCEND_MIN_VZ)，
+       防"刚进本状态还在悬停(vz约0)就被判成已接触"=> 在高空上锁 = 摔机。
+为什么不能只用"降到某个高度就上锁"：那要靠人工量的平台高度，量错十几厘米就会
+       "从高处摔"或"撞进平台"；接触检测测的是"物理上还能不能继续下降"，
+       免疫平台高度未知。两者结合：闸门保安全，接触检测保精度。
+
+★★★ 这里踩过两次死锁，改参数前必读 ★★★
+  接触检测的启用门槛(PLAT_DESCEND_MIN_VZ)与实际降速的硬上限(PLAT_DESCEND_SPD，
+  即放开后的垂直限速)会互相咬死。门槛一旦够到上限，这道门永远过不去 =>
+  接触检测永不启用 => 永不锁桨 => 走到超时返航。
+  两次事故：
+    (1) 用 PLAT_DESCEND_SPD*0.5 推算门槛，却忘了放开垂直限速
+        => 平飞档 0.1 = 门槛 0.1，严格大于永不成立
+    (2) 改成独立参数但填了 0.25 > PLAT_DESCEND_SPD(0.2)
+  现在的防护：
+    进入 TRACK_LAND 必须调 drone_.set_plat_descend_mode(true) 放开垂直限速，
+    两个出口(正常落上 / 超时返航)都复位，stop() 里还有兜底；
+    params.hpp 里有两个 static_assert 把取值铁律钉死，填错组合【编译就失败】。
+  降速判据取 drone_.vz_est()(低通)，不是单拍裸差分——50Hz 下正负1cm 的 SLAM 噪声
+    就是 0.5m/s 假速度，是 PLAT_TOUCH_VZ(0.05)的 10 倍，裸差分会让接触计时被
+    噪声反复清零，永远判不出接触。
+
+两条出口：
+    正常：检测到接触 => 主动上锁 => PLAT_WAIT
+    兜底：PLAT_DESCEND_TIMEOUT_S 超时 => 放弃，飞回起点降落(GO_HOME)
+调用方式：
+    case MissionState::TRACK_LAND:
+        step_track_land();
+        break;
+
+----------------------------------------------------------------------------
+状态：PLAT_WAIT / PLAT_TAKEOFF（平台待机与起飞）
+功能说明：
+  PLAT_WAIT     落在平台上等 PLAT_WAIT_SEC 秒，然后自己重新起飞(不需要任何指令)。
+                此时已上锁、桨不转，不发 setpoint。平台可能还在动，飞机跟着走,
+                这段时间不做任何控制。
+  PLAT_TAKEOFF  与 REARM 同一套流程(自己切 OFFBOARD + 解锁 + 爬升)，两点不同：
+                日志前缀、以及【刻意不调 capture_home()】——1.5m 仍以最初起飞点
+                为基准，所以飞机实际只从平台爬升 (1.5 - 平台高度) 那么多。
+                好处是后面"飞回原点"的坐标系一致。
+调用方式：
+    case MissionState::PLAT_WAIT:     step_plat_wait();     break;
+    case MissionState::PLAT_TAKEOFF:  step_plat_takeoff();  break;
+
+----------------------------------------------------------------------------
+流程：二次起飞（GO_FORWARD => LAND_THEN_WAIT => WAIT_TRIGGER => REARM
+                => TAKEOFF_AGAIN => GO_HOME）
+功能说明：中间【真的落地上锁】，之后由程序自己切 OFFBOARD + 解锁再飞。
+          起飞高度三处共用常量 REARM_TAKEOFF_Z(mission_step_plat.cpp)。
+
+触发命令(UDP 模式，当前)：在另一台机器上跑
+    udp_cmd_send <飞机IP> again
+  收到一次即锁定，重复发一律忽略(可连发防丢包)。
+  重要：命令 2 带状态门——只在 WAIT_TRIGGER 状态才接受。若发送脚本在第一段还在
+  飞的时候就开始发(提前开了脚本/上一轮进程没关)，收到的会被丢弃并提示。
+  没这道门的话 trigger_recv_ 会被提前锁存，等落地进 WAIT_TRIGGER 时标志已是 true
+  => 不等指令直接起飞，人还没准备好桨就转了。
+
+为什么二次起飞需要这些额外机制(改动点，勿删)：
+  1) mission_state.cpp 的 lost_check_active_state() 白名单：
+     LAND_THEN_WAIT / WAIT_TRIGGER / REARM / PLAT_WAIT / PLAT_TAKEOFF / TRACK_LAND
+     这些状态本来就【未解锁或非 OFFBOARD】，若不放行，0.5s 去抖一到就被误判成
+     "飞手接管" => stop() + FINISHED，二次起飞永远走不到。
+  2) drone_.request_offboard()：第一次起飞的 OFFBOARD 是飞手手动拨的，落地后没人
+     再去拨 => 程序自己请求。切之前必须已有 setpoint 流，故先 takeoff() 把流起来、
+     预热 PREHEAT_S(0.5s) 再请求(此时未解锁，桨不转、飞机不动)。
   3) drone_.reset_arm_offboard_retry()：解锁/切模式的重试计数第一次起飞已用掉，
-     不复位则二次起飞可用次数不足、或被旧 giveup 标志直接判失败。
-  4) REARM 首拍 drone_.capture_home() 把【落地点】记为新 home：takeoff() 飞的是 home
-     正上方，不重记会拿第一次的 home(原点) 当目标 → 边爬升边横拉，贴地拖行。
-     (⑦"飞回原点"用 target_xy_slam(0,0) 绝对坐标，不受 home 影响。)
+     不复位则可用次数不足、或被旧 giveup 标志直接判失败。
+  4) REARM 首拍 drone_.capture_home() 把【落地点】记为新 home：takeoff() 飞的是
+     home 正上方，不重记会拿第一次的 home(原点) 当目标 => 边爬升边横拉，贴地拖行。
+     ("飞回原点"用 target_xy_slam(0,0) 绝对坐标，不受 home 影响。)
      若此刻没有雷达位姿，REARM 会原地等 SLAM 恢复，不会盲飞。
+调用方式：
+    case MissionState::GO_FORWARD:
+        target_xy_slam(1.0, 0.0);
+        if (is_reached()) state_ = MissionState::LAND_THEN_WAIT;
+        break;
+    case MissionState::LAND_THEN_WAIT:  step_land_then_wait();  break;
+    case MissionState::WAIT_TRIGGER:    step_wait_trigger();    break;
+    case MissionState::REARM:           step_rearm();           break;
+    case MissionState::TAKEOFF_AGAIN:   step_takeoff_again();   break;
 
-★改这条流程的常用点★：
-    悬停时长   → HOVER_3S 的 wait_time(3.0)
-    前进目标点 → GO_FORWARD 的 target_xy_slam(1.0, 0.0)
-    返回目标点 → GO_HOME    的 target_xy_slam(0.0, 0.0)
-    起飞高度   → HOVER 前的 takeoff(1.0) 与 TAKEOFF_AGAIN 的 takeoff(1.0)(两次可不同)
-    触发话题名 → 构造里 "/mission/takeoff_again"
-★注意★：相邻两个状态都用 wait_time 但秒数不同时是安全的——wait_time 已按"时长变了就
-    重新起算"处理(同 target_xy_slam 的入参变了就重新派活)。若沿用旧版"只按 HOLD+
-    wait_active 判"的实现，第二段会沿用上一段已到期的计时而被整段跳过。
+两处降落状态的区别：
+    LAND            降落完 => 按 MISSION2_ENABLE 决定 FINISHED 还是 WAIT_TRIGGER
+    LAND_THEN_WAIT  降落完 => WAIT_TRIGGER(地面待机)，仅二次起飞链用
 
 ============================================================================
  三、检测 / 状态查询（BOOT_CHECK 与通用判定用）
 ============================================================================
-  drone_.is_connected()      —— 飞控是否已连接(收到 /mavros/state)
-  drone_.has_pose()          —— 是否已收到雷达里程计位姿
-  drone_.is_offboard()       —— 当前是否 OFFBOARD 模式
-  drone_.is_armed()          —— 是否已解锁
-  drone_.is_armed_offboard() —— 解锁且 OFFBOARD(失锁检测用)
-  drone_.request_arm()       —— 请求解锁(每秒重试≤5次)；返回 false=放弃
-  drone_.capture_home()      —— 把当前位姿记为 home(起飞前调一次)
-  drone_.stop()              —— 停止：action_mode 设回 IDLE，只发零速占位
-  is_reached()               —— 当前动作是否到位(见各动作说明；含稳定计时)
+  drone_.is_connected()      -- 飞控是否已连接(收到 /mavros/state)
+  drone_.has_pose()          -- 是否已收到雷达里程计位姿
+  drone_.is_offboard()       -- 当前是否 OFFBOARD 模式
+  drone_.is_armed()          -- 是否已解锁
+  drone_.is_armed_offboard() -- 解锁且 OFFBOARD(失锁检测用)
+  drone_.request_arm()       -- 请求解锁(每秒重试<=5次)；返回 false=放弃
+  drone_.request_offboard()  -- 请求切 OFFBOARD(同款重试)
+  drone_.request_disarm()    -- 请求上锁(落平台主动上锁用)
+  drone_.capture_home()      -- 把当前位姿记为 home(起飞前调一次)
+  drone_.home_z()            -- home 的 SLAM 高度(算"离起飞点多高"用)
+  drone_.stop()              -- 停止：action_mode 设回 IDLE，只发零速占位
+                                (同时复位 plat_descend_mode_ 等标志，兜底)
+  drone_.current_x/y/z()     -- 当前 SLAM 坐标。无位姿时返回 0，调用方须先判 has_pose()
+  drone_.current_yaw_deg()   -- 当前偏航(度)
+  drone_.vz_est()            -- 垂直速度估计(m/s，向上为正)，低通后的，与 PD 的 D 项同源
+  is_reached()               -- 当前动作是否到位(含稳定计时 SETTLE_DURATION)
+  is_reached_find()          -- 找图专用：容差换成 FF_TOL_XY(0.10)，比正常 TOL_XY(0.15)紧
+  注意：同一拍内不要既调 is_reached() 又调 is_reached_tol()——它们共用 settle 计时。
 
-BOOT_CHECK 现状(检测链 + ★两声蜂鸣 + 等启动指令★)：
+BOOT_CHECK 现状(检测链 + 两声蜂鸣 + 等启动指令)：
+  实现在 mission_step_basic.cpp 的 step_boot_check()，返回 true = 全部通过可起飞。
+  顺序：飞控连接 => 雷达位姿 => BEEP(1) => 等启动指令 => BEEP(2)
+        => 等飞手拨 OFFBOARD => 自动解锁 => capture_home()
+  case 里只有：
     case MissionState::BOOT_CHECK:
-        if (!drone_.is_connected()) break;             // 等飞控连接
-        if (!drone_.has_pose()) break;                 // 等雷达位姿
-        if (!beep_sent_) { arduino_send("BEEP"); beep_sent_ = true; }      // ★BEEP①★就绪提示
-        if (!start_recv_) break;                       // ★等启动指令 /mission/start★
-        if (!beep2_sent_) { arduino_send("BEEP"); beep2_sent_ = true; }    // ★BEEP②★收到指令
-        if (!drone_.is_offboard()) break;              // 等飞手切 OFFBOARD
-        if (!drone_.is_armed()) {                      // 自动解锁
-            if (!drone_.request_arm()) state_ = MissionState::FINISHED;
-            break;
-        }
-        drone_.capture_home();                         // 记 home
-        state_ = MissionState::TAKEOFF;
+        if (step_boot_check()) state_ = MissionState::TAKEOFF;
         break;
 
-★任务启动指令频道 /mission/start (std_msgs/Int32)★
-  时序：飞控+雷达就绪 → BEEP① → 【等指令】→ BEEP② → 等飞手拨 OFFBOARD → 解锁 → 起飞
-  发送命令(按 1s 1 次持续发，防丢包)：
-      ros2 topic pub -r 1 /mission/start std_msgs/msg/Int32 "{data: 1}"
-  · ★只认 data==1★，其他值(含 0)一律忽略，防误发。
-  · ★收到一次即锁定★(start_recv_)：持续发的后续消息全部丢弃，不会重复触发、也不刷日志。
-  · ★可以提前发★：订阅从程序启动就在，飞控/雷达还没就绪时发也会被记住，
-    等 BEEP① 一响就直接往下走(不会漏)。
-  · 等待期间【尚未解锁、也还没到 OFFBOARD 检查】→ 桨不转，可安全长时间等；
-    每 3s 打一次提示，把发送命令直接打在日志里(不用记)。
-  · 两声蜂鸣各自只发一次(beep_sent_/beep2_sent_)——arduino_send 一次阻塞几十 ms，
-    ★绝不能每拍(50Hz)调★，否则拖垮主循环。
-  · 没插 Arduino → 只打告警，任务照常继续(蜂鸣器不是必需件)。
+★任务启动指令★(CMD_USE_UDP=true，当前走 UDP 9871)
+  发送方式：在另一台机器上跑
+      udp_cmd_send <飞机IP> start
+  建议 1s 1 次持续发防丢包(UDP 会丢，飞机端收到一次即锁定，重发安全)。
+  工具在 tools/udp_cmd_send.cpp，不在 CMakeLists 里，手工编译：
+      g++ -std=c++17 -O2 tools/udp_cmd_send.cpp -Iinclude -o /tmp/udp_cmd_send
+
+  重要：CMD_USE_UDP=true 时【不订阅 /mission/start】，那个 ROS 订阅根本不创建。
+  旧版本文档写的 "ros2 topic pub -r 1 /mission/start ..." 照抄【不会工作】，
+  会一直卡在 BOOT_CHECK 起不来。要用 ROS 话题就得先把 CMD_USE_UDP 改 false 重编。
+  为什么走 UDP：跨机 ROS 话题的 DDS 发现是全连接的，mavros 50+ 插件节点会把 WiFi
+  组播打满，饿死飞控串口链路，setpoint 发不出去。
+
+  等待期间尚未解锁、也还没到 OFFBOARD 检查 => 桨不转，可安全长时间等；
+  每 3s 打一次提示，把发送命令直接打在日志里(不用记)。
+  没插 Arduino => 只打告警，任务照常继续(蜂鸣器不是必需件)。
 
 ============================================================================
  三·五、全局避障（贝塞尔绕杆，跨状态生效，非状态机 case）
 ============================================================================
   是什么：DroneController 在【PD 速度出口】统一做的避障，不是某个状态。订阅
           /multi_pole_detector/center 把每根杆当圆形障碍(膨胀半径=杆半径+安全裕度)，
-          直线路径被挡→构造绕行【二次贝塞尔】、把曲线弧长前瞻点喂给 PD；不挡→正常直线。
-  开关：params.hpp ★全局避障★ 段的 AVOID_ENABLE (默认 false=行为与加避障前逐位一致)。
-        AVOID_TRIGGER_DIST_M(当前1.1m)=离挡路杆心多近才开始绕(远于此照直飞，不在安全区提前斜)。
-        AVOID_REJOIN_AHEAD_M(默认0.5m)=绕完在原航线"过杆后此米"处切回(不斜奔远处航点，减少线外飘)。
-        AVOID_ARRIVE_SLACK_M(当前0.4m)=★航点被杆占的放宽到达★：某航点落在杆膨胀圈内(靠不近)、
-          飞机已贴到"杆边缘+此"内 → 走线状态判该航点"已到达"、推进下一点(不为被占角点卡死/切邻格)。
-          走线 case 到达判定已改为 is_reached() || waypoint_blocked_arrived(wp)。仅 AVOID_ENABLE 生效。
-        其余 AVOID_* 调离杆多远/绕行快慢/障碍时效等。纯数学在 avoidance.hpp/.cpp。
+          直线路径被挡 => 构造绕行二次贝塞尔、把曲线弧长前瞻点喂给 PD；不挡则直飞。
+  开关：params.hpp 的 AVOID_ENABLE，当前 = false(行为与加避障前逐位一致)。
+        AVOID_TRIGGER_DIST_M  离挡路杆心多近才开始绕(远于此照直飞)
+        AVOID_REJOIN_AHEAD_M  绕完在原航线"过杆后此米"处切回
+        AVOID_ARRIVE_SLACK_M  航点被杆占的放宽到达：某航点落在杆膨胀圈内(靠不近)、
+                              飞机已贴到"杆边缘+此"内 => 走线状态判该航点已到达、
+                              推进下一点(不为被占角点卡死)。走线 case 的到达判定已改为
+                              is_reached() || waypoint_blocked_arrived(wp)。仅 AVOID_ENABLE 生效。
   作用范围：只对【位置类】动作(HOLD/TAKEOFF/MOVE_XY/MOVE_Z/MOVE_POSE/TURN_YAW)生效。
         EXTERNAL_VEL(寻线/探索)/IDLE/LAND 在 PD 之前就 return，天然不受影响；
-        CIRCLE(绕圈/绕杆环绕那段)★显式排除★(被绕的杆自己是障碍，避它会毁掉圈)。
-  ★关键★：避障【不改 target_x_/y_】，只改 PD 追的"有效目标"(eff_gx_/eff_gy_)。故
+        CIRCLE(绕圈/绕杆环绕那段)显式排除(被绕的杆自己是障碍，避它会毁掉圈)。
+  关键：避障【不改 target_x_/y_】，只改 PD 追的"有效目标"(eff_gx_/eff_gy_)。故
         is_reached()、各原语语义、到位判定【全部不变】——状态机 case 无需任何改动，
         开关一开，所有位置类移动自动具备绕杆能力。z/yaw 也不受避障影响。
 
 ============================================================================
  三·六、视觉数据通道（shm 信箱 / ROS 话题 双通道，非状态机 case）
 ============================================================================
-  是什么：找图(FindFigure)/寻线(LineFollower)吃的视觉结果有两条进货路，开关在
-          params.hpp ★视觉数据通道★段 USE_SHM_CV（改完要重编译）：
-    true  = ★当前★ 主控 on_timer 每拍读共享内存信箱 /dev/shm/uav_cv_out(纳秒级)，
-            有新帧就转成与老 JSON 相同结构喂 find_.ingest()/lf_.ingest()——两模块
-            及所有状态 case 一行不用改。不再订阅 /cv/target_info。
-            日志：2s 节流打 [shm] 消费 seq/数据年龄ms/targets 数(年龄≈视觉处理耗时+一拍)。
-    false = 回退老路：订阅 /cv/target_info(JSON)，行为与改造前逐位一致。
-  视觉端：finding_new1.2.1.py 双写(shm+ROS 同时发)，无论开关在哪边都不用动它。
-  ★前提★：USE_SHM_CV=true 时视觉程序必须带 ShmMailboxWriter(照 finding_new1.2.1.py
-          抄)；只发 ROS 话题的老视觉程序配 true 会收不到数据(信箱没人写)。
-  布局/协议：include/fly_mission/shm_mailbox.hpp 顶部注释(与 Python 写端一一对应，改必两边一起)。
+  开关在 params.hpp 的 USE_SHM_CV，当前 = true（改完要重编译）：
+    true   主控 on_timer 每拍调 consume_shm_cv()(mission_io.cpp)读共享内存信箱
+           /dev/shm/uav_cv_out(纳秒级)，有新帧就转成与老 JSON 相同结构喂
+           find_.ingest()/lf_.ingest()——两模块及所有状态 case 一行不用改。
+           不再订阅 /cv/target_info。日志：2s 节流打 [shm] 消费 seq/数据年龄ms/targets 数。
+    false  回退老路：订阅 /cv/target_info(JSON)，行为与改造前逐位一致。
+  前提：USE_SHM_CV=true 时视觉程序必须带 ShmMailboxWriter；只发 ROS 话题的老视觉
+        程序配 true 会收不到数据(信箱没人写)。
+  布局/协议：include/fly_mission/shm_mailbox.hpp 顶部注释(与 Python 写端一一对应，
+        改必两边一起)。
+  坐标系陷阱：shm 的 x/y 没有字段标明坐标系。
+        down_vision 程序(shm_world_coords=false)写的是【机体系 dx/dy】；
+        race_2025 程序(shm_world_coords=true)写的是【SLAM 世界绝对坐标】，语义相反。
+        所以同时只能跑一个视觉程序。跑错的症状：dx/dy 是"飞机在场地里的绝对坐标"
+        那种数值(几米、且不随对准而减小) => 越飞越偏、永不投掷。
+        地面自检：手持飞机对着目标移动，看 [锁定] 日志的 dx/dy 是否趋近 0。
 
 ============================================================================
- 四、当前状态机顺序（fly_mission_node.cpp 现状，供对照）
+ 三·七、跨机 UDP 三通道 + 遥测（旧版速查表没有，2026-08 补）
 ============================================================================
-  BOOT_CHECK(BEEP①→等/mission/start→BEEP②→等OFFBOARD→解锁) → TAKEOFF(1.5m)
-    → WAIT_AFTER_TAKEOFF(0.5s) → (到位时按所选方式各自初始化) → 六选一：
-    ├─ HOVER_3S ★当前选中★ ──► TRACK_CAR (悬停3s → ★一直追踪小车雷达、不退出、不降落★)
-    │     └─ 另有一条不再接入的旧支：GO_FORWARD → LAND_THEN_WAIT → WAIT_TRIGGER
-    │        → REARM → TAKEOFF_AGAIN → GO_HOME → LAND (二次起飞流程，case 都还在，
-    │        把 HOVER_3S 出口的 state_ 改回 GO_FORWARD 即可恢复)
-    ├─ RUN_WAYPOINTS  或  RUN_EXT_WAYPOINTS ──(走完)──► LAND → FINISHED
-    │     └─ 途中 FindFigure 确认到图形 → 打断进 FINDFIGURE → 处理完回原走线状态
-    ├─ FOLLOW_LINE ──(连续1s丢线)──► LAND → FINISHED   (寻线不被找图打断)
-    ├─ DRILL_RING ──(环前对准→悬停→穿到环后→悬停 / 没看到环)──► LAND → FINISHED
-    └─ CIRCLE_AROUND ──(采杆→杆前1m对准→绕杆一圈 / 没看到杆)──► LAND → FINISHED
+  三条通道端口互不相同，收发都在 on_timer 单线程里做(非线程安全，勿从别处调)：
 
-  ★切换起飞后任务★：改 WAIT_AFTER_TAKEOFF 出口那一行 const MissionState next =
-      HOVER_3S           二次起飞流程(见"二、特殊动作"末尾那条)               (init: 无，不开找图不装航点)  ★当前选中★
-      RUN_WAYPOINTS      写死航点表(waypoints.hpp)，起飞后直接飞              (init: find_.enable()+wp_loaded_=false)
-      RUN_EXT_WAYPOINTS  外部发航点(/mission/waypoints)，先悬停等再飞          (init: 同上，起飞前收到则预装载)
-      FOLLOW_LINE        视觉寻线(沿黑线，横向纠偏)                           (init: drone_.enter_exploration()锁高 + lf_.begin())
-      DRILL_RING         钻圈(采环位姿→环前1m对准→悬停→穿到环后1m→悬停→降落)  (init: rd_.begin())
-      CIRCLE_AROUND      绕杆(采杆位姿→杆前1m对准→绕杆一圈→降落)              (init: 无，首次调 description_circle_right() 内部起采集)
+  9870  收  小车位姿   magic 'PSE1' 48B   CAR_USE_UDP=true
+            发送端在小车/雷达机上(tools/udp_pose_sender.cpp，拷过去独立编译)。
+            诊断工具：tools/udp_pose_monitor.cpp(在飞机上跑，1秒一行打 seq/Hz/
+            age/丢包/pose)，接进主控前先验链路。
+  9871  收  启动指令   magic 'CMD1' 16B   CMD_USE_UDP=true
+            cmd 1=启动(CMD_START)，2=二段触发(CMD_TAKEOFF_AGAIN)。
+            发送工具 tools/udp_cmd_send.cpp。
+  9872  发  遥测上报   magic 'TLM1' 64B   TLM_ENABLE=true
+            飞机 xyz + 小车【原始 B 系】xy + status + flags，限频 TLM_RATE_HZ(10Hz)。
+            status: 0其它 1起飞 2追踪 3投掷 4降落(映射见 mission_state.cpp 的
+            telemetry_status())。
+            flags: bit0 车数据OK / bit1 视觉OK / bit2 位姿OK。
+            监控端必须查 bit2：位姿无效时发的是 (0,0,0)，不查就和"停在原点"没法区分。
+            小车坐标是原始值(未加 CAR_ORIGIN 平移)，要同图绘制得自己加标校量——
+            故意发原始值，好把"标定错"和"雷达坏"区分开。
+            本仓库【没有】9872 的接收端工具，只有 tools/PROMPT_for_telemetry_monitor.md
+            (给另一台机器的 AI 用来生成 Python 接收端的提示词)。
+            发送失败只按 TLM_WARN_PERIOD_S(5s)节流打红色 ERROR，绝不阻塞飞行。
 
-  ★两处降落状态的区别★：
-      LAND            降落完 → FINISHED(任务真结束)
-      LAND_THEN_WAIT  降落完 → WAIT_TRIGGER(地面待机等二次起飞)，★仅二次起飞流程用★
+  时钟约定：包内 stamp 是【发送端】的 monotonic 时钟，跨机不同源，【不能相减算延迟】。
+            新鲜度一律用本机收包时刻(age_sec() / CarTracker 的 stamp_)。
 
-  已定义但当前未接入顺序的：EXPLORATION(状态机里只有 case、没有任何地方给 state_ 赋这个值，
-  即当前不可达；要用得自己把 next 或某个出口改成它)。各 target_* 原语可随时插状态用。
+============================================================================
+ 四、当前状态机顺序（对照用）
+============================================================================
+  当前流程(step_wait_after_takeoff() 里 next = EXPLORATION，MISSION2_ENABLE=false)：
+
+      BOOT_CHECK          飞控+雷达就绪 => BEEP(1) => 等UDP启动指令 => BEEP(2)
+                          => 等飞手拨OFFBOARD => 自动解锁 => 记home
+      TAKEOFF             起飞到 1.5m
+      WAIT_AFTER_TAKEOFF  悬停 0.5s => 退出起飞段位置环 => 按 next 分岔
+      EXPLORATION         自主探索(算法给速度，终点 7.0/4.0)
+      LAND                降落(触底+上锁)
+      FINISHED            任务结束
+
+  改 next 可切到的其他分支(各自的初始化都已写在那里)：
+      HOVER_3S           悬停3s => 追踪小车 => 投掷 => 返航降落
+      RUN_WAYPOINTS      写死航点表 => 走完降落(途中可被找图打断)
+      RUN_EXT_WAYPOINTS  外部航点   => 走完降落(途中可被找图打断)
+      FOLLOW_LINE        视觉寻线   => 丢线超时降落
+      DRILL_RING         钻圈       => 完成/失败都降落
+      CIRCLE_AROUND      绕杆       => 完成/失败都降落
+      GO_FORWARD         二次起飞链 => 降落 => 等命令 => 再起飞 => 回原点降落
+
+  MISSION2_ENABLE=true 时 LAND 不进 FINISHED，而是进 WAIT_TRIGGER 等第二段
+  (见 二·六)。当前为 false，所以降落即结束。
+
+  横切判定(每拍在 switch 之前跑，不属于任何状态)：
+      check_pilot_takeover()        失锁/飞手接管去抖 0.5s => stop() + FINISHED
+                                   返回 true 时本拍不再跑状态机
+      check_find_figure_interrupt() 走航点时确认到图形 => 打断进 FINDFIGURE
+      car_.poll() / poll_udp_cmd() / consume_shm_cv()   三个收包
+      telemetry_tick()             放在 switch【之后】，上报本拍刚决定的状态
 ============================================================================

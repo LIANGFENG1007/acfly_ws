@@ -18,10 +18,10 @@ namespace params {
 //   例：起飞点世界 (-4,0)，10x10 场地世界 x,y ∈ [-5,5]
 //       → SLAM x ∈ [-5-(-4), 5-(-4)] = [-1, 9]，y ∈ [-5, 5]
 // ---------------------------------------------------------------------------
-inline constexpr double FIELD_MIN_X = -0.5;
-inline constexpr double FIELD_MIN_Y = -2.0;
-inline constexpr double FIELD_MAX_X =  4.4;
-inline constexpr double FIELD_MAX_Y =  2.0;
+inline constexpr double FIELD_MIN_X = -1.0;
+inline constexpr double FIELD_MIN_Y = -5.0;
+inline constexpr double FIELD_MAX_X =  7.0;
+inline constexpr double FIELD_MAX_Y =  5.0;
 
 // ★ 离墙安全内缩 (m) ★  ← 改这里
 //   牛耕车道/掉头点离四面墙至少留这么远，飞机绝不贴墙飞（防撞）。
@@ -43,7 +43,7 @@ inline constexpr double COVERAGE_THRESH = 0.90;   // 大格完成阈值（占比
 //   开角 120° → 半开角 ±60°
 // ---------------------------------------------------------------------------
 inline constexpr double FOV_DEG   = 100.0;   // 总开角 (度)
-inline constexpr double FOV_RANGE = 2.0;     // 可视半径 (m)
+inline constexpr double FOV_RANGE = 3.0;     // 可视半径 (m)
 
 // ---------------------------------------------------------------------------
 // 覆盖路径规划（牛耕往返）

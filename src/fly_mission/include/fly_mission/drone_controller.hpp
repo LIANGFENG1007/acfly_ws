@@ -123,6 +123,11 @@ public:
     double current_y() const   { return current_pose_.pose.position.y; }
     // 当前偏航 (度)：给"锁定时保持机头朝向"等场合用(内部 current_yaw() 是弧度)。
     double current_yaw_deg() const { return current_yaw() * 180.0 / M_PI; }
+    // 当前垂直速度估计 (m/s，★向上为正，下降时为负★)：位置差分 + V_EST_ALPHA 低通，
+    //   与 PD 的 D 项同源。给"判断实际还在不在下降"的场合用(落平台接触检测)。
+    //   ★别用单拍裸差分替代★：50Hz 下 ±1cm 的 SLAM 噪声就是 0.01/0.02 = 0.5m/s 假
+    //   速度，是接触判据阈值(PLAT_TOUCH_VZ=0.05)的 10 倍，判据会被噪声完全淹没。
+    double vz_est() const      { return v_est_z_; }
     // 起飞点(home)的 SLAM 高度：给"把绝对高度换算成相对起飞点的高度"用，
     //   如日志里打 current_z() - home_z() = 离起飞地面多高。
     //   ★capture_home() 之前调没有意义★(返回 0)，调用方须在起飞后用。

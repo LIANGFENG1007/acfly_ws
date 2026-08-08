@@ -20,7 +20,15 @@ include_directories(include)
 
 # ── 可执行 ──
 add_executable(fly_mission_node
+  # 主控节点：构造 + on_timer 派发 + main
   src/fly_mission_node.cpp
+  # 状态机各状态的实现(按功能域分文件，见 fly_mission_node.hpp 顶部分工说明)
+  src/mission_state.cpp
+  src/mission_step_basic.cpp
+  src/mission_step_track.cpp
+  src/mission_step_plat.cpp
+  src/mission_io.cpp
+  # 运动库与各功能模块
   src/drone_controller.cpp
   src/find_figure.cpp
   src/waypoint_receiver.cpp
