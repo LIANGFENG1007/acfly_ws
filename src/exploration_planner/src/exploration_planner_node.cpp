@@ -5,13 +5,14 @@
 //    /aft_mapped_to_init  (nav_msgs/Odometry, camera_init/SLAM, ~20Hz) 位姿
 //    /exploration/goal    (geometry_msgs/PointStamped, latched) 探索终点(进入时一次)
 //  发布：
-//    /exploration/cmd_vel (geometry_msgs/TwistStamped) 机体系速度 20Hz
+//    /exploration/cmd_vel (geometry_msgs/TwistStamped) 机体系速度 50Hz
 //                          linear.x=前进 v_fwd, linear.y=横向纠偏 v_lat, angular.z=yaw_rate
 //    /exploration/finished(std_msgs/Bool, latched) 扫完且到终点 → true
 //
-//  流程：收到 goal → 牛耕规划 → 贝塞尔平滑 → 轨迹跟踪逐拍发速度；
-//        每拍把 150°/3m 扇形标进双层栅格；覆盖率达标且到终点 → finished。
-//  可视化：OpenCV 弹窗（主线程刷新，spin 在子线程）。
+//  流程：收到 goal → 动态前沿覆盖选点 → A* 绕障 → 平滑 → 轨迹跟踪逐拍发速度；
+//        每拍把 FOV_DEG/FOV_RANGE(当前 100°/3m)扇形标进双层栅格；覆盖率达标且到终点 → finished。
+//  ★频率★：控制 50Hz(TIMER_PERIOD_MS=20)，可视化 20Hz(VIZ_PERIOD_MS=50)。二者独立。
+//  可视化：OpenCV 弹窗（主线程刷新，spin 在子线程；栅格走 snapshot 拷贝，无竞态）。
 // ============================================================================
 
 #include <rclcpp/rclcpp.hpp>
@@ -66,6 +67,8 @@ public:
         gcfg_.fov_deg         = dd("fov_deg", params::FOV_DEG);
         gcfg_.fov_range       = dd("fov_range", params::FOV_RANGE);
 
+        // lane_spacing：旧静态牛耕(plan_boustrophedon)的车道间距。动态前沿覆盖已不用它，
+        //   此处仍 declare 只为保持 ROS 参数表兼容(外部脚本/launch 可能仍在传)。读了不用是有意的。
         lane_spacing_ = dd("lane_spacing", params::LANE_SPACING);
         arc_ds_       = dd("arc_sample_ds", params::ARC_SAMPLE_DS);
 
@@ -82,6 +85,8 @@ public:
         gains_.max_v_lat       = dd("max_v_lat", params::MAX_V_LAT);
         gains_.heading_gate_rad =
             dd("heading_gate_deg", params::HEADING_GATE_DEG) * M_PI / 180.0;
+        // D 项差分周期 = 主循环真实周期。★与 timer 同源推导★，勿写死常数(见 TrackerGains::dt)。
+        gains_.dt = params::TIMER_PERIOD_MS / 1000.0;
 
         done_coverage_ = dd("done_coverage", params::DONE_COVERAGE);
         goal_tol_      = dd("goal_tol_xy", params::GOAL_TOL_XY);
@@ -256,8 +261,12 @@ public:
 
         // 障碍圆（obs_map_ 自带锁，无需持 mtx_）→ 弹窗画绿圆
         const Obstacles obstacles = obs_map_->snapshot();
+        // 栅格同理：GridMap 自带锁，snapshot() 在锁内拷出只读副本。
+        //   ★勿改回传 *grid_★：那是在锁外读活地图，而 50Hz 主循环正在 mark_scan 里写它
+        //   ——渲染一帧要几毫秒，期间数据被并发改写 = 数据竞争(撕裂画面 + UB)。
+        const GridSnapshot grid_snap = grid_->snapshot();
 
-        cv::Mat img = viz_obj_->render(*grid_, traj, goal, goal_valid,
+        cv::Mat img = viz_obj_->render(grid_snap, traj, goal, goal_valid,
                                        px, py, yaw, pose_valid, look, look_valid,
                                        pois, obstacles,
                                        turning, turn_dir, unreach_valid, unreach_pos);
@@ -498,15 +507,19 @@ private:
     {
         bool all_explored = false;
 
+        // 栅格快照：本次规划期间只读一次地图(一把锁+一次拷贝)，
+        //   下面的覆盖率判定与 plan_explore 逐格选点都基于【同一时刻】的视图，不会半新半旧。
+        const GridSnapshot gsnap = grid_->snapshot();
+
         // 黑名单按覆盖率台阶清空：每涨过 unreach_clear_step_(默认5%) 给死路区一次重试机会
         //   (飞机已移动、视角已变，之前 A* 够不到的区可能现在进得去)。换终点也会清(见 on_goal)。
-        const double cov_now = grid_->coverage_ratio();
+        const double cov_now = gsnap.coverage_ratio();
         if (cov_now - last_unreach_clear_cov_ >= unreach_clear_step_) {
             unreachable_.clear();
             last_unreach_clear_cov_ = cov_now;
         }
 
-        Path2 wp = plan_explore(*grid_, fcfg_, cur, yaw_, cur_band_, all_explored,
+        Path2 wp = plan_explore(gsnap, fcfg_, cur, yaw_, cur_band_, all_explored,
                                 &unreachable_, unreach_block_r_);
 
         // 挑覆盖路径上第一个距当前 ≥ explore_target_min_dist_ 的点作 A* 终点：
@@ -882,13 +895,17 @@ private:
 
             // 完程度(覆盖率)达标 → 进入归航刹停阶段（一旦进入不再回退）。
             // 注意：仅在没有插点活动时才判定/接管，避免插点途中误触发归航。
-            if (!poi_active && has_goal_ && !homing_ && grid_->coverage_ratio() >= done_coverage_) {
-                homing_ = true;
-                turning_for_solution_ = false;            // 转归航：打断探索的原地转身找解
-                tracker_->set_trajectory(Trajectory{});   // 丢弃探索轨迹，归航不走 tracker
-                RCLCPP_INFO(get_logger(),
-                    "完程度达标(%.0f%%) → 归航，朝终点 (%.2f, %.2f) PD 刹停",
-                    grid_->coverage_ratio() * 100.0, goal_.x, goal_.y);
+            //   覆盖率只读一次并复用：判定与日志同源，日志里印的就是真正触发归航的那个值。
+            if (!poi_active && has_goal_ && !homing_) {
+                const double cov = grid_->coverage_ratio();
+                if (cov >= done_coverage_) {
+                    homing_ = true;
+                    turning_for_solution_ = false;            // 转归航：打断探索的原地转身找解
+                    tracker_->set_trajectory(Trajectory{});   // 丢弃探索轨迹，归航不走 tracker
+                    RCLCPP_INFO(get_logger(),
+                        "完程度达标(%.0f%%) → 归航，朝终点 (%.2f, %.2f) PD 刹停",
+                        cov * 100.0, goal_.x, goal_.y);
+                }
             }
 
             if (poi_active) {
@@ -1036,7 +1053,8 @@ private:
     GridConfig    gcfg_;
     TrackerGains  gains_;
     FrontierConfig fcfg_;
-    double        lane_spacing_, arc_ds_;
+    double        lane_spacing_;       // 旧牛耕车道间距：已不参与任何计算(见构造里说明)，保留仅为参数表兼容
+    double        arc_ds_;
     double        done_coverage_, goal_tol_, v_est_alpha_;
     double        goal_stop_v_, kp_goal_, kd_goal_, v_goal_max_;
     double        replan_period_ = 0.7, replan_dev_ = 0.5;
@@ -1056,8 +1074,10 @@ private:
     double         global_lookahead_ = 0.50;  // 沿绕障轨迹取 carrot 的前瞻距离 (m)
     double         explore_target_min_dist_ = 1.50; // 探索挑 A* 终点的最小距离 (m)
     // ★换路评估(路径迟滞)★：重算出新 A* 路径后，只有它【更安全/更快】超过下列比例才换路(否则续用旧路)，根除左右横跳。
-    double         path_switch_safety_gain_  = 0.20;  // 新路最小障碍边距需比旧路高 ≥此比例才算更安全
-    double         path_switch_time_gain_    = 0.15;  // 新路剩余弧长需比旧路短 ≥此比例才算更快
+    //   ★注意★：下面这些成员初值只是"构造函数跑之前的占位"，真正生效的是构造里
+    //   declare_parameter 填入的 params:: 常量(当前 0.50 / 0.20 / true)。改参数请改 params.hpp 或用 -p 覆盖。
+    double         path_switch_safety_gain_  = 0.50;  // 新路最小障碍边距需比旧路高 ≥此比例才算更安全（实际值见 params::PATH_SWITCH_SAFETY_GAIN）
+    double         path_switch_time_gain_    = 0.20;  // 新路剩余弧长需比旧路短 ≥此比例才算更快（实际值见 params::PATH_SWITCH_TIME_GAIN）
     bool           path_switch_require_both_ = true;  // true=两者都满足才换(最稳)；false=任一满足即换(更看重效率)
 
     std::unique_ptr<GridMap>           grid_;

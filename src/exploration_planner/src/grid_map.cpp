@@ -74,6 +74,8 @@ bool GridMap::in_small_bounds(int gi, int gj) const
 
 void GridMap::mark_scan(double px, double py, double yaw, const Obstacles& obstacles)
 {
+    std::lock_guard<std::mutex> lk(mtx_);   // 整帧标记在一把锁里做完，读方看到的永远是完整帧
+
     const double half_fov = (cfg_.fov_deg * 0.5) * M_PI / 180.0;
     const double r = cfg_.fov_range;
 
@@ -123,6 +125,8 @@ void GridMap::mark_scan(double px, double py, double yaw, const Obstacles& obsta
 // 把障碍圆覆盖的小格标成已扫(永久)。遍历每个障碍圆的包围盒，圆内小格全标。
 void GridMap::fill_obstacle_cells(const Obstacles& obstacles)
 {
+    std::lock_guard<std::mutex> lk(mtx_);
+
     for (const auto& o : obstacles) {
         const double r2 = o.r * o.r;
         int gi0, gj0, gi1, gj1;
@@ -147,6 +151,7 @@ void GridMap::fill_obstacle_cells(const Obstacles& obstacles)
 }
 
 // 标记单个小格为已扫并增量更新大格（mark_scan/fill_obstacle_cells 共用）。
+//   ★调用方必须已持有 mtx_★：两个调用点都在各自的 lock_guard 作用域内。
 void GridMap::mark_small_cell(int gi, int gj)
 {
     const int idx = s_idx(gi, gj);
@@ -169,8 +174,24 @@ void GridMap::mark_small_cell(int gi, int gj)
     }
 }
 
+// 锁内一次性拷出只读副本：可视化线程渲染整帧期间不再触碰活地图，竞态根除。
+GridSnapshot GridMap::snapshot() const
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    GridSnapshot s;
+    s.cfg = cfg_;
+    s.snx = small_nx_;  s.sny = small_ny_;
+    s.bnx = big_nx_;    s.bny = big_ny_;
+    s.cpb = cells_per_big_;
+    s.cov = (big_total_ == 0) ? 0.0 : static_cast<double>(explored_total_) / big_total_;
+    s.small = small_scanned_;
+    s.big   = big_explored_;
+    return s;
+}
+
 double GridMap::coverage_ratio() const
 {
+    std::lock_guard<std::mutex> lk(mtx_);
     if (big_total_ == 0) return 0.0;
     return static_cast<double>(explored_total_) / big_total_;
 }
@@ -178,18 +199,21 @@ double GridMap::coverage_ratio() const
 bool GridMap::big_explored(int bi, int bj) const
 {
     if (bi < 0 || bi >= big_nx_ || bj < 0 || bj >= big_ny_) return false;
+    std::lock_guard<std::mutex> lk(mtx_);
     return big_explored_[b_idx(bi, bj)] != 0;
 }
 
 int GridMap::big_count(int bi, int bj) const
 {
     if (bi < 0 || bi >= big_nx_ || bj < 0 || bj >= big_ny_) return 0;
+    std::lock_guard<std::mutex> lk(mtx_);
     return big_count_[b_idx(bi, bj)];
 }
 
 bool GridMap::small_scanned(int gi, int gj) const
 {
     if (!in_small_bounds(gi, gj)) return false;
+    std::lock_guard<std::mutex> lk(mtx_);
     return small_scanned_[s_idx(gi, gj)] != 0;
 }
 

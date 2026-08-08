@@ -3,12 +3,16 @@
 //
 //  render() 在节点主线程被周期调用，返回画好的 cv::Mat 由调用方 imshow。
 //  画面内容：
-//    - 已扫小格按填充程度着色，达 80% 的大格整格高亮（"不断填充"效果）
+//    - 已扫小格按填充程度着色，达 COVERAGE_THRESH 的大格整格高亮（"不断填充"效果）
 //    - 大格网格线
 //    - 规划好的贝塞尔参考轨迹（线）
-//    - 飞机位置(marker) + 朝向箭头 + 150° 扇形视野轮廓
+//    - 飞机位置(marker) + 朝向箭头 + FOV_DEG 扇形视野轮廓
 //    - 终点(星标)
 //    - 覆盖率 % 文本
+//
+//  ★线程★：render 跑在主线程，栅格却由 50Hz 主循环线程在写。所以这里吃的是
+//    GridMap::snapshot() 拷出的【只读快照】而非活引用——渲染整帧期间数据不会
+//    被并发改写。GridSnapshot 的只读接口与 GridMap 同名同义，故本文件逻辑不变。
 // ============================================================================
 
 #pragma once
@@ -34,7 +38,7 @@ public:
     //   obstacles：雷达拟合的障碍圆，画绿色实心圆(半径按比例缩放到正确位置)。
     //   turning/turn_dir：飞机正在【原地转身找解】时画旋转标志(turn_dir +1=逆时针/-1=顺时针)。
     //   unreachable_valid/unreachable_pos：目标【真被围死(转一圈仍无解)】时在该位置画红色叉。
-    cv::Mat render(const GridMap& grid,
+    cv::Mat render(const GridSnapshot& grid,
                    const Trajectory& traj,
                    const Vec2& goal, bool goal_valid,
                    double px, double py, double yaw, bool pose_valid,

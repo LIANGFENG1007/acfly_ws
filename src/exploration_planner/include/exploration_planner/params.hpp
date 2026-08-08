@@ -39,15 +39,15 @@ inline constexpr double SMALL_CELL      = 0.05;   // 小格边长 (m)
 inline constexpr double COVERAGE_THRESH = 0.90;   // 大格完成阈值（占比）
 
 // ---------------------------------------------------------------------------
-// 可视区（几何模型，第一版不用点云）：前方 150° 开角、3m 半径的扇形
-//   开角 120° → 半开角 ±60°
+// 可视区（几何模型，第一版不用点云）：前方 FOV_DEG 开角、FOV_RANGE 半径的扇形
+//   当前 100° → 半开角 ±50°
 // ---------------------------------------------------------------------------
 inline constexpr double FOV_DEG   = 100.0;   // 总开角 (度)
 inline constexpr double FOV_RANGE = 3.0;     // 可视半径 (m)
 
 // ---------------------------------------------------------------------------
 // 覆盖路径规划（牛耕往返）
-//   关键：飞机不必走遍每个格子，靠 120°/3m 视野"扫过去"覆盖。
+//   关键：飞机不必走遍每个格子，靠 FOV_DEG/FOV_RANGE 视野"扫过去"覆盖。
 //   一条直线车道，扇形向两侧各可靠覆盖约 2.6m（= fov_range*sin60° - 大格半宽）。
 //   保守取重叠：车道间距 ≈ 单侧覆盖 ×约1.15，相邻车道视野有重叠，防漏扫。
 //   场地越大，车道数越少、飞行路程越短。
@@ -59,7 +59,7 @@ inline constexpr double LANE_SPACING = 3.00;   // 相邻车道间距 (m)（旧�
 //   分层：上层把可达区按 BAND_WIDTH(≈视野宽) 沿 y 切成扫描条带，蛇形顺序逐带推进
 //         (带迟滞，不折返不横跳)；下层在当前条带内朝最近未扫前沿贪心串链，并用
 //         ALONG_BONUS 鼓励顺着条带主方向(x)横扫。下层是未来接【避障】【必经点】的落点。
-//   每拍把 150°/3m 视野标进栅格；偏离轨迹或周期到点就从当前位置重规划。
+//   每拍把 FOV_DEG/FOV_RANGE 视野标进栅格；偏离轨迹或周期到点就从当前位置重规划。
 //   完程度达标后转归航 PD 刹停（见下方"完成判定+归航"）。
 // ---------------------------------------------------------------------------
 inline constexpr double REPLAN_PERIOD_S    = 0.20;  // 周期性重规划间隔 (s)，缩短→路线更跟手、减少视觉延后
@@ -87,13 +87,21 @@ inline constexpr double ARC_SAMPLE_DS = 0.05;  // 沿弧长采样步长 (m)
 //   横向只做低限纠偏，主转向靠 yaw_rate
 // ---------------------------------------------------------------------------
 inline constexpr double V_MAX        = 0.50;   // 前进速度上限 (m/s)
-inline constexpr double V_MIN        = 0.00;   // 前进速度下限 (m/s)，防止过弯停死
+inline constexpr double V_MIN        = 0.00;   // 前进速度下限 (m/s)，防止过弯停死。
+                                               //   ★当前为 0 = 该下限保护是空操作★(tracker 里那段 if 恒不生效)。
+                                               //   若实测出现"过弯降速到几乎不动"，调到 0.05~0.10 即可启用兜底。
 inline constexpr double K_CURV       = 0.40;   // 曲率降速系数（越大过弯越慢）。1.0→0.4:绕障弧κ≈2时 v 从0.167提到0.28,过弯快约1.7倍;偏切外就往回调
 inline constexpr double LOOKAHEAD    = 0.40;   // pure-pursuit 前瞻距离 (m)
 inline constexpr double ENDPOINT_SLOW_R = 0.50;// 距终点此半径内开始线性降速 (m)
 
 inline constexpr double KP_YAW       = 1.60;   // 朝向误差 → yaw_rate 的 P
-inline constexpr double KD_YAW       = 0.50;   // yaw_rate 的 D
+// ★KD 口径修正(2026-08)★：此前 tracker 内把 D 项 dt 写死 0.05，而主循环真实周期是 0.02
+//   (TIMER_PERIOD_MS=20) → 微分项恒为真值的 0.4 倍，KD_YAW=0.50 实际只等效 0.20。
+//   现 dt 改为按 TIMER_PERIOD_MS 正确推导，KD 同步缩放 ×0.4 使【输出逐位不变】：
+//     KD_YAW 0.50→0.20    KD_LAT 0.10→0.04
+//   即这两个数只是把原先隐藏在错误 dt 里的真实增益显式写了出来，飞行手感与之前完全一致。
+//   ★以后调参请以这两个新值为基准★；改 TIMER_PERIOD_MS 时阻尼会正确跟随，不再隐性跳变。
+inline constexpr double KD_YAW       = 0.20;   // yaw_rate 的 D（口径修正后的真实值，等价于旧 0.50@dt=0.05）
 inline constexpr double MAX_YAW_RATE = 1.80;   // yaw_rate 限幅 (rad/s)
 
 // ★先转再走·朝向门控★：防"规划出身后/大角度路径时,机头还没转过来飞机就带着机体平移甩出线外撞柱"。
@@ -103,7 +111,7 @@ inline constexpr double MAX_YAW_RATE = 1.80;   // yaw_rate 限幅 (rad/s)
 inline constexpr double HEADING_GATE_DEG = 65.0; // 机头偏离超此角度则原地转身(度)。调小→更早原地转更稳;调大→更敢边转边走
 
 inline constexpr double KP_LAT       = 0.80;   // 横向偏差 → v_lat 的 P
-inline constexpr double KD_LAT       = 0.10;   // v_lat 的 D
+inline constexpr double KD_LAT       = 0.04;   // v_lat 的 D（口径修正后的真实值，等价于旧 0.10@dt=0.05，见上方 KD_YAW 说明）
 inline constexpr double MAX_V_LAT    = 0.20;   // 横向纠偏速度上限 (m/s)，压很低
 
 inline constexpr double V_EST_ALPHA  = 0.30;   // 位置差分估速度低通系数（同主控思路）
@@ -195,7 +203,7 @@ inline constexpr double GLOBAL_MARGIN    = 0.30;  // 障碍额外安全余量(m)
                                                   //   墙边柱风险仍靠 RETREAT_* + relax 兜底。若墙边频繁卡死→优先降 GLOBAL_WALL_MARGIN，不要降此值。
 inline constexpr double GLOBAL_WALL_MARGIN = 0.60;// 离墙安全距离(m)：cell 中心距任一场地边界<此值即禁入。
                                                   //   2026-06-04 0.80→0.60：原 0.8 偏宽,墙边柱子时把"柱墙之间能过的缝"吃掉→A*判无解、飞机
-                                                  //   转头面向墙卡死。0.6 物理离墙余量=0.6-ROBOT_RADIUS(0.2)=0.4m 仍绝不撞墙；且 <WALL_MARGIN(1.0)
+                                                  //   转头面向墙卡死。0.6 物理离墙余量=0.6-ROBOT_RADIUS(0.30)=0.30m 仍绝不撞墙；且 <WALL_MARGIN(1.0)
                                                   //   覆盖目标(离墙≥1.0m)仍直接可达。调大更躲墙但墙边缝更窄/近墙目标够不到。
 inline constexpr double COMMIT_TARGET_TOL = 0.60; // ★路径承诺★目标移动超此距离(m)才重算A*换边。
                                                   //   核心防"绕障左右翻边"：旧路径仍无碰撞就续用,不因左右绕代价 near-tie 每拍翻边→撞柱。
@@ -210,8 +218,8 @@ inline constexpr double EXPLORE_TARGET_MIN_DIST = 1.50; // 探索挑 A* 终点�
 //   边距=安全)，只有新路【更安全】且/或【更快】超过下列比例，才真的换路；否则续用旧路。
 //   关键：左右横跳的两条路是 near-tie(几乎等长、等安全) → 两项都达不到阈值 → 不换 → 横跳根除。
 //   只有旧路【已被挡(会撞)】或【已快走完(剩余很短)】时跳过本评估，直接采纳新路(安全/进度优先)。
-inline constexpr double PATH_SWITCH_SAFETY_GAIN  = 0.50; // 新路"最小障碍边距"需比旧路高 ≥此比例(20%)才算【更安全】。调大→更不爱为安全换路(更稳)
-inline constexpr double PATH_SWITCH_TIME_GAIN    = 0.20; // 新路"剩余弧长"需比旧路短 ≥此比例(15%)才算【更快】。调大→更不爱为抄近路换路(更稳/更咬死旧路)
+inline constexpr double PATH_SWITCH_SAFETY_GAIN  = 0.50; // 新路"最小障碍边距"需比旧路高 ≥此比例(50%)才算【更安全】。调大→更不爱为安全换路(更稳)
+inline constexpr double PATH_SWITCH_TIME_GAIN    = 0.20; // 新路"剩余弧长"需比旧路短 ≥此比例(20%)才算【更快】。调大→更不爱为抄近路换路(更稳/更咬死旧路)
 inline constexpr bool   PATH_SWITCH_REQUIRE_BOTH = true; // true=【更安全且更快】两者都满足才换(最稳/最不横跳)；false=任一满足即换(更看重效率,换路更勤)
 
 // ★机头锥(2026-06-10)★：A* 起点段只许朝飞机机头方向延伸,根除"新规划路线从飞机侧后方起步→飞机

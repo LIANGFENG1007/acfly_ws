@@ -103,24 +103,61 @@ GlobalResult plan_global_path(const Vec2& start, const Vec2& goal,
 {
     GlobalResult res;
 
-    const double rr = cfg.robot_radius + cfg.inflate;  // 禁入半径 = 障碍r + 此
-
     // ---- 建栅格 + 膨胀障碍 + 四面墙 ----
+    //   ★热点★：本函数在【原地转身找解】期间每拍(50Hz)都跑，且持有节点 mtx_。
+    //   旧写法是 nx*ny 全格 × 每格遍历所有障碍 = 50,000×N 次距离判定/次搜索。
+    //   现改为两步"只算需要算的"，判定式与旧版逐字相同 → 结果逐位一致，只是不再做无用功：
+    //     ① 墙：条件可分离(只看 ix 或只看 iy) → 预算两个一维布尔表 O(nx+ny)，
+    //           再按列填充(列在内存中连续，memset 级)。
+    //     ② 障碍：只盖各自【包围盒】内的格 O(Σ 盒面积)，盒外的格必然不满足距离判定。
     Grid g;
     g.min_x = cfg.min_x; g.min_y = cfg.min_y; g.cell = cfg.cell;
     g.nx = std::max(1, static_cast<int>(std::ceil((cfg.max_x - cfg.min_x) / cfg.cell)));
     g.ny = std::max(1, static_cast<int>(std::ceil((cfg.max_y - cfg.min_y) / cfg.cell)));
     g.blocked.assign(static_cast<size_t>(g.nx) * g.ny, 0);
+
+    // ① 墙禁入：cell 中心距任一场地边界 < wall_margin。x 侧只与 ix 有关、y 侧只与 iy 有关。
     const double wm = cfg.wall_margin;   // 墙坐标已知(=场地边界)，直接画进栅格，不靠点云
-    for (int ix = 0; ix < g.nx; ++ix)
-        for (int iy = 0; iy < g.ny; ++iy) {
-            const double cx = g.cx(ix), cy = g.cy(iy);
-            // 距任一场地边界 < wall_margin → 墙禁入；与障碍禁入合并进同一张 blocked。
-            const bool wall = (cx - cfg.min_x < wm) || (cfg.max_x - cx < wm) ||
-                              (cy - cfg.min_y < wm) || (cfg.max_y - cy < wm);
-            if (wall || point_blocked(cx, cy, obs, rr))
-                g.blocked[g.idx(ix, iy)] = 1;
+    std::vector<char> wall_x(g.nx), wall_y(g.ny);
+    for (int ix = 0; ix < g.nx; ++ix) {
+        const double cx = g.cx(ix);
+        wall_x[ix] = (cx - cfg.min_x < wm) || (cfg.max_x - cx < wm);
+    }
+    for (int iy = 0; iy < g.ny; ++iy) {
+        const double cy = g.cy(iy);
+        wall_y[iy] = (cy - cfg.min_y < wm) || (cfg.max_y - cy < wm);
+    }
+    for (int ix = 0; ix < g.nx; ++ix) {
+        char* col = &g.blocked[static_cast<size_t>(ix) * g.ny];   // 第 ix 列在内存中连续
+        if (wall_x[ix]) { std::fill(col, col + g.ny, static_cast<char>(1)); continue; }
+        for (int iy = 0; iy < g.ny; ++iy) if (wall_y[iy]) col[iy] = 1;
+    }
+
+    // ② 障碍禁入：只遍历每个障碍的包围盒。盒取 ±1 格余量，确保不漏任何"中心距 < R"的格；
+    //    盒内仍用与旧版【完全相同】的判定式 dx*dx+dy*dy < R*R，故结果逐位一致。
+    const double rr = cfg.robot_radius + cfg.inflate;  // 禁入半径 = 障碍r + 此
+    for (const auto& o : obs) {
+        const double R = o.r + rr;
+        // cell 中心 = min + (i+0.5)*cell ⇒ 由 |中心−圆心| ≤ R 反解 i 的范围
+        int ix_lo = static_cast<int>(std::floor((o.cx - R - cfg.min_x) / cfg.cell)) - 1;
+        int ix_hi = static_cast<int>(std::ceil ((o.cx + R - cfg.min_x) / cfg.cell)) + 1;
+        int iy_lo = static_cast<int>(std::floor((o.cy - R - cfg.min_y) / cfg.cell)) - 1;
+        int iy_hi = static_cast<int>(std::ceil ((o.cy + R - cfg.min_y) / cfg.cell)) + 1;
+        ix_lo = std::max(ix_lo, 0);  ix_hi = std::min(ix_hi, g.nx - 1);
+        iy_lo = std::max(iy_lo, 0);  iy_hi = std::min(iy_hi, g.ny - 1);
+        const double R2 = R * R;
+        for (int ix = ix_lo; ix <= ix_hi; ++ix) {
+            const double dx = g.cx(ix) - o.cx;
+            const double dx2 = dx * dx;
+            if (dx2 >= R2) continue;                      // 整列都在圆外，跳过
+            char* col = &g.blocked[static_cast<size_t>(ix) * g.ny];
+            for (int iy = iy_lo; iy <= iy_hi; ++iy) {
+                if (col[iy]) continue;                    // 已被墙/其他障碍禁入
+                const double dy = g.cy(iy) - o.cy;
+                if (dx2 + dy * dy < R2) col[iy] = 1;
+            }
         }
+    }
 
     // ---- 起点/终点定格（越界则钳进栅格） ----
     int sx, sy, gx, gy;

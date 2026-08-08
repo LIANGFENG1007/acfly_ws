@@ -79,7 +79,7 @@ Path2 plan_boustrophedon(const CoverageConfig& cfg, const Vec2& start, const Vec
     return path;
 }
 
-Path2 plan_explore(const GridMap& grid, const FrontierConfig& cfg,
+Path2 plan_explore(const GridSnapshot& grid, const FrontierConfig& cfg,
                    const Vec2& cur, double cur_yaw, int& cur_band, bool& all_explored,
                    const std::vector<Vec2>* unreachable, double block_r)
 {
@@ -141,7 +141,15 @@ Path2 plan_explore(const GridMap& grid, const FrontierConfig& cfg,
 
     // ---- 上层：推进当前条带（迟滞，不回退）----
     // 当前条带内剩余未扫格 ≤ band_clear_cnt 就推进到"下一个还有未扫格的条带"。
-    if (cur_band < 0) cur_band = band_of(cur.y);          // 首次：用当前所在条带
+    //
+    // ★"不回退"的真实作用范围（勿按字面理解）★：cur_band 由调用方持有，但每次
+    //   replan 传进来的若是负值(首次 -1 / 上次收尾置的 -2)，这里都会重新取
+    //   band_of(飞机当前 y)。所以：
+    //     · 推进阶段(cur_band ≥ 0)：确实单调向上，不回退、不横跳 —— 迟滞在这里生效。
+    //     · 收尾阶段(上一拍置了 -2)：下一拍即被重置成"飞机当前所在带"，等价于
+    //       允许回到下方条带捡残格。★这是有意保留的行为★——残格常散落在已过条带，
+    //       不许回头就够不到，覆盖率会卡在 DONE_COVERAGE 以下永远无法转归航。
+    if (cur_band < 0) cur_band = band_of(cur.y);          // 首次(-1) 或 上拍收尾(-2)：用当前所在条带
     cur_band = std::clamp(cur_band, 0, n_band - 1);
 
     auto count_in_band = [&](int b) {
@@ -158,8 +166,11 @@ Path2 plan_explore(const GridMap& grid, const FrontierConfig& cfg,
             if (count_in_band(b) > 0) { nxt = b; break; }
         }
         if (nxt < 0) {
-            // 上方没有了：可能还有零星残格散落在已过条带 → 退而求其次，扫全场剩余
-            cur_band = -2;   // 标记"无条带约束，扫全场残格"
+            // 上方没有了：可能还有零星残格散落在已过条带 → 退而求其次，扫全场剩余。
+            //   -2 只在【本次调用内】生效(下面 in_active_band 恒真=无条带约束)；
+            //   下一拍会被上面 `cur_band < 0` 重置成飞机当前所在带 —— 见那里的说明，
+            //   这正是收尾阶段能回下方条带捡残格的原因，有意为之。
+            cur_band = -2;   // 标记"无条带约束，扫全场残格"(仅本次调用)
             break;
         }
         cur_band = nxt;

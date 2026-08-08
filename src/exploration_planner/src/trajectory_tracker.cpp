@@ -88,8 +88,9 @@ VelCmd TrajectoryTracker::update(double px, double py, double yaw,
     // 左正右负：把偏差投影到切线的左法向 (-sinθ, cosθ)
     const double e_ct = -std::sin(np.theta) * dx + std::cos(np.theta) * dy;
 
-    // D 项（数值差分，update 周期固定 20Hz → 用固定 dt）
-    const double dt = 0.05;
+    // D 项（数值差分）：dt = 真实控制周期，由节点按 TIMER_PERIOD_MS 推导填入 g_.dt。
+    //   勿写死常数——写死值与真实周期不符时，微分项会被静默缩放(历史 bug，见 TrackerGains::dt)。
+    const double dt = (g_.dt > 1e-6) ? g_.dt : 0.02;   // 兜底：万一没填，按 50Hz 算
     double de_yaw = 0.0, de_ct = 0.0;
     if (prev_valid_) {
         de_yaw = wrap_pi(e_yaw - prev_e_yaw_) / dt;

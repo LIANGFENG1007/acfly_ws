@@ -27,7 +27,7 @@ cv::Point Visualizer::to_px(double x, double y) const
     return cv::Point(px, py);
 }
 
-cv::Mat Visualizer::render(const GridMap& grid,
+cv::Mat Visualizer::render(const GridSnapshot& grid,
                            const Trajectory& traj,
                            const Vec2& goal, bool goal_valid,
                            double px, double py, double yaw, bool pose_valid,
@@ -132,7 +132,7 @@ cv::Mat Visualizer::render(const GridMap& grid,
         cv::circle(img, qp, 6, cv::Scalar(255, 255, 255), 1);        // 白描边更醒目
     }
 
-    // ---- 4) 飞机：位置 + 朝向箭头 + 150° 扇形视野 ----
+    // ---- 4) 飞机：位置 + 朝向箭头 + FOV_DEG 扇形视野 ----
     if (pose_valid) {
         cv::Point pp = to_px(px, py);
 

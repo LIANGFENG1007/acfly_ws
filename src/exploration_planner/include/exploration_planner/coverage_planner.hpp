@@ -55,7 +55,12 @@ struct FrontierConfig {
 // unreachable/block_r: explore give-up blacklist. Skip candidate cells within
 //   block_r of any unreachable point so the drone stops retrying dead-end areas.
 //   Pass nullptr/empty to disable filtering (same as old behavior).
-Path2 plan_explore(const GridMap& grid, const FrontierConfig& cfg,
+//
+// ★取 GridSnapshot 而非 GridMap★：本函数要逐格读 ~NX*NY*9 次(当前场地≈2880 次)。
+//   GridMap 的只读访问器现在每次都要取锁，逐格调会造成无谓的锁抖动；且逐格取锁只保证
+//   "每格自身一致"，跨格仍可能读到半新半旧的撕裂视图。改吃调用方一次性拷好的快照：
+//   一次锁 + 一次拷贝(≈32KB)，既更快又保证整次选点看到的是【同一时刻】的地图。
+Path2 plan_explore(const GridSnapshot& grid, const FrontierConfig& cfg,
                    const Vec2& cur, double cur_yaw, int& cur_band, bool& all_explored,
                    const std::vector<Vec2>* unreachable = nullptr, double block_r = 0.0);
 

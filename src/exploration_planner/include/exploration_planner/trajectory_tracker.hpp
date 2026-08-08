@@ -21,6 +21,12 @@ struct TrackerGains {
     double kp_yaw, kd_yaw, max_yaw_rate;
     double kp_lat, kd_lat, max_v_lat;
     double heading_gate_rad;   // 机头偏离超此角度→前进+横向全清零,只原地转身(防大角度甩出线外撞柱)
+    // ★控制周期 (s)★：D 项数值差分的分母。★必须等于 update() 的真实调用周期★
+    //   (= TIMER_PERIOD_MS/1000)，由节点构造时按 TIMER_PERIOD_MS 推导填入，勿写死。
+    //   2026-08 修：此前 tracker 内写死 0.05 而实际周期是 0.02，微分项恒为真值的 0.4 倍
+    //   (KD_YAW=0.50 实际只等效 0.20)。现改为显式传入并把 KD 同步缩放，输出逐位不变；
+    //   之后再改 TIMER_PERIOD_MS，阻尼会跟着正确变化，不再隐性跳变。
+    double dt;
 };
 
 struct VelCmd {
