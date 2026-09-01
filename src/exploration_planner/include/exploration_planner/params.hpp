@@ -67,6 +67,17 @@ inline constexpr double REPLAN_DEV_M       = 0.20;  // 偏离当前轨迹超过�
 inline constexpr double FRONTIER_NEAR_W    = 1.40;  // ★邻近系数★：距离项权重，越大越优先去【最近】的未扫区域
 inline constexpr double FRONTIER_TURN_PEN  = 1.70;  // 选目标的转向代价 (m/rad)，越大越爱直行少掉头
 inline constexpr double FRONTIER_CLUSTER_W = 1.80;  // 未扫邻居加成 (m/个)，越大越优先大片未知区(别追孤格)
+// ★孤格饥饿修复(2026-08)★ ← 解决"障碍遮挡出的小片未扫区，飞机走很远以后才回来扫"
+//   成因：遮挡区在飞机路过时被挡住扫不到 → 周围格陆续扫完 → 它的未扫邻居数 nbr 从 8 掉到
+//   1~2 → 代价里 -FRONTIER_CLUSTER_W*nbr 从 -14.4 变成 -1.8，代价【跳升 12.6】
+//   (≈要多绕 9m 才划算) → 排名从队首暴跌到队尾 → 再无机会被选中，直到全场只剩它们才
+//   被迫回头。实测有格 t=0 就被看见、却拖到 47s 才扫完(全程仅 50s)。
+//   对策：cluster 加成【饱和】—— 用 min(nbr, CAP) 代替 nbr，大片区不再线性碾压孤格。
+//   实测(7 场景 × 4 起飞点 = 28 组)：总用时 -9.2%、里程 -8.9%、
+//   滞后>10s 的格 1160→908、最大滞后 61.9s→58.8s，零超时。
+//   ★不可调太小★：CAP=4 时有 2 组超时(+44.5%)——压太狠会让飞机放弃"优先大片"策略、
+//   在零散格间乱跳。CAP=5 为 -3.7%，CAP=7 为 -7.3%，6 是实测最优。≥8 等于关闭。
+inline constexpr int    FRONTIER_CLUSTER_CAP = 6;   // nbr 饱和上限（0 或 ≥8 = 关闭）
 inline constexpr double EXPLORE_HORIZON_M  = 8.00;  // 单次规划链路总长 (m)，分层后可略长，少重算
 inline constexpr double CHAIN_GAP_M        = 1.00;  // 链路相邻目标点最小间隔 (m)，按视野铺开
 
@@ -264,6 +275,17 @@ inline constexpr double RETREAT_TRIGGER_M  = 0.55; // 触发后退的贴障距�
 inline constexpr double RETREAT_STEP_M     = 0.50; // 每次后退目标点距离(m)：朝远离障碍方向取此远的点当 PD 目标,低速退。
 inline constexpr double RETREAT_MAX_DIST   = 1.20; // 累计后退超此距离(m)仍无解 → 放弃后退,判真被围死。防无限后退。
 inline constexpr double RETREAT_V_MAX      = 0.35; // 后退限速(m/s)：低速蹭出来,别猛退甩飞。
+// ★后退超时(2026-08)★ ← 修"界面冻结、终端反复刷'后退脱困(已退 0.00m)'、飞机悬在原地"
+//   两个 bug 叠加导致：
+//   ① do_retreat 旧实现把后退点交给 pd_core，而后退点在飞机【身后】(e_yaw≈180°) →
+//      朝向门控 head_gate=0 → 速度恒为 0，只发 yaw_rate 让飞机原地掉头 180°。
+//      实测要转 72 拍(1.44s)速度才解禁；期间飞机没动 → traveled 恒为 0 →
+//      "traveled < RETREAT_MAX_DIST"永远成立 → 无限重试。(已改为直接投影到机体系，不掉头)
+//   ② A* 误判无解：3 个障碍各距 0.8m 环绕时，relax 突围只放行 ±0.60m 方框，
+//      出框即恢复"障碍r+0.60"禁入 → 膨胀圆叠加封死出路 → probe 也无解 → 落到 retreat 分支。
+//   本参数是【兜底闸】：与"退够距离"是【或】关系，先满足哪个都退出后退态，绝不卡死。
+//   调大→给退不动的情形更多机会；调小→更快放弃转去别处。<=0 关闭超时(退回旧行为，不推荐)。
+inline constexpr double RETREAT_TIMEOUT_S  = 2.0;  // 进入后退态超此秒数仍没退够 → 判"退不动"，交上层跳带/悬停
 
 }  // namespace params
 }  // namespace exploration

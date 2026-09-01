@@ -43,6 +43,11 @@ struct FrontierConfig {
     double near_weight;                  // 邻近系数：距离项权重，越大越优先最近未扫区
     double turn_penalty;                 // 选目标转向代价 (m/rad)
     double cluster_weight;               // 未扫邻居加成 (m/个)
+    // ★nbr 饱和上限★：cluster 加成用 min(nbr, cluster_cap) 而非 nbr 本身。
+    //   防"孤格饥饿"：遮挡产生的小片未扫区，周围扫完后 nbr 掉到 1~2，代价暴涨被永久
+    //   排到队尾，直到全场只剩它们才回头补 —— 表现为"走很远以后又回来扫小区域"。
+    //   饱和后大片区仍优先、但不会把孤格压死。0 或 ≥8 = 关闭(8 邻域上限就是 8)。
+    int    cluster_cap;
     double horizon;                      // 单次链路总长 (m)
     double chain_gap;                    // 链路相邻目标最小间隔 (m)
     // ---- 分层新增 ----

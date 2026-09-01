@@ -104,6 +104,9 @@ public:
         fcfg_.near_weight    = dd("frontier_near_w",   params::FRONTIER_NEAR_W);
         fcfg_.turn_penalty   = dd("frontier_turn_pen", params::FRONTIER_TURN_PEN);
         fcfg_.cluster_weight = dd("frontier_cluster_w",params::FRONTIER_CLUSTER_W);
+        // 孤格饥饿修复：cluster 加成饱和上限（防遮挡小区被排到队尾、走远才回头补扫）
+        fcfg_.cluster_cap    = static_cast<int>(std::lround(
+                               dd("frontier_cluster_cap", static_cast<double>(params::FRONTIER_CLUSTER_CAP))));
         fcfg_.horizon        = dd("explore_horizon_m", params::EXPLORE_HORIZON_M);
         fcfg_.chain_gap      = dd("chain_gap_m",       params::CHAIN_GAP_M);
         fcfg_.band_width     = dd("band_width",        params::BAND_WIDTH);
@@ -160,6 +163,7 @@ public:
         retreat_step_            = dd("retreat_step",     params::RETREAT_STEP_M);
         retreat_max_dist_        = dd("retreat_max_dist", params::RETREAT_MAX_DIST);
         retreat_v_max_           = dd("retreat_v_max",    params::RETREAT_V_MAX);
+        retreat_timeout_         = dd("retreat_timeout_s", params::RETREAT_TIMEOUT_S);
         ggcfg_.min_x = gcfg_.min_x; ggcfg_.min_y = gcfg_.min_y;
         ggcfg_.max_x = gcfg_.max_x; ggcfg_.max_y = gcfg_.max_y;
         ggcfg_.cell         = dd("global_cell",        params::GLOBAL_CELL);
@@ -227,6 +231,7 @@ public:
 
         last_plan_time_ = now();
         last_global_plan_time_ = now();
+        retreat_start_  = now();   // 占位初始化；真正的起点在 do_retreat 首次进入时记
 
         RCLCPP_INFO(get_logger(),
             "exploration_planner 已启动 (场地 %.1fx%.1fm, 大格 %.2fm, 小格 %.2fm, 动态前沿覆盖)",
@@ -792,14 +797,26 @@ private:
             } else { ux /= nn; uy /= nn; }
         }
 
-        if (!retreating_) { retreating_ = true; retreat_origin_ = {px_, py_}; }
+        if (!retreating_) { retreating_ = true; retreat_origin_ = {px_, py_}; retreat_start_ = now(); }
 
         const Vec2 back{ px_ + ux * retreat_step_, py_ + uy * retreat_step_ };
         traj_ = smooth_catmull_rom(Path2{ {px_, py_}, back }, arc_ds_);   // 可视化:后退直线
         last_look_ = back; look_valid_ = true;
 
-        Vec2 vb = pd_core(back, retreat_step_);   // 朝后退点；dist=step 使其全程出力(不提前刹停)
-        // 限后退速度：等比缩放(pd_core 已给机体系 vx/vy)
+        // ★不走 pd_core(2026-08 修死锁)★
+        //   旧实现 pd_core(back, step) 有致命缺陷：后退点在飞机【身后】，e_yaw≈180° →
+        //   朝向门控 head_gate=0 → 速度恒为 0，只发 yaw_rate 让飞机原地掉头 180°。
+        //   实测要转 72 拍(1.44s)速度才解禁；而这期间飞机没动 → traveled 恒为 0 →
+        //   try_retreat 的"已退 0.00m"永远成立 → 无限重试；若期间障碍圆微抖使 back 方向
+        //   改变、或 replan_locked 复位 retreat_origin_，则永远转不出去 → 彻底卡死
+        //   (日志表现：反复刷"A* 无解且贴障 → 后退脱困(已退 0.00m)"，飞机悬在原地不动)。
+        //   ★后退本来就不该先掉头★：飞机是全向的，直接把"世界系后退方向"投影到机体系
+        //   即可，机头保持不动(也不该动——机头还朝着障碍/未扫区，转走反而丢失视野)。
+        const double c = std::cos(yaw_), s = std::sin(yaw_);
+        Vec2 vb{ (  c * ux + s * uy) * retreat_v_max_,     // 机体前向分量
+                 ( -s * ux + c * uy) * retreat_v_max_ };   // 机体横向分量
+        last_yaw_rate_ = 0.0;                              // 后退期间不转头，保持视野朝向
+        // 合速度限幅（分量已按 retreat_v_max_ 缩放，这里只防数值溢出）
         const double sp = std::hypot(vb.x, vb.y);
         if (sp > retreat_v_max_ && sp > 1e-6) { const double k = retreat_v_max_ / sp; vb.x *= k; vb.y *= k; }
         return vb;
@@ -813,16 +830,28 @@ private:
         const double od = nearest_obstacle_dist(obs);
         const double traveled = retreating_
             ? std::hypot(px_ - retreat_origin_.x, py_ - retreat_origin_.y) : 0.0;
-        if (od < retreat_trigger_ && traveled < retreat_max_dist_) {
+        // ★后退超时(2026-08)★：只靠"退够 retreat_max_dist_"退出是不够的 —— 若飞机因任何
+        //   原因【退不动】(位置不变 → traveled 恒为 0)，条件永远成立 → 无限重试、飞机悬在
+        //   原地反复刷"后退脱困(已退 0.00m)"。加一道【时间】闸：进入后退态超过
+        //   retreat_timeout_ 秒仍没退够，就判定"退不动"，交上层走放弃/跳带逻辑。
+        //   与距离闸是【或】关系：先满足哪个都退出，绝不会卡死。
+        const double elapsed = retreating_ ? (now() - retreat_start_).seconds() : 0.0;
+        const bool timed_out = retreating_ && retreat_timeout_ > 0.0 && elapsed > retreat_timeout_;
+        if (od < retreat_trigger_ && traveled < retreat_max_dist_ && !timed_out) {
             const Vec2 vb = do_retreat(obs);
             cmd.twist.linear.x = vb.x;
             cmd.twist.linear.y = vb.y;
             cmd.twist.angular.z = last_yaw_rate_;
             RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000,
-                "A* 无解且贴障(边距 %.2fm) → 后退脱困(已退 %.2fm)", od, traveled);
+                "A* 无解且贴障(边距 %.2fm) → 后退脱困(已退 %.2fm, %.1fs)", od, traveled, elapsed);
             return true;
         }
-        retreating_ = false;   // 不满足后退条件 → 复位，交原逻辑
+        if (timed_out) {
+            RCLCPP_WARN(get_logger(),
+                "后退脱困超时(%.1fs 仅退了 %.2fm，退不动) → 放弃后退，交上层跳带/悬停",
+                elapsed, traveled);
+        }
+        retreating_ = false;   // 不满足后退条件 / 超时 → 复位，交原逻辑
         return false;
     }
 
@@ -1165,6 +1194,8 @@ private:
     double retreat_step_     = 0.50;   // 每次后退目标点距离(m)，由 RETREAT_STEP_M 覆盖
     double retreat_max_dist_ = 1.20;   // 累计后退上限(m)，由 RETREAT_MAX_DIST 覆盖
     double retreat_v_max_    = 0.35;   // 后退限速(m/s)，由 RETREAT_V_MAX 覆盖
+    rclcpp::Time retreat_start_;       // 进入后退态的时刻（超时兜底，防"退不动"无限重试）
+    double retreat_timeout_  = 2.0;    // 后退超时(s)：超此仍没退够 → 判退不动，交上层跳带。由 RETREAT_TIMEOUT_S 覆盖
 
     // ---- 原地转身找解（mtx_ 保护）：探索锥内无解但有路(只是不在机头方向)→原地转身改朝向重搜 ----
     bool          turning_for_solution_ = false;  // 正在原地转身找解
