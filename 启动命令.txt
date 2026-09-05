@@ -10,6 +10,7 @@ ros2 launch point_lio mapping_mid360.launch.py rviz:=false
 ros2 launch mavros acfly.launch.py
 
 主控程序
+/tmp/udp_cmd_send 127.0.0.1 start
 ros2 run fly_mission fly_mission_node
 
 启动视觉
