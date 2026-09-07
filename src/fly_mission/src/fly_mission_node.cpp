@@ -48,23 +48,37 @@ FlyMissionNode::FlyMissionNode()
     goal_pub_ = create_publisher<geometry_msgs::msg::PointStamped>(
         "/exploration/goal", latched);
 
-    // ★任务启动指令频道★：BOOT_CHECK 里响完第一声蜂鸣后等启动指令，收到才继续
-    //   （响第二声 → 等 OFFBOARD → 解锁起飞）。
+    // ★起飞前流程横幅★：START_CMD_REQUIRED 决定要不要等启动指令(见 params 该项说明)。
+    if (params::START_CMD_REQUIRED) {
+        RCLCPP_INFO(get_logger(),
+            "[启动] 起飞前流程：自检 → BEEP① → ★等启动指令★ → BEEP② → 等飞手拨 OFFBOARD → 自动解锁");
+    } else {
+        RCLCPP_INFO(get_logger(),
+            "[启动] 起飞前流程：自检 → BEEP①+BEEP②(间隔 %.1fs) → 等飞手拨 OFFBOARD → 自动解锁"
+            "（★不需要启动指令★；要改回需求指令模式见 params::START_CMD_REQUIRED）",
+            params::BOOT_BEEP_GAP_S);
+    }
+
+    // ★命令 UDP 频道★：收启动指令(cmd=1，仅 START_CMD_REQUIRED=true 时参与放行)
+    //   与二次起飞触发(cmd=2，见 poll_udp_cmd 的状态门)。
+    //   ★即使不需要启动指令也要建★——命令 2 走同一个端口。
     //   ★收到一次就锁定★——对方会 1s 1 次持续发防丢包，之后的一律忽略，不会重复触发。
-    //   两种来源由 params::CMD_USE_UDP 选择，状态机只看 start_recv_，逻辑不变：
     if (params::CMD_USE_UDP) {
         // ★UDP 模式★：不订阅 ROS 话题(避免跨机 DDS 组播发现打爆 WiFi、拖垮 mavros)。
-        //   构造即 bind；失败只告警——此时收不到启动指令，会一直停在 BOOT_CHECK 等，
-        //   不会误起飞。收包在 on_timer 里 poll_udp_cmd()。
+        //   构造即 bind；失败只告警——不影响起飞(起飞闸门是飞手拨 OFFBOARD)，
+        //   但会收不到命令 2。收包在 on_timer 里 poll_udp_cmd()。
         cmd_rx_ = std::make_unique<udp_cmd::UdpCmdReceiver>(params::CMD_UDP_PORT);
         if (!cmd_rx_->ok()) {
             RCLCPP_ERROR(get_logger(),
-                "[启动] ★命令 UDP 端口 %d bind 失败★(被占用?)。将收不到启动指令→"
-                "一直停在等待。换端口需同时改 params::CMD_UDP_PORT 与发送端 -p port:=",
-                params::CMD_UDP_PORT);
+                "[启动] ★命令 UDP 端口 %d bind 失败★(被占用?)。%s"
+                "换端口需同时改 params::CMD_UDP_PORT 与发送端最后一个参数",
+                params::CMD_UDP_PORT,
+                params::START_CMD_REQUIRED
+                    ? "将收不到启动指令→一直停在等待。"
+                    : "启动不受影响(不需启动指令)，但收不到命令 2(二次起飞)。");
         } else {
             RCLCPP_INFO(get_logger(),
-                "[启动] 启动指令走【UDP】监听端口 %d(不订阅 /mission/start)",
+                "[启动] 命令频道走【UDP】监听端口 %d(不订阅 /mission/start)",
                 params::CMD_UDP_PORT);
         }
     } else {
@@ -198,7 +212,7 @@ void FlyMissionNode::on_timer()
         break;
 
     case MissionState::TAKEOFF:
-        takeoff(1.5);
+        takeoff(0.8);
         if (is_reached()) {
             RCLCPP_INFO(get_logger(), "[起飞] 完成");
             state_ = MissionState::WAIT_AFTER_TAKEOFF;
@@ -212,7 +226,7 @@ void FlyMissionNode::on_timer()
         break;
 
     case MissionState::EXPLORATION:
-        exploration(7.0, 4.0);              // 探索终点 (SLAM 系)，改这里即可
+        exploration(4.7, 2.2);              // 探索终点 (SLAM 系)，改这里即可
         if (explore_done_) {
             RCLCPP_INFO(get_logger(), "[探索] 算法报告完成，准备降落");
             state_ = MissionState::LAND;

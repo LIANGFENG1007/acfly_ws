@@ -2,7 +2,6 @@
 ros2 launch livox_ros_driver2 msg_mid360_launch.py
 
 启动 Point-LIO 算法
-ros2 launch point_lio mapping_mid360.launch.py rviz:=false
 
 /bin/python3 /home/nvidia/ws_opencv/pose.py
 
@@ -10,7 +9,10 @@ ros2 launch point_lio mapping_mid360.launch.py rviz:=false
 ros2 launch mavros acfly.launch.py
 
 主控程序
-/tmp/udp_cmd_send 127.0.0.1 start
+
+/tmp/udp_cmd_send 127.0.0.1 start        # 本机自发自收，每秒1次，Ctrl+C 停
+/tmp/udp_cmd_send 127.0.0.1 again        # 二次起飞触发（cmd=2）
+
 ros2 run fly_mission fly_mission_node
 
 启动视觉
@@ -35,4 +37,4 @@ rviz2 -d ~/acfly_ws/install/pole_detector/share/pole_detector/rviz/pole_detector
 pcl 找杆（多杆带 ID）
 ros2 run multi_pole_detector multi_pole_detector_node
 
-rviz2 -d ~/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/rviz/multi_pole_detector.rviz
+rviz2 -d ~/acfly_ws/install/multi_pole_detector/share/multi_pole_detector/rviz/multi_pole_detector.rvizros2 launch point_lio mapping_mid360.launch.py rviz:=false

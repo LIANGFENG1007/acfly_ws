@@ -103,6 +103,8 @@ private:
     //   有新帧就喂给 find_/lf_，并更新 LOCK_DROP 用的 dx/dy 与 SLAM 绝对目标点。
     void consume_shm_cv();
     // ★UDP 命令收包★(CMD_USE_UDP=true 时)：置 start_recv_ / trigger_recv_。
+    //   命令 1(start)在 params::START_CMD_REQUIRED=false 时仍会锁存 start_recv_，
+    //     但 step_boot_check() 已不看它 → 发了也只是记个日志，不影响流程。
     //   命令 2 带状态门：不在 WAIT_TRIGGER 时收到一律丢弃，防提前锁存导致不等指令就起飞。
     void poll_udp_cmd();
 
@@ -243,8 +245,12 @@ private:
     bool         plat_wait_start_valid_ = false;
 
     bool beep_sent_            = false;   // BEEP①(连接+雷达就绪)只发一次的标志
-    bool beep2_sent_           = false;   // BEEP②(收到启动指令)只发一次的标志
-    bool start_recv_           = false;   // 已收到 /mission/start 的 data==1（收到一次即锁定）
+    bool beep2_sent_           = false;   // BEEP②只发一次的标志。含义随 params::START_CMD_REQUIRED：
+                                          //   true=收到启动指令 / false=BEEP① 之后隔 BOOT_BEEP_GAP_S 自动补响
+    rclcpp::Time beep_time_;              // BEEP① 发出的时刻(START_CMD_REQUIRED=false 时用来隔开第二声)
+    bool beep_time_valid_      = false;
+    bool start_recv_           = false;   // 已收到启动指令（收到一次即锁定）。
+                                          //   ★START_CMD_REQUIRED=false 时本标志不参与放行★(那条门直接跳过)
 
     // ---- 失锁去抖 ----
     rclcpp::Time lost_since_;

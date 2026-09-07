@@ -302,7 +302,10 @@ inline constexpr int    CAR_UDP_PORT = 9870;
 
 // ---------------------------------------------------------------------------
 // ★★★ 启动指令(BEEP① 之后等的那个"1")的来源：UDP 还是 ROS 话题 ★★★
-//   BOOT_CHECK 流程：飞控+雷达就绪 → BEEP① → ★等启动指令★ → BEEP② → 等 OFFBOARD → 解锁
+//   ★本项只决定"启动指令从哪来"，不决定"要不要等启动指令"★——后者见下面的
+//   START_CMD_REQUIRED(当前 false，即不等启动指令，本项只用于命令 2)。
+//   BOOT_CHECK 流程(START_CMD_REQUIRED=true 时)：
+//     飞控+雷达就绪 → BEEP① → ★等启动指令★ → BEEP② → 等 OFFBOARD → 解锁
 //   true  = ★当前★ 走【UDP 单播】收命令(端口 CMD_UDP_PORT)，不订阅 /mission/start。
 //   false = 走 ROS 话题 /mission/start (Int32 data==1)，旧行为逐位一致。
 //
@@ -318,6 +321,27 @@ inline constexpr int    CAR_UDP_PORT = 9870;
 // ---------------------------------------------------------------------------
 inline constexpr bool   CMD_USE_UDP   = true;
 inline constexpr int    CMD_UDP_PORT  = 9871;
+
+// ---------------------------------------------------------------------------
+// ★★★ 起飞前是否需要"启动指令"这道门 ★★★
+//   true  = 旧行为：飞控+雷达就绪 → BEEP① → ★等启动指令(UDP/话题)★ → BEEP② → 等 OFFBOARD
+//   false = ★当前★ 省掉启动指令：飞控+雷达就绪 → BEEP① → (隔 BOOT_BEEP_GAP_S) → BEEP②
+//           → 直接等 OFFBOARD。两声连响就是"自检全过，可以拨 OFFBOARD 了"。
+//
+//   ★为什么去掉是安全的★：起飞的真正闸门不是启动指令，而是【飞手手动拨 OFFBOARD】——
+//   程序只在检测到 OFFBOARD 之后才请求解锁。少了启动指令，桨也不会自己转。
+//
+//   ★改回 true 的场合★：需要"人在远端确认后飞机才进入待拨 OFFBOARD 状态"的流程
+//   (比如多机依次起飞、或裁判统一发令)。改回 true 后 udp_cmd_send <IP> start 照旧可用，
+//   收发两端代码都保留着，无需其它改动。
+//
+//   ★注意★：命令 2(二次起飞触发 CMD_TAKEOFF_AGAIN)与本开关无关，始终走 UDP 收，
+//   见 MISSION2_ENABLE 与 poll_udp_cmd() 里的状态门。
+// ---------------------------------------------------------------------------
+inline constexpr bool   START_CMD_REQUIRED = false;
+// 两声蜂鸣之间的间隔(s)：两次 arduino_send 各阻塞几十 ms，同一拍连发会糊成一声，
+//   听不出"响了两下"。隔开一点既好辨识，也不让主循环连续卡住。
+inline constexpr double BOOT_BEEP_GAP_S    = 0.6;
 
 
 // ---------------------------------------------------------------------------

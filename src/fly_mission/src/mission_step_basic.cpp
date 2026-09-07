@@ -74,14 +74,23 @@ bool FlyMissionNode::step_boot_check()
     //   ★不能每拍调 arduino_send★：一次阻塞几十 ms(5次×20ms)，50Hz 会拖垮主循环。
     if (!beep_sent_) {
         arduino_send("BEEP");
-        beep_sent_ = true;
-        RCLCPP_INFO(get_logger(),
-            "[启动] 飞控+雷达就绪，已响第一声 → 等启动指令 /mission/start (Int32 data=1)");
+        beep_sent_       = true;
+        beep_time_       = now();      // 记下时刻：给下面第二声隔开用
+        beep_time_valid_ = true;
+        if (params::START_CMD_REQUIRED) {
+            RCLCPP_INFO(get_logger(),
+                "[启动] 飞控+雷达就绪，已响第一声 → 等启动指令");
+        } else {
+            RCLCPP_INFO(get_logger(),
+                "[启动] 飞控+雷达就绪，已响第一声 → %.1fs 后补第二声(不需启动指令)",
+                params::BOOT_BEEP_GAP_S);
+        }
     }
 
-    // ── 等启动指令 ──：★收到一次即锁定★(start_recv_)，用户会 1s 1 次持续发防丢包，
-    //   重复发直接忽略。此时【尚未解锁、也还没到 OFFBOARD 检查】，桨不转，可安全长时间等。
-    if (!start_recv_) {
+    // ── 等启动指令 ──：★仅 START_CMD_REQUIRED=true 时才有这道门★。
+    //   ★收到一次即锁定★(start_recv_)，用户会 1s 1 次持续发防丢包，重复发直接忽略。
+    //   此时【尚未解锁、也还没到 OFFBOARD 检查】，桨不转，可安全长时间等。
+    if (params::START_CMD_REQUIRED && !start_recv_) {
         if (params::CMD_USE_UDP) {
             RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 3000,
                 "[启动] 等启动指令(UDP 端口 %d)：在另一台机器上跑 "
@@ -94,12 +103,25 @@ bool FlyMissionNode::step_boot_check()
         return false;
     }
 
-    // ── BEEP② ──：收到启动指令的确认音（同样只发一次）。响完这声就该由飞手拨 OFFBOARD。
+    // ── BEEP② ──：确认音（只发一次）。响完这声就该由飞手拨 OFFBOARD。
+    //   START_CMD_REQUIRED=true  → 含义是"收到启动指令了"，此处已放行，立即响。
+    //   START_CMD_REQUIRED=false → 含义是"自检全过"，等 BOOT_BEEP_GAP_S 让两声可辨。
+    //     ★这里 return false 是必须的★：本状态每拍都跑，不等够间隔就先别往下走，
+    //     否则会在第一声还没响完时就冲到 OFFBOARD 检查(虽不危险，但少了一声提示)。
     if (!beep2_sent_) {
+        if (!params::START_CMD_REQUIRED && beep_time_valid_ &&
+            (now() - beep_time_).seconds() < params::BOOT_BEEP_GAP_S) {
+            return false;                 // 间隔还没到，下一拍再看
+        }
         arduino_send("BEEP");
         beep2_sent_ = true;
-        RCLCPP_INFO(get_logger(),
-            "[启动] 已收到启动指令并响第二声 → 请拨 OFFBOARD，之后自动解锁起飞");
+        if (params::START_CMD_REQUIRED) {
+            RCLCPP_INFO(get_logger(),
+                "[启动] 已收到启动指令并响第二声 → 请拨 OFFBOARD，之后自动解锁起飞");
+        } else {
+            RCLCPP_INFO(get_logger(),
+                "[启动] 自检通过，已响两声 → 请拨 OFFBOARD，之后自动解锁起飞");
+        }
     }
 
     // 等飞手手动切到 OFFBOARD（此时 setpoint 占位流已经在发了）

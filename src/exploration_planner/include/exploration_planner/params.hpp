@@ -18,10 +18,10 @@ namespace params {
 //   例：起飞点世界 (-4,0)，10x10 场地世界 x,y ∈ [-5,5]
 //       → SLAM x ∈ [-5-(-4), 5-(-4)] = [-1, 9]，y ∈ [-5, 5]
 // ---------------------------------------------------------------------------
-inline constexpr double FIELD_MIN_X = -1.0;
-inline constexpr double FIELD_MIN_Y = -5.0;
-inline constexpr double FIELD_MAX_X =  7.0;
-inline constexpr double FIELD_MAX_Y =  5.0;
+inline constexpr double FIELD_MIN_X = -0.5;
+inline constexpr double FIELD_MIN_Y = -2.1;
+inline constexpr double FIELD_MAX_X =  4.8;
+inline constexpr double FIELD_MAX_Y =  2.3;
 
 // ★ 离墙安全内缩 (m) ★  ← 改这里
 //   牛耕车道/掉头点离四面墙至少留这么远，飞机绝不贴墙飞（防撞）。
@@ -43,7 +43,7 @@ inline constexpr double COVERAGE_THRESH = 0.90;   // 大格完成阈值（占比
 //   当前 100° → 半开角 ±50°
 // ---------------------------------------------------------------------------
 inline constexpr double FOV_DEG   = 100.0;   // 总开角 (度)
-inline constexpr double FOV_RANGE = 3.0;     // 可视半径 (m)
+inline constexpr double FOV_RANGE = 1.5;     // 可视半径 (m)
 
 // ---------------------------------------------------------------------------
 // 覆盖路径规划（牛耕往返）
@@ -63,7 +63,7 @@ inline constexpr double LANE_SPACING = 3.00;   // 相邻车道间距 (m)（旧�
 //   完程度达标后转归航 PD 刹停（见下方"完成判定+归航"）。
 // ---------------------------------------------------------------------------
 inline constexpr double REPLAN_PERIOD_S    = 0.20;  // 周期性重规划间隔 (s)，缩短→路线更跟手、减少视觉延后
-inline constexpr double REPLAN_DEV_M       = 0.20;  // 偏离当前轨迹超过此距离立即重规划 (m)，偏一点就重画
+inline constexpr double REPLAN_DEV_M       = 0.10;  // 偏离当前轨迹超过此距离立即重规划 (m)，偏一点就重画
 inline constexpr double FRONTIER_NEAR_W    = 1.40;  // ★邻近系数★：距离项权重，越大越优先去【最近】的未扫区域
 inline constexpr double FRONTIER_TURN_PEN  = 1.70;  // 选目标的转向代价 (m/rad)，越大越爱直行少掉头
 inline constexpr double FRONTIER_CLUSTER_W = 1.80;  // 未扫邻居加成 (m/个)，越大越优先大片未知区(别追孤格)
@@ -108,7 +108,7 @@ inline constexpr double ARC_SAMPLE_DS = 0.05;  // 沿弧长采样步长 (m)
 //   v_fwd 上限 0.8，跟随曲率动态降：v_fwd = V_MAX / (1 + K_CURV*|κ|)
 //   横向只做低限纠偏，主转向靠 yaw_rate
 // ---------------------------------------------------------------------------
-inline constexpr double V_MAX        = 0.50;   // 前进速度上限 (m/s)
+inline constexpr double V_MAX        = 0.40;   // 前进速度上限 (m/s)
 inline constexpr double V_MIN        = 0.00;   // 前进速度下限 (m/s)，防止过弯停死。
                                                //   ★当前为 0 = 该下限保护是空操作★(tracker 里那段 if 恒不生效)。
                                                //   若实测出现"过弯降速到几乎不动"，调到 0.05~0.10 即可启用兜底。
@@ -143,13 +143,13 @@ inline constexpr double V_EST_ALPHA  = 0.30;   // 位置差分估速度低通系
 //   覆盖率达标 → 进入"归航"：算法侧对到终点的位置误差跑 PD，平滑刹停，
 //   精确停在目标点（不再夹安全区）。停稳(到点+速度够小) → finished。
 // ---------------------------------------------------------------------------
-inline constexpr double DONE_COVERAGE   = 0.90;  // 完程度(已探索大格占比)达此值即"扫完"→归航
+inline constexpr double DONE_COVERAGE   = 0.70;  // 完程度(已探索大格占比)达此值即"扫完"→归航
 inline constexpr double GOAL_TOL_XY     = 0.10;  // 到终点位置容差 (m)，精确停所以收紧
 inline constexpr double GOAL_STOP_V     = 0.05;  // 停稳速度阈值 (m/s)，到点且慢于此才算停稳
 
 // 归航 PD（机体系输出 v_fwd/v_lat 直奔终点；D 项吃惯性 → 不冲过头）
 inline constexpr double KP_GOAL     = 1.20;   // 位置误差 → 速度的 P (1/s)
-inline constexpr double KD_GOAL     = 0.60;   // 速度阻尼 D（越大刹得越稳、越不冲）
+inline constexpr double KD_GOAL     = 0.80;   // 速度阻尼 D（越大刹得越稳、越不冲）
 inline constexpr double V_GOAL_MAX  = 0.60;   // 归航段速度上限 (m/s)，比巡航略低更好停
 
 // ---------------------------------------------------------------------------

@@ -15,7 +15,8 @@ namespace fly_mission {
 //  任务全部状态
 // ────────────────────────────────────────────────────────────────────────
 enum class MissionState {
-    BOOT_CHECK,                 // 检测：连接 + 雷达 → BEEP① → 等启动指令 → BEEP② → OFFBOARD + 解锁
+    BOOT_CHECK,                 // 检测：连接 + 雷达 → BEEP① → BEEP② → OFFBOARD + 解锁
+                                //   (中间那道"等启动指令"由 params::START_CMD_REQUIRED 控制，当前关)
     TAKEOFF,                    // 起飞到 1m
     WAIT_AFTER_TAKEOFF,
     EXPLORATION,
