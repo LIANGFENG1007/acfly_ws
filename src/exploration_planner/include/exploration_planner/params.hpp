@@ -23,6 +23,18 @@ inline constexpr double FIELD_MIN_Y = -2.1;
 inline constexpr double FIELD_MAX_X =  4.8;
 inline constexpr double FIELD_MAX_Y =  2.3;
 
+// ★整套运动控制方式★
+//   true  = 使用位置环控制运动目标；
+//   false = 使用原有速度环/速度指令控制方式。
+//   当前代码值决定默认模式，运行时也可通过 ROS 参数 use_position_control 覆盖。
+inline constexpr bool USE_POSITION_CONTROL = false;
+
+// ★自主探索·车式前进模式★（仅影响 exploration_planner 的轨迹跟踪）
+//   true  = 只给机体前向速度，航向偏差较大时先原地转向；不再用横向速度侧移。
+//   false = 保留旧的全向跟踪方式（允许 v_lat 横向纠偏）。
+//   这与 USE_POSITION_CONTROL 独立：无论位置环还是速度环，均可使用车式轨迹跟踪。
+inline constexpr bool EXPLORATION_CARLIKE_MODE = true;
+
 // ★ 离墙安全内缩 (m) ★  ← 改这里
 //   牛耕车道/掉头点离四面墙至少留这么远，飞机绝不贴墙飞（防撞）。
 //   墙根的格子不靠飞机走过去，而是靠 3m 视野"看"过去覆盖。
@@ -106,14 +118,16 @@ inline constexpr double ARC_SAMPLE_DS = 0.05;  // 沿弧长采样步长 (m)
 // ---------------------------------------------------------------------------
 // 轨迹跟踪 + PID（机体系输出：前进 v_fwd / 横向纠偏 v_lat / yaw_rate）
 //   v_fwd 上限 0.8，跟随曲率动态降：v_fwd = V_MAX / (1 + K_CURV*|κ|)
-//   横向只做低限纠偏，主转向靠 yaw_rate
+//   全向模式横向只做低限纠偏；车式模式由 EXPLORATION_CARLIKE_MODE 强制关闭横移，主转向靠 yaw_rate
 // ---------------------------------------------------------------------------
 inline constexpr double V_MAX        = 0.40;   // 前进速度上限 (m/s)
 inline constexpr double V_MIN        = 0.00;   // 前进速度下限 (m/s)，防止过弯停死。
                                                //   ★当前为 0 = 该下限保护是空操作★(tracker 里那段 if 恒不生效)。
                                                //   若实测出现"过弯降速到几乎不动"，调到 0.05~0.10 即可启用兜底。
 inline constexpr double K_CURV       = 0.40;   // 曲率降速系数（越大过弯越慢）。1.0→0.4:绕障弧κ≈2时 v 从0.167提到0.28,过弯快约1.7倍;偏切外就往回调
+inline constexpr double CARLIKE_K_CURV = 0.80; // 车式模式曲率降速：弯道先减速，给转向和障碍留余量
 inline constexpr double LOOKAHEAD    = 0.40;   // pure-pursuit 前瞻距离 (m)
+inline constexpr double CARLIKE_LOOKAHEAD = 0.60; // 车式模式前瞻(m)：提前对准弯道，减少临近障碍才转向
 inline constexpr double ENDPOINT_SLOW_R = 0.50;// 距终点此半径内开始线性降速 (m)
 
 inline constexpr double KP_YAW       = 1.60;   // 朝向误差 → yaw_rate 的 P
@@ -130,7 +144,11 @@ inline constexpr double MAX_YAW_RATE = 1.80;   // yaw_rate 限幅 (rad/s)
 //   机头到目标方向的偏差 |e_yaw| > HEADING_GATE_DEG → 前进+横向全清零,只转 yaw_rate(原地转身);
 //   阈值内用 cos(e_yaw) 平滑门控(乘到前进和横向上)。正常巡航 e_yaw 很小≈不影响,只大角度才压。
 //   ★前进和横向都乘这个门(关键)★:光压前进不压横向,飞机仍会沿线法向侧移甩出去。
-inline constexpr double HEADING_GATE_DEG = 65.0; // 机头偏离超此角度则原地转身(度)。调小→更早原地转更稳;调大→更敢边转边走
+inline constexpr double HEADING_GATE_DEG = 65.0; // 全向模式门限：机头偏离超此角度则原地转身(度)
+inline constexpr double CARLIKE_HEADING_GATE_DEG = 18.0; // 车式模式门限：超过此角度只转向、不前进
+inline constexpr double CARLIKE_TURN_BLEND_M = 0.80; // 换线过渡长度(m)：当前方向到下一条线用 Bézier 丝滑衔接
+inline constexpr double CARLIKE_TURN_BLEND_ANGLE_DEG = 15.0; // 转角小于此值不额外插入过渡段
+inline constexpr int    CARLIKE_TURN_BLEND_SAMPLES = 12; // Bézier 过渡段采样点数
 
 inline constexpr double KP_LAT       = 0.80;   // 横向偏差 → v_lat 的 P
 inline constexpr double KD_LAT       = 0.04;   // v_lat 的 D（口径修正后的真实值，等价于旧 0.10@dt=0.05，见上方 KD_YAW 说明）
@@ -217,12 +235,11 @@ inline constexpr int OBS_GHOST_CLEAR_FRAMES = 25;    // 视野内连续无命中
 //         过不去(被围死)直接返回无解 → 探索放弃该区跳带；POI/终点(必达)报警+悬停。
 // ===========================================================================
 inline constexpr double GLOBAL_CELL      = 0.04;  // A* 搜索栅格分辨率(m)：越小越贴墙/钻窄缝但越慢
-inline constexpr double GLOBAL_MARGIN    = 0.30;  // 障碍额外安全余量(m)：障碍禁入半径 = 障碍r + ROBOT_RADIUS + 此值。
-                                                  //   飞机【边缘】离障碍【边缘】的物理余量就是此值。2026-07 按需求定 0.30(飞机边缘距杆≥30cm)。
+inline constexpr double GLOBAL_MARGIN    = 0.30;  // 障碍额外安全余量(m)：禁入半径 = 障碍r + ROBOT_RADIUS + 此值。
+                                                  //   飞机中心到障碍物外表面的实际最小距离
+                                                  //   = ROBOT_RADIUS(0.30) + GLOBAL_MARGIN(0.30) = 0.60m。
                                                   //   ★越大越早远绕越不贴障碍,但太大会把"柱墙之间的缝"吃掉→墙边柱子绕不过去★。
-                                                  //   2026-06-04 曾因 0.3 致墙边卡死(缝被吃→A*无解→面墙卡住)，靠"后退避墙(RETREAT_*)+A*起点突围(relax)"
-                                                  //   修复后当时回调 0.2。现重设 0.3=用户安全硬指标：真机杆间距若不足则宁可卡死报警也不贴撞；
-                                                  //   墙边柱风险仍靠 RETREAT_* + relax 兜底。若墙边频繁卡死→优先降 GLOBAL_WALL_MARGIN，不要降此值。
+                                                  //   真机杆间距若不足则宁可卡死报警也不贴撞；墙边柱风险靠 RETREAT_* + relax 兜底。
 inline constexpr double GLOBAL_WALL_MARGIN = 0.60;// 离墙安全距离(m)：cell 中心距任一场地边界<此值即禁入。
                                                   //   2026-06-04 0.80→0.60：原 0.8 偏宽,墙边柱子时把"柱墙之间能过的缝"吃掉→A*判无解、飞机
                                                   //   转头面向墙卡死。0.6 物理离墙余量=0.6-ROBOT_RADIUS(0.30)=0.30m 仍绝不撞墙；且 <WALL_MARGIN(1.0)

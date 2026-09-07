@@ -4,7 +4,7 @@
 //  输入：参考轨迹 + 当前位姿(x,y,yaw) + 当前估计速度(用于 D 项)。
 //  输出：机体系速度命令 —— 前进 v_fwd / 横向纠偏 v_lat / yaw_rate。
 //    v_fwd 上限 V_MAX，按曲率/朝向误差/临近终点动态降速；
-//    yaw_rate 为主转向（把机头拉向切线）；v_lat 仅低限纠偏。
+//    yaw_rate 为主转向；车式模式下 v_lat 强制为 0，只沿机头前向行驶。
 // ============================================================================
 
 #pragma once
@@ -21,6 +21,7 @@ struct TrackerGains {
     double kp_yaw, kd_yaw, max_yaw_rate;
     double kp_lat, kd_lat, max_v_lat;
     double heading_gate_rad;   // 机头偏离超此角度→前进+横向全清零,只原地转身(防大角度甩出线外撞柱)
+    bool   forward_only = false; // 车式模式：只允许机体前向速度，禁止横向侧移
     // ★控制周期 (s)★：D 项数值差分的分母。★必须等于 update() 的真实调用周期★
     //   (= TIMER_PERIOD_MS/1000)，由节点构造时按 TIMER_PERIOD_MS 推导填入，勿写死。
     //   2026-08 修：此前 tracker 内写死 0.05 而实际周期是 0.02，微分项恒为真值的 0.4 倍

@@ -13,6 +13,8 @@
 
 #include <nlohmann/json.hpp>
 #include <chrono>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2/LinearMath/Matrix3x3.h>
 
 namespace fly_mission {
 
@@ -34,6 +36,25 @@ FlyMissionNode::FlyMissionNode()
             ext_yaw_rate_  = msg->twist.angular.z;
             ext_cmd_valid_ = true;
             ext_cmd_time_  = now();   // ★收到时刻★：给 exploration() 判新鲜度用(见那里说明)
+        });
+
+    // 自主探索位置环目标。位置目标只在 EXPLORATION 状态被消费，不影响其他任务。
+    target_pose_sub_ = create_subscription<geometry_msgs::msg::PoseStamped>(
+        "/exploration/target_pose", 10,
+        [this](const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
+            explore_pos_x_ = msg->pose.position.x;
+            explore_pos_y_ = msg->pose.position.y;
+            explore_pos_z_ = msg->pose.position.z;
+            const auto& q = msg->pose.orientation;
+            const double n = q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w;
+            if (n > 1e-9) {
+                tf2::Quaternion tq(q.x, q.y, q.z, q.w);
+                tf2::Matrix3x3 m(tq);
+                double roll, pitch;
+                m.getRPY(roll, pitch, explore_pos_yaw_);
+            }
+            explore_pos_valid_ = true;
+            explore_pos_time_ = now();
         });
 
     // 算法 → 主控：探索完成标志（latched）

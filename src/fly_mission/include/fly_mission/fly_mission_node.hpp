@@ -40,6 +40,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/twist_stamped.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/point_stamped.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/int32.hpp>   // 任务启动指令 /mission/start
@@ -173,12 +174,19 @@ private:
 
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Subscription<geometry_msgs::msg::TwistStamped>::SharedPtr cmd_sub_;
+    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr  target_pose_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr             finished_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr            start_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr             trigger_sub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr           cv_sub_;
     rclcpp::CallbackGroup::SharedPtr                                 cv_cbg_;
     rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr    goal_pub_;
+
+    // 自主探索位置环目标（仅 EXPLORATION 使用）
+    double explore_pos_x_ = 0.0, explore_pos_y_ = 0.0;
+    double explore_pos_z_ = 0.0, explore_pos_yaw_ = 0.0;
+    bool   explore_pos_valid_ = false;
+    rclcpp::Time explore_pos_time_;
 
     MissionState state_ = MissionState::BOOT_CHECK;
     MissionState state_before_find_ = MissionState::RUN_EXT_WAYPOINTS;  // 进 FINDFIGURE 前的状态(处理完回它)

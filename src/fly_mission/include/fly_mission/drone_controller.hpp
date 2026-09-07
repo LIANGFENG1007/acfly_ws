@@ -31,6 +31,7 @@ enum class ActionMode {
     TURN_YAW,    // 转头到目标 yaw
     CIRCLE,      // 绕前方圆心做圆周运动（机头始终朝圆心）
     EXTERNAL_VEL,// 外部算法直接给机体系速度（探索）
+    EXTERNAL_POS,// 自主探索位置目标（仅探索）
     LAND         // 请求 AUTO.LAND等触底
 };
 
@@ -82,6 +83,9 @@ public:
     void enter_exploration();
     // 算法每拍调用：缓存机体系速度命令（前进 / 横向纠偏 / yaw_rate）+ 时间戳
     void set_velocity_body(double v_fwd, double v_lat, double yaw_rate);
+    // 自主探索位置环：目标为飞机 SLAM/camera_init 系坐标，yaw 单位为弧度。
+    void enter_exploration_position();
+    void set_exploration_position_slam(double x, double y, double z, double yaw);
 
     // ====================================================================
     //   状态查询
@@ -240,6 +244,12 @@ private:
     rclcpp::Time ext_cmd_time_;         // 最近一次收到速度的时间（看门狗用）
     bool         ext_valid_    = false; // 是否已收到过速度命令
     double       explore_z_    = 0.0;   // 进入探索时锁定的保持高度 (slam z)
+
+    // ---- 外部位置（EXTERNAL_POS：自主探索位置环）----
+    double       ext_pos_x_ = 0.0, ext_pos_y_ = 0.0;
+    double       ext_pos_z_ = 0.0, ext_pos_yaw_ = 0.0;
+    rclcpp::Time ext_pos_cmd_time_;
+    bool         ext_pos_valid_ = false;
 
     // ---- 圆周运动状态（description_circle_right）----
     // 闭环画圆：每拍用飞机实际位置算当前角，目标点放在前方一点的圆上，

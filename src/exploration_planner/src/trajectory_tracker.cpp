@@ -78,8 +78,14 @@ VelCmd TrajectoryTracker::update(double px, double py, double yaw,
     last_look_ = ref.p;
 
     // 3) 误差
-    // 朝向误差：机头 → 前瞻点切线方向
-    const double e_yaw = wrap_pi(ref.theta - yaw);
+    // 朝向误差：普通模式跟踪轨迹切线；车式模式跟踪“当前位置→前瞻点”的方位。
+    double desired_theta = ref.theta;
+    if (g_.forward_only) {
+        const double lx = ref.p.x - px;
+        const double ly = ref.p.y - py;
+        if (std::hypot(lx, ly) > 1e-6) desired_theta = std::atan2(ly, lx);
+    }
+    const double e_yaw = wrap_pi(desired_theta - yaw);
 
     // 横向偏差：当前点相对最近点切线的带符号垂距
     const TrajPoint& np = traj_[near];
@@ -111,8 +117,13 @@ VelCmd TrajectoryTracker::update(double px, double py, double yaw,
         (std::fabs(e_yaw) > g_.heading_gate_rad) ? 0.0 : std::max(0.0, std::cos(e_yaw));
 
     // v_lat：横向纠偏（注意符号：飞机在轨迹左侧 e_ct>0，应向右移即机体 -y）
-    cmd.v_lat = clamp_abs(-(g_.kp_lat * e_ct + g_.kd_lat * de_ct), g_.max_v_lat);
-    cmd.v_lat *= head_gate;   // ★关键★:不压横向则飞机仍沿线法向侧移甩出去
+    if (g_.forward_only) {
+        // 车式模式严格禁止横移，避免目标在左/右前方时斜飞。
+        cmd.v_lat = 0.0;
+    } else {
+        cmd.v_lat = clamp_abs(-(g_.kp_lat * e_ct + g_.kd_lat * de_ct), g_.max_v_lat);
+        cmd.v_lat *= head_gate;
+    }
     (void)v_lat_est;
 
     // v_fwd：曲率前馈降速 + 朝向门控降速 + 临近终点斜坡降速

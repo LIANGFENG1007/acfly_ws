@@ -302,6 +302,21 @@ void DroneController::tick()
         return;
     }
 
+    // EXTERNAL_POS：自主探索位置环。规划器给 SLAM 位置目标，直接发布位置
+    // setpoint，由飞控位置环跟踪；目标超时则锁定当前位置，避免追旧目标。
+    if (action_mode_ == ActionMode::EXTERNAL_POS) {
+        const double age = ext_pos_valid_ ? (node_->now() - ext_pos_cmd_time_).seconds() : 1e9;
+        if (age > 0.5) {
+            ext_pos_x_ = current_pose_.pose.position.x;
+            ext_pos_y_ = current_pose_.pose.position.y;
+            ext_pos_z_ = explore_z_;
+            ext_pos_yaw_ = current_yaw();
+        }
+        publish_position_setpoint(ext_pos_x_, ext_pos_y_, ext_pos_z_, ext_pos_yaw_);
+        log_progress();
+        return;
+    }
+
     // ★★★ 起飞段位置环("打点上去")★★★
     //   只在起飞段生效：takeoff() 置 takeoff_pos_mode_，状态机在起飞后悬停稳定时调
     //   exit_takeoff_position_mode() 关掉 → 之后所有动作恢复速度环 PD(逐位同改动前)。
@@ -353,6 +368,7 @@ void DroneController::log_progress()
         case ActionMode::TURN_YAW: tag = "[转向]"; break;
         case ActionMode::CIRCLE:   tag = "[环绕]"; break;
         case ActionMode::EXTERNAL_VEL: tag = "[探索]"; break;
+        case ActionMode::EXTERNAL_POS: tag = "[探索位置环]"; break;
         case ActionMode::HOLD:     tag = "[悬停]"; break;
         case ActionMode::LAND:     tag = "[降落]"; break;
         case ActionMode::IDLE:     return;
@@ -637,6 +653,10 @@ bool DroneController::is_reached_tol(double tol_xy) const
         // 探索是否结束由算法的 /exploration/finished 决定，drone_ 自身不判定
         return false;
 
+    case ActionMode::EXTERNAL_POS:
+        // 探索是否结束由算法的 /exploration/finished 决定，drone_ 自身不判定
+        return false;
+
     case ActionMode::TURN_YAW: {
         // yaw 类：yaw 误差 + 持续 SETTLE_DURATION_YAW 秒
         const double err = std::abs(wrap_pi(target_yaw_ - current_yaw()));
@@ -721,6 +741,15 @@ std::string DroneController::progress_string() const
         std::snprintf(buf, sizeof(buf),
                       "v_fwd %.2f v_lat %.2f yr %.2f  高度 %.2fm",
                       ext_v_fwd_, ext_v_lat_, ext_yaw_rate_, rel_h);
+        break;
+    }
+
+    case ActionMode::EXTERNAL_POS: {
+        const double rel_h = cz - home_z_;
+        const double dx = ext_pos_x_ - cx, dy = ext_pos_y_ - cy;
+        const double eyaw = wrap_pi(ext_pos_yaw_ - current_yaw()) * 180.0 / M_PI;
+        std::snprintf(buf, sizeof(buf), "目标 dx%.2f dy%.2f yaw误差%.1f° 高度 %.2fm",
+                      dx, dy, eyaw, rel_h);
         break;
     }
 
@@ -1256,6 +1285,31 @@ void DroneController::set_velocity_body(double v_fwd, double v_lat, double yaw_r
     ext_yaw_rate_ = yaw_rate;
     ext_cmd_time_ = node_->now();
     ext_valid_    = true;
+}
+
+void DroneController::enter_exploration_position()
+{
+    explore_z_ = current_pose_.pose.position.z;
+    ext_pos_x_ = current_pose_.pose.position.x;
+    ext_pos_y_ = current_pose_.pose.position.y;
+    ext_pos_z_ = explore_z_;
+    ext_pos_yaw_ = current_yaw();
+    ext_pos_valid_ = false;
+    reset_for_new_action(settle_valid_, wait_active_);
+    action_mode_ = ActionMode::EXTERNAL_POS;
+}
+
+void DroneController::set_exploration_position_slam(double x, double y, double z, double yaw)
+{
+    if (action_mode_ != ActionMode::EXTERNAL_POS) {
+        enter_exploration_position();
+    }
+    ext_pos_x_ = x;
+    ext_pos_y_ = y;
+    ext_pos_z_ = z;
+    ext_pos_yaw_ = yaw;
+    ext_pos_cmd_time_ = node_->now();
+    ext_pos_valid_ = true;
 }
 
 // ============================================================================

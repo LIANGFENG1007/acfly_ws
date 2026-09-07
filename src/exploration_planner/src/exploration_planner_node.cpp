@@ -7,6 +7,7 @@
 //  发布：
 //    /exploration/cmd_vel (geometry_msgs/TwistStamped) 机体系速度 50Hz
 //                          linear.x=前进 v_fwd, linear.y=横向纠偏 v_lat, angular.z=yaw_rate
+//    /exploration/target_pose (geometry_msgs/PoseStamped) 自主探索位置环目标(开关开启时)
 //    /exploration/finished(std_msgs/Bool, latched) 扫完且到终点 → true
 //
 //  流程：收到 goal → 动态前沿覆盖选点 → A* 绕障 → 平滑 → 轨迹跟踪逐拍发速度；
@@ -18,6 +19,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/point_stamped.hpp>
 #include <geometry_msgs/msg/twist_stamped.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
@@ -33,6 +35,7 @@
 #include <deque>
 #include <memory>
 #include <mutex>
+#include <limits>
 #include <thread>
 #include <unordered_set>
 
@@ -57,10 +60,14 @@ public:
     {
         // ---- 参数 ----
         auto dd = [this](const std::string& n, double v) { return this->declare_parameter<double>(n, v); };
+        carlike_mode_ = declare_parameter<bool>(
+            "exploration_carlike_mode", params::EXPLORATION_CARLIKE_MODE);
         gcfg_.min_x = dd("field_min_x", params::FIELD_MIN_X);
         gcfg_.min_y = dd("field_min_y", params::FIELD_MIN_Y);
         gcfg_.max_x = dd("field_max_x", params::FIELD_MAX_X);
         gcfg_.max_y = dd("field_max_y", params::FIELD_MAX_Y);
+        use_position_control_ = declare_parameter<bool>(
+            "use_position_control", params::USE_POSITION_CONTROL);
         gcfg_.big_cell        = dd("big_cell", params::BIG_CELL);
         gcfg_.small_cell      = dd("small_cell", params::SMALL_CELL);
         gcfg_.coverage_thresh = dd("coverage_thresh", params::COVERAGE_THRESH);
@@ -74,8 +81,8 @@ public:
 
         gains_.v_max           = dd("v_max", params::V_MAX);
         gains_.v_min           = dd("v_min", params::V_MIN);
-        gains_.k_curv          = dd("k_curv", params::K_CURV);
-        gains_.lookahead       = dd("lookahead", params::LOOKAHEAD);
+        gains_.k_curv          = dd("k_curv", carlike_mode_ ? params::CARLIKE_K_CURV : params::K_CURV);
+        gains_.lookahead       = dd("lookahead", carlike_mode_ ? params::CARLIKE_LOOKAHEAD : params::LOOKAHEAD);
         gains_.endpoint_slow_r = dd("endpoint_slow_r", params::ENDPOINT_SLOW_R);
         gains_.kp_yaw          = dd("kp_yaw", params::KP_YAW);
         gains_.kd_yaw          = dd("kd_yaw", params::KD_YAW);
@@ -84,7 +91,14 @@ public:
         gains_.kd_lat          = dd("kd_lat", params::KD_LAT);
         gains_.max_v_lat       = dd("max_v_lat", params::MAX_V_LAT);
         gains_.heading_gate_rad =
-            dd("heading_gate_deg", params::HEADING_GATE_DEG) * M_PI / 180.0;
+            dd("heading_gate_deg",
+               carlike_mode_ ? params::CARLIKE_HEADING_GATE_DEG : params::HEADING_GATE_DEG) * M_PI / 180.0;
+        gains_.forward_only = carlike_mode_;
+        turn_blend_m_ = dd("carlike_turn_blend_m", params::CARLIKE_TURN_BLEND_M);
+        turn_blend_min_angle_rad_ =
+            dd("carlike_turn_blend_angle_deg", params::CARLIKE_TURN_BLEND_ANGLE_DEG) * M_PI / 180.0;
+        turn_blend_samples_ = static_cast<int>(std::lround(
+            dd("carlike_turn_blend_samples", static_cast<double>(params::CARLIKE_TURN_BLEND_SAMPLES))));
         // D 项差分周期 = 主循环真实周期。★与 timer 同源推导★，勿写死常数(见 TrackerGains::dt)。
         gains_.dt = params::TIMER_PERIOD_MS / 1000.0;
 
@@ -191,6 +205,8 @@ public:
 
         // ---- ROS 接口 ----
         cmd_pub_ = create_publisher<geometry_msgs::msg::TwistStamped>("/exploration/cmd_vel", 10);
+        target_pose_pub_ = create_publisher<geometry_msgs::msg::PoseStamped>(
+            "/exploration/target_pose", 10);
 
         rclcpp::QoS latched(1);
         latched.transient_local();
@@ -234,9 +250,10 @@ public:
         retreat_start_  = now();   // 占位初始化；真正的起点在 do_retreat 首次进入时记
 
         RCLCPP_INFO(get_logger(),
-            "exploration_planner 已启动 (场地 %.1fx%.1fm, 大格 %.2fm, 小格 %.2fm, 动态前沿覆盖)",
+            "exploration_planner 已启动 (场地 %.1fx%.1fm, 大格 %.2fm, 小格 %.2fm, 动态前沿覆盖, 跟踪=%s)",
             gcfg_.max_x - gcfg_.min_x, gcfg_.max_y - gcfg_.min_y,
-            gcfg_.big_cell, gcfg_.small_cell);
+            gcfg_.big_cell, gcfg_.small_cell,
+            carlike_mode_ ? "车式前进" : "全向");
     }
 
     bool viz_enabled() const { return viz_; }
@@ -421,8 +438,29 @@ private:
     //   需在持有 mtx_ 时调用。
     void adopt_explore_path(const GlobalResult& gr, const Vec2& scan_target)
     {
-        explore_raw_            = gr.path;                       // 裸折线(供下拍 path_clear 校验)
-        traj_                   = smooth_catmull_rom(gr.path, arc_ds_);
+        // 新目标换线时保留上一条路径的末端方向，在当前点与新 A* 路段之间
+        // 插入一段经过碰撞校验的 Bézier 过渡。这样下一条直线不会从飞机侧后方
+        // 突然接入，车式跟踪器可以先转弯再顺滑进入新线。
+        const Obstacles transition_obs = obs_map_->snapshot();
+        const Path2 blended = blend_explore_transition(gr.path, transition_obs);
+        explore_raw_            = blended;                       // 裸折线/采样折线(供下拍 path_clear 校验)
+        const Trajectory smooth_traj = smooth_catmull_rom(blended, arc_ds_);
+        Path2 smooth_points;
+        smooth_points.reserve(smooth_traj.size());
+        for (const auto& tp : smooth_traj) smooth_points.push_back(tp.p);
+
+        // Catmull-Rom 可能在急弯处向障碍内侧切入；最终执行轨迹也必须满足同一
+        // 安全口径。若平滑轨迹不安全，退回已经逐段校验过的采样折线。
+        bool smooth_safe = smooth_points.size() >= 2 && path_inside_safe_field(smooth_points);
+        if (smooth_safe) smooth_safe = path_clear(blended.front(), smooth_points, transition_obs, ggcfg_);
+        if (smooth_safe) {
+            traj_ = smooth_traj;
+        } else {
+            traj_ = make_polyline_trajectory(blended);
+            RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1500,
+                "平滑轨迹切入安全区 → 退回安全折线跟踪(障碍外表面余量 %.2fm)",
+                ggcfg_.inflate + ggcfg_.robot_radius);
+        }
         explore_failed_         = false;
         explore_has_committed_  = true;
         explore_target_         = scan_target;
@@ -430,6 +468,131 @@ private:
         plan_pending_           = false;
         last_plan_time_         = now();
         has_unreachable_marker_ = false;                         // 又有路了 → 撤红叉
+    }
+
+    // 检查轨迹采样点是否都在四面墙的安全内缩区域内。
+    bool path_inside_safe_field(const Path2& path) const
+    {
+        const double xlo = ggcfg_.min_x + ggcfg_.wall_margin;
+        const double xhi = ggcfg_.max_x - ggcfg_.wall_margin;
+        const double ylo = ggcfg_.min_y + ggcfg_.wall_margin;
+        const double yhi = ggcfg_.max_y - ggcfg_.wall_margin;
+        for (const auto& p : path) {
+            if (p.x < xlo || p.x > xhi || p.y < ylo || p.y > yhi) return false;
+        }
+        return true;
+    }
+
+    // 把已经碰撞校验过的折线转换成 tracker 可用的轨迹，作为平滑曲线不安全时的兜底。
+    Trajectory make_polyline_trajectory(const Path2& path) const
+    {
+        Trajectory out;
+        if (path.empty()) return out;
+
+        Path2 clean;
+        clean.reserve(path.size());
+        for (const auto& p : path) {
+            if (clean.empty() || std::hypot(p.x - clean.back().x, p.y - clean.back().y) > 1e-6)
+                clean.push_back(p);
+        }
+        if (clean.empty()) return out;
+
+        out.resize(clean.size());
+        double s = 0.0;
+        for (size_t i = 0; i < clean.size(); ++i) {
+            if (i > 0) s += std::hypot(clean[i].x - clean[i - 1].x,
+                                       clean[i].y - clean[i - 1].y);
+            out[i].p = clean[i];
+            out[i].s = s;
+            out[i].kappa = 0.0;
+            const size_t ia = (i == 0) ? 0 : i - 1;
+            const size_t ib = (i + 1 < clean.size()) ? i + 1 : i;
+            out[i].theta = std::atan2(clean[ib].y - clean[ia].y,
+                                      clean[ib].x - clean[ia].x);
+        }
+        return out;
+    }
+
+    // 给一条新 A* 路径补“当前方向→新路方向”的 Bézier 过渡。
+    // 返回的仍是折线采样点，path_clear() 会逐段检查障碍；任何不安全或几何退化
+    // 都直接返回原 A* 路径，安全优先。
+    Path2 blend_explore_transition(const Path2& path, const Obstacles& obs)
+    {
+        if (!carlike_mode_ || path.size() < 2 || turn_blend_m_ <= 0.0)
+            return path;
+
+        const Vec2 p0 = path.front();
+        const Vec2 p3 = path[1];
+        const double d03 = std::hypot(p3.x - p0.x, p3.y - p0.y);
+        if (d03 < 1e-3) return path;
+
+        auto normalize = [](Vec2 v) {
+            const double n = std::hypot(v.x, v.y);
+            if (n < 1e-9) return Vec2{1.0, 0.0};
+            return Vec2{v.x / n, v.y / n};
+        };
+
+        // 当前方向优先取旧承诺路径在飞机附近的切线；没有旧路径时用实际机头方向。
+        Vec2 old_dir{std::cos(yaw_), std::sin(yaw_)};
+        if (explore_has_committed_ && explore_raw_.size() >= 2) {
+            size_t best_i = 0;
+            double best_d2 = std::numeric_limits<double>::infinity();
+            for (size_t i = 0; i + 1 < explore_raw_.size(); ++i) {
+                const Vec2 a = explore_raw_[i], b = explore_raw_[i + 1];
+                const double vx = b.x - a.x, vy = b.y - a.y;
+                const double vv = vx * vx + vy * vy;
+                const double t = (vv > 1e-9)
+                    ? std::clamp(((px_ - a.x) * vx + (py_ - a.y) * vy) / vv, 0.0, 1.0)
+                    : 0.0;
+                const double qx = a.x + t * vx, qy = a.y + t * vy;
+                const double dx = px_ - qx, dy = py_ - qy;
+                const double d2 = dx * dx + dy * dy;
+                if (d2 < best_d2) { best_d2 = d2; best_i = i; }
+            }
+            old_dir = normalize({explore_raw_[best_i + 1].x - explore_raw_[best_i].x,
+                                 explore_raw_[best_i + 1].y - explore_raw_[best_i].y});
+        }
+
+        // 新方向取过渡终点之后的 A* 段方向；只有两点时退化为指向终点方向。
+        Vec2 new_dir = normalize({p3.x - p0.x, p3.y - p0.y});
+        if (path.size() >= 3) {
+            new_dir = normalize({path[2].x - p3.x, path[2].y - p3.y});
+        }
+
+        const double dot = std::clamp(old_dir.x * new_dir.x + old_dir.y * new_dir.y, -1.0, 1.0);
+        const double angle = std::acos(dot);
+        if (angle < turn_blend_min_angle_rad_) return path;
+
+        // 控制柄长度受当前第一段和下一段长度约束，避免短段过冲。
+        const double next_len = (path.size() >= 3)
+            ? std::hypot(path[2].x - p3.x, path[2].y - p3.y) : d03;
+        const double handle = std::min(turn_blend_m_, std::min(d03 * 0.45, next_len * 0.45));
+        if (handle < 0.05) return path;
+
+        const Vec2 c1{p0.x + old_dir.x * handle, p0.y + old_dir.y * handle};
+        const Vec2 c2{p3.x - new_dir.x * handle, p3.y - new_dir.y * handle};
+
+        const int samples = std::max(4, turn_blend_samples_);
+        Path2 blended;
+        blended.reserve(static_cast<size_t>(samples) + path.size());
+        blended.push_back(p0);
+        for (int k = 1; k <= samples; ++k) {
+            const double t = static_cast<double>(k) / samples;
+            const double u = 1.0 - t;
+            const double w0 = u * u * u;
+            const double w1 = 3.0 * u * u * t;
+            const double w2 = 3.0 * u * t * t;
+            const double w3 = t * t * t;
+            blended.push_back({
+                w0 * p0.x + w1 * c1.x + w2 * c2.x + w3 * p3.x,
+                w0 * p0.y + w1 * c1.y + w2 * c2.y + w3 * p3.y});
+        }
+        for (size_t i = 2; i < path.size(); ++i) blended.push_back(path[i]);
+
+        // 墙边也要检查：A* 原始路径考虑了墙，过渡曲线不能切出安全区。
+        if (!path_inside_safe_field(blended)) return path;
+        if (!path_clear(p0, blended, obs, ggcfg_)) return path;
+        return blended;
     }
 
     // 进入【原地转身找解】：锥内无解但无锥 probe 有解(=有路只是不在机头方向)时调用。
@@ -1042,6 +1205,36 @@ private:
 
         cmd_pub_->publish(cmd);
 
+        // 位置环模式：发布当前轨迹前瞻点(作为 SLAM 位置目标)。速度话题仍继续发布，
+        // 便于关闭位置环时无缝退回原有速度控制链。
+        if (use_position_control_) {
+            geometry_msgs::msg::PoseStamped target;
+            target.header.stamp = cmd.header.stamp;
+            target.header.frame_id = "camera_init";
+            double pxc, pyc, yawc, tx, ty;
+            bool look_valid;
+            {
+                std::lock_guard<std::mutex> lk(mtx_);
+                pxc = px_; pyc = py_; yawc = yaw_;
+                tx = last_look_.x; ty = last_look_.y;
+                look_valid = look_valid_;
+            }
+            target.pose.position.x = look_valid ? tx : pxc;
+            target.pose.position.y = look_valid ? ty : pyc;
+            target.pose.position.z = 0.0;  // fly_mission 收到后替换为当前锁定高度
+            double target_yaw = yawc;
+            const double dx = target.pose.position.x - pxc;
+            const double dy = target.pose.position.y - pyc;
+            if (std::hypot(dx, dy) > 1e-6) target_yaw = std::atan2(dy, dx);
+            tf2::Quaternion q;
+            q.setRPY(0.0, 0.0, target_yaw);
+            target.pose.orientation.x = q.x();
+            target.pose.orientation.y = q.y();
+            target.pose.orientation.z = q.z();
+            target.pose.orientation.w = q.w();
+            target_pose_pub_->publish(target);
+        }
+
         // rviz 可视化：处理后障碍点云(每拍) + 设定边界框(首拍一次)。都在锁外，不阻塞主循环。
         publish_obstacle_cloud();
         if (!boundary_sent_) { publish_field_boundary(); boundary_sent_ = true; }
@@ -1101,6 +1294,11 @@ private:
 
     // ---- 配置 / 模块 ----
     GridConfig    gcfg_;
+    bool          use_position_control_ = params::USE_POSITION_CONTROL;
+    bool          carlike_mode_ = params::EXPLORATION_CARLIKE_MODE;
+    double        turn_blend_m_ = params::CARLIKE_TURN_BLEND_M;
+    double        turn_blend_min_angle_rad_ = params::CARLIKE_TURN_BLEND_ANGLE_DEG * M_PI / 180.0;
+    int           turn_blend_samples_ = params::CARLIKE_TURN_BLEND_SAMPLES;
     TrackerGains  gains_;
     FrontierConfig fcfg_;
     double        lane_spacing_;       // 旧牛耕车道间距：已不参与任何计算(见构造里说明)，保留仅为参数表兼容
@@ -1140,6 +1338,7 @@ private:
 
     // ---- ROS ----
     rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr cmd_pub_;
+    rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr target_pose_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr              finished_pub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr    obs_cloud_pub_;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr  boundary_pub_;
