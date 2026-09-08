@@ -38,8 +38,17 @@
 //    16     double    x         (SLAM/camera_init 系, m)
 //    24     double    y
 //    32     double    z
-//    40     double    yaw       (rad, SLAM 系)
-//    48     16B       保留
+//    40     double    yaw       (rad, SLAM 系)  ★仅此角是弧度★
+//    48     double    roll_deg  (度, SLAM 系)
+//    56     double    pitch_deg (度, SLAM 系)
+//    ★符号按 ROS FLU 机体系(x前 y左 z上)右手定则，非航空惯例★：
+//      roll  绕 x 轴，右翼下沉为正；pitch 绕 y 轴，【机头下压为正】(抬头是负,
+//      与飞控/航空习惯相反)；两者范围 ±180/±90 度。真机务必先看一眼实测符号。
+//    ★roll/pitch 用【度】而非弧度：视觉端直接拿来用，不再自己换算——单位不同故
+//      带 _deg 后缀，任何一端漏乘 180/π 都会立刻在变量名上露出来。
+//      yaw 保持弧度不动：视觉 location_to_world 里直接进 sin/cos，改单位要动下游。
+//    ★保留区已用尽★：再加字段必须扩 POSE_SHM_SIZE，且要先删掉旧的
+//      /dev/shm/uav_pose_out 文件(ftruncate 变大对已 mmap 的读端不生效，会 SIGBUS)
 // ============================================================================
 
 #include <cstdint>
@@ -149,7 +158,7 @@ private:
 };
 
 // ============================================================================
-//  信箱B 写端：主控→视觉 飞机位姿(x/y/z/yaw)。
+//  信箱B 写端：主控→视觉 飞机位姿(x/y/z/yaw + roll/pitch)。
 //  用法：DroneController 构造一个成员，odom 回调里每条 write() 一次(20Hz)。
 //  写一次 = 64B memcpy + 两次屏障，亚微秒级，回调里顺手写零负担。
 //  ★主控负责创建文件(O_CREAT)★——视觉读端只 open 不建，等主控先写(自动重试)。
@@ -176,15 +185,19 @@ public:
 
     bool ok() const { return mem_ != nullptr && mem_ != MAP_FAILED; }
 
-    // 写最新位姿(SLAM 系, yaw 弧度)。stamp 自动取 CLOCK_MONOTONIC(≈odom 到达时刻)。
-    void write(double x, double y, double z, double yaw)
+    // 写最新位姿。★单位不统一，看形参名★：yaw 弧度，roll_deg/pitch_deg 度(视觉直接用)。
+    //   stamp 自动取 CLOCK_MONOTONIC(≈odom 到达时刻)。
+    //   roll/pitch 不给默认值——只有一个调用点，漏传时让编译器报错好过静默写 0(=飞机永远水平)。
+    void write(double x, double y, double z, double yaw,
+               double roll_deg, double pitch_deg)
     {
         if (!ok()) return;
         uint8_t* p = static_cast<uint8_t*>(mem_);
         ++seq_;                                           // 奇：写入中
         std::memcpy(p, &seq_, 8);
         __sync_synchronize();                             // seq(奇) 先于 payload 落地
-        const double vals[5] = { now_mono(), x, y, z, yaw };
+        // 7 double = 56B，+ 偏移 8 = 正好 64B(POSE_SHM_SIZE)，写满不越界
+        const double vals[7] = { now_mono(), x, y, z, yaw, roll_deg, pitch_deg };
         std::memcpy(p + 8, vals, sizeof(vals));
         __sync_synchronize();                             // payload 先于 seq(偶) 落地
         ++seq_;                                           // 偶：写完有效

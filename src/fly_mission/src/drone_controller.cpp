@@ -68,16 +68,27 @@ DroneController::DroneController(rclcpp::Node* node)
             has_pose_.store(true);
 
             // 位姿信箱B(主控→视觉)：雷达来一条写一条(20Hz,写一次亚微秒)。视觉端
-            //   直读代替订阅 odom(第4步去 rclpy)。yaw 用 current_yaw() 同款公式，
-            //   但只算 yaw 不建矩阵(回调里省一点)。
-            pose_shm_.write(msg->pose.pose.position.x,
-                            msg->pose.pose.position.y,
-                            msg->pose.pose.position.z,
-                            [&q = msg->pose.pose.orientation] {
-                                const double siny = 2.0 * (q.w * q.z + q.x * q.y);
-                                const double cosy = 1.0 - 2.0 * (q.y * q.y + q.z * q.z);
-                                return std::atan2(siny, cosy);
-                            }());
+            //   直读代替订阅 odom(第4步去 rclpy)。
+            //   yaw 保持弧度(视觉 location_to_world 直接进 sin/cos)；roll/pitch 转成
+            //   【度】写出去——视觉侧要的就是度，换算放这一处，避免两边各转一次。
+            {
+                const auto& q = msg->pose.pose.orientation;
+                double roll = 0.0, pitch = 0.0, yaw = 0.0;
+                // ★必须挡全零四元数★：tf2::Matrix3x3 由四元数构造时按 2/length2() 缩放，
+                //   SLAM 未初始化时 odom 可能发全 0 → 除零 → NaN 进信箱，而 NaN 的比较
+                //   恒 false，会静默绕过视觉端所有距离阈值。守卫同 fly_mission_node。
+                const double n2 = q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w;
+                if (n2 > 1e-9) {
+                    tf2::Matrix3x3 m(tf2::Quaternion(q.x, q.y, q.z, q.w));
+                    m.getRPY(roll, pitch, yaw);           // ZYX，与 fly_mission_node 同款
+                }
+                pose_shm_.write(msg->pose.pose.position.x,
+                                msg->pose.pose.position.y,
+                                msg->pose.pose.position.z,
+                                yaw,
+                                roll  * 180.0 / M_PI,
+                                pitch * 180.0 / M_PI);
+            }
         });
 
     setpoint_pub_ = node_->create_publisher<mavros_msgs::msg::PositionTarget>(
