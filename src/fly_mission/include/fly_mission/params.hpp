@@ -236,6 +236,18 @@ inline constexpr double AVOID_ARRIVE_SLACK_M  = 0.4;   // ★航点被杆占时�
 //   取值：算法 50Hz 发(20ms 一条)，0.5s 容得下 25 帧抖动，又能较快发现真停了。
 // ---------------------------------------------------------------------------
 inline constexpr double EXPLORE_CMD_TIMEOUT_S = 0.5;
+inline constexpr double EXPLORE_LAND_HEADING_HANDOVER_SEC = 0.30; // H点降落前保位/保持当前yaw再交接AUTO.LAND
+
+// 探索红点与后续通道任务，坐标均为 camera_init / SLAM 系 (m)。
+// 可用同名小写 ROS 参数在启动时覆盖；入口/H 也可在红点等待时用 ros2 param set 调整。
+// 以下使用现场给定坐标；若改为 NaN，表示未配置，飞机到红点后保高等待，不自动降落。
+inline constexpr double EXPLORE_GOAL_X = 7.0;   // 原探索终点（图中红点）
+inline constexpr double EXPLORE_GOAL_Y = 4.25;
+inline constexpr bool   EXPLORE_CORRIDOR_ENABLED = true; // false: 红点完成后按旧流程降落
+inline constexpr double CORRIDOR_ENTRY_X = 8.1;  // 保持 -90 度朝向横移进入通道的第一个点 x
+inline constexpr double CORRIDOR_ENTRY_Y = 4.25;  // 进入通道的第一个点 y
+inline constexpr double CORRIDOR_H_X = 8.1;      // 穿过全部门后的 H 点 x
+inline constexpr double CORRIDOR_H_Y = -4.0;     // 穿过全部门后的 H 点 y
 
 
 // ---------------------------------------------------------------------------

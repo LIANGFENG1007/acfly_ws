@@ -29,6 +29,8 @@ add_executable(exploration_planner_node
   src/visualizer.cpp
   src/obstacle_map.cpp
   src/global_planner.cpp
+  src/corridor_perception.cpp
+  src/corridor_controller.cpp
 )
 
 ament_target_dependencies(exploration_planner_node
@@ -52,6 +54,46 @@ install(DIRECTORY include/
 )
 
 if(BUILD_TESTING)
+  add_executable(trajectory_overshoot_test tests/trajectory_overshoot_test.cpp
+    src/trajectory_tracker.cpp)
+  target_compile_features(trajectory_overshoot_test PRIVATE cxx_std_17)
+  add_test(NAME trajectory_overshoot_test COMMAND trajectory_overshoot_test)
+  add_test(NAME trajectory_overshoot_production_test COMMAND trajectory_overshoot_test --production)
+  add_executable(trajectory_flow_test tests/trajectory_flow_test.cpp
+    src/trajectory_tracker.cpp src/bezier.cpp)
+  target_compile_features(trajectory_flow_test PRIVATE cxx_std_17)
+  add_test(NAME trajectory_flow_test COMMAND trajectory_flow_test)
+  add_test(NAME trajectory_flow_production_test COMMAND trajectory_flow_test --production)
+  add_executable(sensor_freshness_test tests/sensor_freshness_test.cpp)
+  target_compile_features(sensor_freshness_test PRIVATE cxx_std_17)
+  add_test(NAME sensor_freshness_test COMMAND sensor_freshness_test)
+  add_executable(corridor_perception_test tests/corridor_perception_test.cpp src/corridor_perception.cpp)
+  target_compile_features(corridor_perception_test PRIVATE cxx_std_17)
+  add_test(NAME corridor_perception_test COMMAND corridor_perception_test)
+  add_executable(corridor_visualizer_test tests/corridor_visualizer_test.cpp src/visualizer.cpp)
+  target_compile_features(corridor_visualizer_test PRIVATE cxx_std_17)
+  target_link_libraries(corridor_visualizer_test ${OpenCV_LIBS})
+  add_test(NAME corridor_visualizer_test COMMAND corridor_visualizer_test)
+  add_executable(corridor_controller_test tests/corridor_controller_test.cpp
+    src/corridor_controller.cpp src/corridor_perception.cpp)
+  target_compile_features(corridor_controller_test PRIVATE cxx_std_17)
+  add_test(NAME corridor_controller_test COMMAND corridor_controller_test)
+  add_executable(corridor_arena_test tests/corridor_arena_test.cpp
+    src/corridor_controller.cpp src/corridor_perception.cpp)
+  target_compile_features(corridor_arena_test PRIVATE cxx_std_17)
+  add_test(NAME corridor_arena_test COMMAND corridor_arena_test)
+  add_executable(corridor_stability_test tests/corridor_stability_test.cpp
+    src/corridor_controller.cpp src/corridor_perception.cpp)
+  target_compile_features(corridor_stability_test PRIVATE cxx_std_17)
+  add_test(NAME corridor_stability_test COMMAND corridor_stability_test)
+  add_executable(corridor_flow_test tests/corridor_flow_test.cpp
+    src/corridor_controller.cpp src/corridor_perception.cpp)
+  target_compile_features(corridor_flow_test PRIVATE cxx_std_17)
+  add_test(NAME corridor_flow_test COMMAND corridor_flow_test)
+  add_executable(corridor_exit_test tests/corridor_exit_test.cpp
+    src/corridor_controller.cpp src/corridor_perception.cpp)
+  target_compile_features(corridor_exit_test PRIVATE cxx_std_17)
+  add_test(NAME corridor_exit_test COMMAND corridor_exit_test)
   find_package(ament_lint_auto REQUIRED)
   set(ament_cmake_copyright_FOUND TRUE)
   set(ament_cmake_cpplint_FOUND TRUE)

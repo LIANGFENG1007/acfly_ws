@@ -275,8 +275,23 @@ void DroneController::tick()
         return;
     }
 
-    // LAND 模式只切一次 AUTO.LAND，之后等飞控自己降下来
+    // 走廊结束时先传递明确的当前航向，避免从纯 yaw_rate 流直接断开。
+    // AUTO.LAND 接管后不再发送 OFFBOARD 目标，降落仍由飞控负责。
     if (action_mode_ == ActionMode::LAND) {
+        if (land_hold_heading_ && is_offboard()) {
+            eff_gx_ = target_x_;
+            eff_gy_ = target_y_;
+            double vx, vy, vz, yr;
+            compute_velocity_command(vx, vy, vz, yr);
+            publish_setpoint(vx, vy, clamp_abs(vz, params::MAX_SPEED_Z_LEVEL),
+                             0.0, target_yaw_);
+            const double elapsed = std::chrono::duration<double>(
+                std::chrono::steady_clock::now() - land_handover_start_).count();
+            if (elapsed < params::EXPLORE_LAND_HEADING_HANDOVER_SEC) {
+                log_progress();
+                return;
+            }
+        }
         if (!land_requested_) {
             land_requested_ = true;
             auto req = std::make_shared<mavros_msgs::srv::SetMode::Request>();
@@ -510,7 +525,8 @@ void DroneController::update_circle_target()
 // ============================================================================
 //   setpoint 出口：把当前目标 + 当前位置 + 当前速度 → 速度命令（含限幅）
 // ============================================================================
-void DroneController::publish_setpoint(double vx, double vy, double vz, double yaw_rate)
+void DroneController::publish_setpoint(double vx, double vy, double vz, double yaw_rate,
+                                       double yaw)
 {
     if (!std::isfinite(vx) || !std::isfinite(vy) ||
         !std::isfinite(vz) || !std::isfinite(yaw_rate)) {
@@ -536,6 +552,11 @@ void DroneController::publish_setpoint(double vx, double vy, double vz, double y
     msg.velocity.y = vy;
     msg.velocity.z = vz;
     msg.yaw_rate   = yaw_rate;
+    if (std::isfinite(yaw)) {
+        msg.type_mask &= ~mavros_msgs::msg::PositionTarget::IGNORE_YAW;
+        msg.type_mask |= mavros_msgs::msg::PositionTarget::IGNORE_YAW_RATE;
+        msg.yaw = static_cast<float>(yaw);
+    }
     setpoint_pub_->publish(msg);
 }
 
@@ -1019,9 +1040,20 @@ void DroneController::exit_takeoff_position_mode()
         "[起飞] 退出位置环 → 之后改用速度环 PD(走航点/找图等照常)");
 }
 
-void DroneController::land()
+void DroneController::land(bool preserve_heading)
 {
     if (action_mode_ != ActionMode::LAND) {
+        land_hold_heading_ = preserve_heading && has_pose_.load();
+        if (land_hold_heading_) {
+            target_x_ = current_pose_.pose.position.x;
+            target_y_ = current_pose_.pose.position.y;
+            target_z_ = current_pose_.pose.position.z;
+            target_yaw_ = current_yaw();
+            land_handover_start_ = std::chrono::steady_clock::now();
+            RCLCPP_INFO(node_->get_logger(),
+                "[降落] 保持当前位置及航向 %.1f° 交接 %.2fs，再请求 AUTO.LAND",
+                target_yaw_ * 180.0 / M_PI, params::EXPLORE_LAND_HEADING_HANDOVER_SEC);
+        }
         reset_for_new_action(settle_valid_, wait_active_);
         action_mode_    = ActionMode::LAND;
         land_requested_ = false;

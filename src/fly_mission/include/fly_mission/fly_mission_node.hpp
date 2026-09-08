@@ -14,9 +14,9 @@
 //    on_timer 的 switch 里【每个 case 只有几行】——调一个 step_xxx()、判到位、
 //    切状态。所有实际逻辑放进对应的 step_xxx() 成员函数里。例如：
 //        case MissionState::EXPLORATION:
-//            exploration(4.0, 1.6);              // 探索终点 (SLAM 系)，改这里即可
+//            exploration(explore_goal_x_, explore_goal_y_);
 //            if (explore_done_) {
-//                RCLCPP_INFO(get_logger(), "[探索] 算法报告完成，准备降落");
+//                RCLCPP_INFO(get_logger(), "[探索] 探索及后续过门任务完成，准备降落");
 //                state_ = MissionState::LAND;
 //            }
 //            break;
@@ -42,6 +42,7 @@
 #include <geometry_msgs/msg/twist_stamped.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/point_stamped.hpp>
+#include <nav_msgs/msg/path.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/int32.hpp>   // 任务启动指令 /mission/start
 #include <std_msgs/msg/string.hpp>
@@ -124,7 +125,8 @@ private:
     // ── 基础流程：mission_step_basic.cpp ──
     bool step_boot_check();          // 返回 true = 检测通过可起飞(失败会自己转 FINISHED)
     void step_wait_after_takeoff();  // 起飞后悬停到位 → 退位置环 + 按选定分支初始化并切走
-    void exploration(double gx, double gy);   // 自主探索：首拍锁高+发终点，之后转发算法速度
+    void exploration(double gx, double gy);   // 首拍锁高+发红点/入口/H，之后转发算法命令
+    void publish_exploration_corridor_route(bool force); // 配置变化时仍使用本次 goal 时间戳
     void step_run_waypoints();       // 写死航点表逐点飞
     void step_run_ext_waypoints();   // 外部航点：未装载则悬停等，装载后逐点飞
     void step_follow_line();         // 视觉寻线
@@ -176,11 +178,24 @@ private:
     rclcpp::Subscription<geometry_msgs::msg::TwistStamped>::SharedPtr cmd_sub_;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr  target_pose_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr             finished_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr             corridor_active_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr            start_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr             trigger_sub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr           cv_sub_;
     rclcpp::CallbackGroup::SharedPtr                                 cv_cbg_;
     rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr    goal_pub_;
+    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr                 corridor_route_pub_;
+
+    double explore_goal_x_ = params::EXPLORE_GOAL_X;
+    double explore_goal_y_ = params::EXPLORE_GOAL_Y;
+    bool corridor_enabled_ = params::EXPLORE_CORRIDOR_ENABLED;
+    double corridor_entry_x_ = params::CORRIDOR_ENTRY_X;
+    double corridor_entry_y_ = params::CORRIDOR_ENTRY_Y;
+    double corridor_h_x_ = params::CORRIDOR_H_X;
+    double corridor_h_y_ = params::CORRIDOR_H_Y;
+    bool corridor_active_ = false;
+    std_msgs::msg::Header exploration_goal_header_;
+    double exploration_route_z_ = 0.0;
 
     // 自主探索位置环目标（仅 EXPLORATION 使用）
     double explore_pos_x_ = 0.0, explore_pos_y_ = 0.0;
@@ -268,10 +283,11 @@ private:
     double ext_v_fwd_    = 0.0;
     double ext_v_lat_    = 0.0;
     double ext_yaw_rate_ = 0.0;
-    bool   ext_cmd_valid_   = false;   // 是否收到过算法速度(一次性锁存，永不清零)
+    bool   ext_cmd_valid_   = false;   // 本次探索是否收到过算法速度
     rclcpp::Time ext_cmd_time_;        // 最近一条算法速度的收到时刻(判新鲜度)
-    bool   explore_done_    = false;   // 算法报告探索完成
-    bool   explore_entered_ = false;   // EXPLORATION 是否已初始化（锁高+发终点）
+    bool   explore_done_    = false;   // 算法报告探索及后续过门任务完成
+    bool   explore_finished_reset_seen_ = false; // 已收到本次任务的 finished=false
+    bool   explore_entered_ = false;   // EXPLORATION 是否已初始化（锁高+发路线）
 
     // ---- 二次起飞 ----
     bool         trigger_recv_ = false;   // 已收到触发命令(收到一次即锁定，重复发忽略)

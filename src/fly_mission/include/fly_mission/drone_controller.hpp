@@ -13,7 +13,9 @@
 #include "fly_mission/shm_mailbox.hpp"
 
 #include <atomic>
+#include <chrono>
 #include <deque>
+#include <limits>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -60,7 +62,8 @@ public:
     //   之后所有动作恢复速度环 PD(与改动前逐位一致)。幂等，多调无副作用。
     //   params::TAKEOFF_POSITION_MODE=false 时本函数是空操作(全程本就是速度环)。
     void exit_takeoff_position_mode();
-    void land();
+    // 走廊到 H 后可先保持当前航向交接；AUTO.LAND 接管后由飞控控制。
+    void land(bool preserve_heading = false);
     void target_xy_slam(double x_slam, double y_slam);
     void target_xy_body(double dx_body, double dy_body);
     void target_z_slam(double z_slam);
@@ -228,6 +231,8 @@ private:
 
     // ---- land 请求一次性标记 ----
     bool land_requested_ = false;
+    bool land_hold_heading_ = false;
+    std::chrono::steady_clock::time_point land_handover_start_;
 
     // ---- ★起飞段位置环★(params::TAKEOFF_POSITION_MODE) ----
     //   true = 当前处于"起飞打点上去"阶段，tick() 发位置 setpoint 而非速度。
@@ -316,7 +321,9 @@ private:
     mutable rclcpp::Time  settle_start_;
 
     // ---- 工具函数 ----
-    void  publish_setpoint(double vx, double vy, double vz, double yaw_rate);
+    // 有限 yaw 用于降落交接时保持绝对航向；默认仍使用 yaw_rate。
+    void  publish_setpoint(double vx, double vy, double vz, double yaw_rate,
+                           double yaw = std::numeric_limits<double>::quiet_NaN());
     // ★位置 setpoint 出口★(起飞段用)：直接发目标位置 x/y/z(SLAM系,m) + 目标 yaw(rad)，
     //   屏蔽速度/加速度/yaw_rate → 飞控内部位置环飞过去。本程序不算速度、不做 PD 矫正。
     void  publish_position_setpoint(double x, double y, double z, double yaw);

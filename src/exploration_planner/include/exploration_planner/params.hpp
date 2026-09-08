@@ -18,7 +18,7 @@ namespace params {
 //   例：起飞点世界 (-4,0)，10x10 场地世界 x,y ∈ [-5,5]
 //       → SLAM x ∈ [-5-(-4), 5-(-4)] = [-1, 9]，y ∈ [-5, 5]
 // ---------------------------------------------------------------------------
-inline constexpr double FIELD_MIN_X = -1.0;   //-0.5
+inline constexpr double FIELD_MIN_X = 0.0;   //-0.5
 inline constexpr double FIELD_MIN_Y = -5.0;   //-2.1
 inline constexpr double FIELD_MAX_X =  7.5;   // 4.8
 inline constexpr double FIELD_MAX_Y =  5.0;   // 2.3
@@ -34,6 +34,63 @@ inline constexpr bool USE_POSITION_CONTROL = false;
 //   false = 保留旧的全向跟踪方式（允许 v_lat 横向纠偏）。
 //   这与 USE_POSITION_CONTROL 独立：无论位置环还是速度环，均可使用车式轨迹跟踪。
 inline constexpr bool EXPLORATION_CARLIKE_MODE = true;
+
+// 探索终点后的走廊任务。入口/H 坐标由 fly_mission 的参数区发送，均为 camera_init 系。
+// true: 到探索终点等待路线，然后转向、进入、穿门、到 H 才 finished。
+// false: 保留到探索终点即完成的流程。过门始终使用速度接口，以执行 0.3m/s 限速。
+inline constexpr bool CORRIDOR_ENABLED = true;
+inline constexpr double CORRIDOR_INITIAL_YAW_DEG = -90.0; // 首次转到此角度，随后入口/对中/穿门/前往H均保持此航向
+inline constexpr double CORRIDOR_WIDTH = 1.5; // 两侧墙搜索范围(m)，不把道路中线当成门中心
+inline constexpr double CORRIDOR_ROBOT_WIDTH = 0.50; // 含桨完整外廓(m)：用户给定门0.80m、飞机窄0.30m
+inline constexpr double CORRIDOR_MIN_GAP_EXTRA = 0.0; // 机宽以外额外要求(m)，默认不额外膨胀
+inline constexpr double CORRIDOR_ENTRY_SPEED = 0.30;
+inline constexpr double CORRIDOR_CRUISE_SPEED = 0.30;
+inline constexpr double CORRIDOR_GATE_SPEED = 0.30; // 正对门中心穿越的速度上限(m/s)
+inline constexpr double CORRIDOR_ALIGN_SPEED = 0.20;
+inline constexpr double CORRIDOR_YAW_KP = 1.60;
+inline constexpr double CORRIDOR_MAX_YAW_RATE = 0.60;
+inline constexpr double CORRIDOR_YAW_ACCEL = 1.20;
+inline constexpr double CORRIDOR_ACCEL = 0.30;
+inline constexpr double CORRIDOR_POSITION_KP = 0.80; // 位置误差到平移速度(1/s)，接近入口/门/H提前减速
+inline constexpr double CORRIDOR_VELOCITY_KD = 0.35; // 实测速度阻尼，减少到点冲过后反向修正
+inline constexpr double CORRIDOR_VELOCITY_FILTER_S = 0.15; // 平移速度估计滤波(s)，用于阻尼和停稳判定
+inline constexpr double CORRIDOR_ARRIVAL_HYSTERESIS = 1.50; // 到点后偏离超过此倍容差才重新对位
+inline constexpr double CORRIDOR_YAW_TOL_DEG = 5.0;
+inline constexpr double CORRIDOR_HEADING_STOP_DEG = 15.0;
+inline constexpr double CORRIDOR_POINT_TOL = 0.08;
+inline constexpr double CORRIDOR_STOP_SPEED = 0.04;
+inline constexpr double CORRIDOR_SETTLE_S = 0.25;
+inline constexpr double CORRIDOR_LOOKAHEAD = 0.25;
+inline constexpr double CORRIDOR_APPROACH_M = 1.20; // 提前在门前此距离附近完成对中(m)，中间点不要求停稳
+inline constexpr double CORRIDOR_MOVING_LOOKAHEAD = 0.80; // 穿门后接力用的移动前瞻(m)，避免追到临时点刹停
+inline constexpr double CORRIDOR_CENTER_PREDICTION_S = 0.25; // 对中放行同时检查预测横向漂移(s)
+inline constexpr double CORRIDOR_EXIT_M = 1.00; // 门后沿当前门中心直行此距离(m)再向下一门/H偏移；空间不足时缩短
+inline constexpr double CORRIDOR_CENTER_TOL = 0.04; // 穿越前对门中心横向误差(m)
+inline constexpr double CORRIDOR_GATE_ASSOC_M = 0.15;
+inline constexpr int CORRIDOR_CONFIRM_FRAMES = 3;
+inline constexpr double CORRIDOR_CLOUD_TIMEOUT_S = 0.50; // 本机连续未收到新点云帧的时长，不与传感器时钟相减
+inline constexpr double CORRIDOR_CLOUD_WINDOW_S = 0.30;
+inline constexpr double CORRIDOR_POSE_TIMEOUT_S = 0.30; // 本机连续未收到新有效里程计帧的时长
+inline constexpr double CORRIDOR_Z_BELOW = 0.30; // 相对当前飞机高度的点云截取下界(m)
+inline constexpr double CORRIDOR_Z_ABOVE = 0.30; // 相对当前飞机高度的点云截取上界(m)
+inline constexpr double CORRIDOR_SELF_RADIUS = 0.10; // 仅去掉雷达自身近距离回波(m)
+inline constexpr double CORRIDOR_SENSOR_RANGE = 6.0;
+inline constexpr double CORRIDOR_CLOUD_MAX_YAW_RATE = 0.60; // 更快旋转时不更新走廊点云，防拖影
+inline constexpr double CORRIDOR_CELL = 0.04;
+inline constexpr double CORRIDOR_LOOKBEHIND = 0.80;
+inline constexpr double CORRIDOR_WALL_SEARCH_M = 0.35;
+inline constexpr double CORRIDOR_WALL_EXCLUSION_M = 0.08;
+inline constexpr double CORRIDOR_WALL_MIN_SPAN = 0.40;
+inline constexpr int CORRIDOR_WALL_MIN_POINTS = 3; // 仍须满足纵向跨度；0.3m体素下短视距不能要求6个独立格
+inline constexpr double CORRIDOR_MAX_WALL_GAP = 0.55;
+inline constexpr double CORRIDOR_GATE_MIN_SPAN = 0.18;
+inline constexpr double CORRIDOR_GATE_DEPTH_CLUSTER = 0.12;
+inline constexpr double CORRIDOR_GATE_MAX_DEPTH = 0.45;
+inline constexpr double CORRIDOR_SURFACE_SAMPLE_GAP = 0.35; // 同一横档表面允许的采样间隔(m)，兼容上游0.3m体素；不是膨胀
+inline constexpr int CORRIDOR_GATE_MIN_POINTS = 3;
+inline constexpr int CORRIDOR_GATE_MIN_CLEAR_RAYS = 2; // 必须有本帧穿过门洞命中后方表面的光线，避免把缺点当开门
+inline constexpr double CORRIDOR_ENDPOINT_EXCLUSION = 0.30;
+inline constexpr double CORRIDOR_MIN_OBSERVED_AHEAD = 0.35;
 
 // ★ 离墙安全内缩 (m) ★  ← 改这里
 //   牛耕车道/掉头点离四面墙至少留这么远，飞机绝不贴墙飞（防撞）。
@@ -139,13 +196,27 @@ inline constexpr double KP_YAW       = 1.60;   // 朝向误差 → yaw_rate 的 
 //   ★以后调参请以这两个新值为基准★；改 TIMER_PERIOD_MS 时阻尼会正确跟随，不再隐性跳变。
 inline constexpr double KD_YAW       = 0.20;   // yaw_rate 的 D（口径修正后的真实值，等价于旧 0.50@dt=0.05）
 inline constexpr double MAX_YAW_RATE = 1.80;   // yaw_rate 限幅 (rad/s)
+inline constexpr double CARLIKE_KD_YAW = 0.50; // 车式纠偏使用实测角速度阻尼，不对跳动的目标角求导
+inline constexpr double CARLIKE_MAX_YAW_RATE = 0.80; // 大角度纠偏的转向速度上限(rad/s)
+inline constexpr double CARLIKE_MAX_ACCEL = 0.30; // 纠偏完成后的前进加速度上限(m/s²)
+inline constexpr double CARLIKE_MAX_YAW_ACCEL = 1.20; // 转向角加速度上限(rad/s²)
+inline constexpr double CARLIKE_YAW_FILTER_S = 0.12; // 无外部角速度测量时的航向差分低通(s)
+inline constexpr double CARLIKE_PREDICTION_S = 0.20; // 根据惯性速度提前修正前瞻方位(s)
+inline constexpr double CARLIKE_LATERAL_PREDICTION_S = 0.50; // 沿路线法向预测横向惯性，提前收住越线趋势(s)
+inline constexpr double CARLIKE_ALIGN_RESUME_DEG = 25.0; // 真正大角度停车纠偏后进入此角度即可继续转弯前进
+inline constexpr double CARLIKE_ALIGN_STOP_SPEED = 0.06; // 先刹至此平移速度(m/s)再开始大转向
+inline constexpr double CARLIKE_ALIGN_STOP_YAW_RATE = 0.12; // 转向惯性降至此角速度后才前进(rad/s)
+inline constexpr double CARLIKE_ALIGN_SETTLE_S = 0.06; // 真正大角度恢复的短确认时间(s)
+inline constexpr double CARLIKE_STOP_ALIGN_DEG = 75.0; // 超过此夹角才停车转向；普通弧线只减速
+inline constexpr double CARLIKE_CORNER_STOP_DEG = 20.0; // 未能安全平滑的真实折线尖角仍按顶点保守通过
+inline constexpr double CARLIKE_MAX_LATERAL_ACCEL = 0.35; // 连续弯道向心加速度上限(m/s²)
 
 // ★先转再走·朝向门控★：防"规划出身后/大角度路径时,机头还没转过来飞机就带着机体平移甩出线外撞柱"。
 //   机头到目标方向的偏差 |e_yaw| > HEADING_GATE_DEG → 前进+横向全清零,只转 yaw_rate(原地转身);
 //   阈值内用 cos(e_yaw) 平滑门控(乘到前进和横向上)。正常巡航 e_yaw 很小≈不影响,只大角度才压。
 //   ★前进和横向都乘这个门(关键)★:光压前进不压横向,飞机仍会沿线法向侧移甩出去。
 inline constexpr double HEADING_GATE_DEG = 65.0; // 全向模式门限：机头偏离超此角度则原地转身(度)
-inline constexpr double CARLIKE_HEADING_GATE_DEG = 18.0; // 车式模式门限：超过此角度只转向、不前进
+inline constexpr double CARLIKE_HEADING_GATE_DEG = 18.0; // 普通纠偏的减速起点，停车阈值见CARLIKE_STOP_ALIGN_DEG
 inline constexpr double CARLIKE_TURN_BLEND_M = 0.80; // 换线过渡长度(m)：当前方向到下一条线用 Bézier 丝滑衔接
 inline constexpr double CARLIKE_TURN_BLEND_ANGLE_DEG = 15.0; // 转角小于此值不额外插入过渡段
 inline constexpr int    CARLIKE_TURN_BLEND_SAMPLES = 12; // Bézier 过渡段采样点数

@@ -21,6 +21,7 @@
 #include <geometry_msgs/msg/twist_stamped.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
+#include <nav_msgs/msg/path.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sensor_msgs/point_cloud2_iterator.hpp>
@@ -32,6 +33,7 @@
 #include <opencv2/opencv.hpp>
 
 #include <atomic>
+#include <chrono>
 #include <deque>
 #include <memory>
 #include <mutex>
@@ -48,6 +50,8 @@
 #include "exploration_planner/visualizer.hpp"
 #include "exploration_planner/obstacle_map.hpp"
 #include "exploration_planner/global_planner.hpp"
+#include "exploration_planner/corridor_controller.hpp"
+#include "exploration_planner/sensor_freshness.hpp"
 
 using namespace std::chrono_literals;
 using namespace exploration;
@@ -68,6 +72,62 @@ public:
         gcfg_.max_y = dd("field_max_y", params::FIELD_MAX_Y);
         use_position_control_ = declare_parameter<bool>(
             "use_position_control", params::USE_POSITION_CONTROL);
+        corridor_enabled_ = declare_parameter<bool>("corridor_enabled", params::CORRIDOR_ENABLED);
+        ccfg_.initial_yaw = dd("corridor_initial_yaw_deg", params::CORRIDOR_INITIAL_YAW_DEG) * M_PI / 180.0;
+        ccfg_.entry_speed = dd("corridor_entry_speed", params::CORRIDOR_ENTRY_SPEED);
+        ccfg_.cruise_speed = dd("corridor_cruise_speed", params::CORRIDOR_CRUISE_SPEED);
+        ccfg_.gate_speed = dd("corridor_gate_speed", params::CORRIDOR_GATE_SPEED);
+        ccfg_.align_speed = dd("corridor_align_speed", params::CORRIDOR_ALIGN_SPEED);
+        ccfg_.yaw_kp = dd("corridor_yaw_kp", params::CORRIDOR_YAW_KP);
+        ccfg_.max_yaw_rate = dd("corridor_max_yaw_rate", params::CORRIDOR_MAX_YAW_RATE);
+        ccfg_.yaw_accel = dd("corridor_yaw_accel", params::CORRIDOR_YAW_ACCEL);
+        ccfg_.acceleration = dd("corridor_acceleration", params::CORRIDOR_ACCEL);
+        ccfg_.position_kp = dd("corridor_position_kp", params::CORRIDOR_POSITION_KP);
+        ccfg_.velocity_kd = dd("corridor_velocity_kd", params::CORRIDOR_VELOCITY_KD);
+        ccfg_.velocity_filter_tau = dd("corridor_velocity_filter_s", params::CORRIDOR_VELOCITY_FILTER_S);
+        ccfg_.arrival_hysteresis = dd("corridor_arrival_hysteresis", params::CORRIDOR_ARRIVAL_HYSTERESIS);
+        ccfg_.heading_tolerance = dd("corridor_yaw_tol_deg", params::CORRIDOR_YAW_TOL_DEG) * M_PI / 180.0;
+        ccfg_.heading_stop = dd("corridor_heading_stop_deg", params::CORRIDOR_HEADING_STOP_DEG) * M_PI / 180.0;
+        ccfg_.point_tolerance = dd("corridor_point_tol", params::CORRIDOR_POINT_TOL);
+        ccfg_.stop_speed = dd("corridor_stop_speed", params::CORRIDOR_STOP_SPEED);
+        ccfg_.settle_time = dd("corridor_settle_s", params::CORRIDOR_SETTLE_S);
+        ccfg_.lookahead = dd("corridor_lookahead", params::CORRIDOR_LOOKAHEAD);
+        ccfg_.approach_distance = dd("corridor_approach_m", params::CORRIDOR_APPROACH_M);
+        ccfg_.moving_lookahead = dd("corridor_moving_lookahead", params::CORRIDOR_MOVING_LOOKAHEAD);
+        ccfg_.center_prediction_time = dd("corridor_center_prediction_s", params::CORRIDOR_CENTER_PREDICTION_S);
+        ccfg_.exit_distance = dd("corridor_exit_m", params::CORRIDOR_EXIT_M);
+        ccfg_.center_tolerance = dd("corridor_center_tol", params::CORRIDOR_CENTER_TOL);
+        ccfg_.gate_association = dd("corridor_gate_assoc_m", params::CORRIDOR_GATE_ASSOC_M);
+        ccfg_.confirm_frames = declare_parameter<int>("corridor_confirm_frames", params::CORRIDOR_CONFIRM_FRAMES);
+        ccfg_.cloud_timeout = dd("corridor_cloud_timeout_s", params::CORRIDOR_CLOUD_TIMEOUT_S);
+        ccfg_.cloud_window = dd("corridor_cloud_window_s", params::CORRIDOR_CLOUD_WINDOW_S);
+        ccfg_.pose_timeout = dd("corridor_pose_timeout_s", params::CORRIDOR_POSE_TIMEOUT_S);
+        corridor_z_below_ = dd("corridor_z_below", params::CORRIDOR_Z_BELOW);
+        corridor_z_above_ = dd("corridor_z_above", params::CORRIDOR_Z_ABOVE);
+        corridor_self_radius_ = dd("corridor_self_radius", params::CORRIDOR_SELF_RADIUS);
+        corridor_sensor_range_ = dd("corridor_sensor_range", params::CORRIDOR_SENSOR_RANGE);
+        corridor_cloud_max_yaw_rate_ = dd("corridor_cloud_max_yaw_rate", params::CORRIDOR_CLOUD_MAX_YAW_RATE);
+        auto& pcfg = ccfg_.perception;
+        pcfg.corridor_width = dd("corridor_width", params::CORRIDOR_WIDTH);
+        pcfg.robot_width = dd("corridor_robot_width", params::CORRIDOR_ROBOT_WIDTH);
+        pcfg.minimum_gap_extra = dd("corridor_min_gap_extra", params::CORRIDOR_MIN_GAP_EXTRA);
+        pcfg.cell_size = dd("corridor_cell", params::CORRIDOR_CELL);
+        pcfg.lookahead = corridor_sensor_range_;
+        pcfg.lookbehind = dd("corridor_lookbehind", params::CORRIDOR_LOOKBEHIND);
+        pcfg.wall_search_tolerance = dd("corridor_wall_search_m", params::CORRIDOR_WALL_SEARCH_M);
+        pcfg.wall_exclusion_band = dd("corridor_wall_exclusion_m", params::CORRIDOR_WALL_EXCLUSION_M);
+        pcfg.wall_min_span = dd("corridor_wall_min_span", params::CORRIDOR_WALL_MIN_SPAN);
+        pcfg.wall_min_points = declare_parameter<int>("corridor_wall_min_points", params::CORRIDOR_WALL_MIN_POINTS);
+        pcfg.max_wall_gap = dd("corridor_max_wall_gap", params::CORRIDOR_MAX_WALL_GAP);
+        pcfg.gate_min_span = dd("corridor_gate_min_span", params::CORRIDOR_GATE_MIN_SPAN);
+        pcfg.gate_cluster_depth = dd("corridor_gate_depth_cluster", params::CORRIDOR_GATE_DEPTH_CLUSTER);
+        pcfg.gate_max_depth = dd("corridor_gate_max_depth", params::CORRIDOR_GATE_MAX_DEPTH);
+        pcfg.surface_sample_gap = dd("corridor_surface_sample_gap", params::CORRIDOR_SURFACE_SAMPLE_GAP);
+        pcfg.gate_min_points = declare_parameter<int>("corridor_gate_min_points", params::CORRIDOR_GATE_MIN_POINTS);
+        pcfg.gate_min_clear_rays = declare_parameter<int>("corridor_gate_min_clear_rays", params::CORRIDOR_GATE_MIN_CLEAR_RAYS);
+        pcfg.endpoint_exclusion = dd("corridor_endpoint_exclusion", params::CORRIDOR_ENDPOINT_EXCLUSION);
+        pcfg.min_observed_ahead = dd("corridor_min_observed_ahead", params::CORRIDOR_MIN_OBSERVED_AHEAD);
+        corridor_ = std::make_unique<CorridorController>(ccfg_);
         gcfg_.big_cell        = dd("big_cell", params::BIG_CELL);
         gcfg_.small_cell      = dd("small_cell", params::SMALL_CELL);
         gcfg_.coverage_thresh = dd("coverage_thresh", params::COVERAGE_THRESH);
@@ -85,8 +145,8 @@ public:
         gains_.lookahead       = dd("lookahead", carlike_mode_ ? params::CARLIKE_LOOKAHEAD : params::LOOKAHEAD);
         gains_.endpoint_slow_r = dd("endpoint_slow_r", params::ENDPOINT_SLOW_R);
         gains_.kp_yaw          = dd("kp_yaw", params::KP_YAW);
-        gains_.kd_yaw          = dd("kd_yaw", params::KD_YAW);
-        gains_.max_yaw_rate    = dd("max_yaw_rate", params::MAX_YAW_RATE);
+        gains_.kd_yaw          = dd("kd_yaw", carlike_mode_ ? params::CARLIKE_KD_YAW : params::KD_YAW);
+        gains_.max_yaw_rate    = dd("max_yaw_rate", carlike_mode_ ? params::CARLIKE_MAX_YAW_RATE : params::MAX_YAW_RATE);
         gains_.kp_lat          = dd("kp_lat", params::KP_LAT);
         gains_.kd_lat          = dd("kd_lat", params::KD_LAT);
         gains_.max_v_lat       = dd("max_v_lat", params::MAX_V_LAT);
@@ -94,6 +154,18 @@ public:
             dd("heading_gate_deg",
                carlike_mode_ ? params::CARLIKE_HEADING_GATE_DEG : params::HEADING_GATE_DEG) * M_PI / 180.0;
         gains_.forward_only = carlike_mode_;
+        gains_.max_accel = dd("carlike_max_accel", params::CARLIKE_MAX_ACCEL);
+        gains_.max_yaw_accel = dd("carlike_max_yaw_accel", params::CARLIKE_MAX_YAW_ACCEL);
+        gains_.yaw_filter_tau = dd("carlike_yaw_filter_s", params::CARLIKE_YAW_FILTER_S);
+        gains_.prediction_time = dd("carlike_prediction_s", params::CARLIKE_PREDICTION_S);
+        gains_.lateral_prediction_time = dd("carlike_lateral_prediction_s", params::CARLIKE_LATERAL_PREDICTION_S);
+        gains_.align_resume_rad = dd("carlike_align_resume_deg", params::CARLIKE_ALIGN_RESUME_DEG) * M_PI / 180.0;
+        gains_.align_stop_speed = dd("carlike_align_stop_speed", params::CARLIKE_ALIGN_STOP_SPEED);
+        gains_.align_stop_yaw_rate = dd("carlike_align_stop_yaw_rate", params::CARLIKE_ALIGN_STOP_YAW_RATE);
+        gains_.align_settle_s = dd("carlike_align_settle_s", params::CARLIKE_ALIGN_SETTLE_S);
+        gains_.stop_align_rad = dd("carlike_stop_align_deg", params::CARLIKE_STOP_ALIGN_DEG) * M_PI / 180.0;
+        gains_.corner_stop_rad = dd("carlike_corner_stop_deg", params::CARLIKE_CORNER_STOP_DEG) * M_PI / 180.0;
+        gains_.max_lateral_accel = dd("carlike_max_lateral_accel", params::CARLIKE_MAX_LATERAL_ACCEL);
         turn_blend_m_ = dd("carlike_turn_blend_m", params::CARLIKE_TURN_BLEND_M);
         turn_blend_min_angle_rad_ =
             dd("carlike_turn_blend_angle_deg", params::CARLIKE_TURN_BLEND_ANGLE_DEG) * M_PI / 180.0;
@@ -211,6 +283,15 @@ public:
         rclcpp::QoS latched(1);
         latched.transient_local();
         finished_pub_ = create_publisher<std_msgs::msg::Bool>("/exploration/finished", latched);
+        corridor_active_pub_ = create_publisher<std_msgs::msg::Bool>("/exploration/corridor_active", latched);
+        corridor_route_sub_ = create_subscription<nav_msgs::msg::Path>(
+            "/exploration/corridor_route", latched,
+            [this](nav_msgs::msg::Path::SharedPtr route) {
+                std::lock_guard<std::mutex> lk(mtx_);
+                pending_corridor_route_ = *route;
+                corridor_route_received_ = true;
+                apply_corridor_route();
+            });
 
         // 处理后障碍点云(rviz 看"算法当障碍的点")+ 设定边界框(rviz 画 FIELD_* 四面墙)。
         obs_cloud_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>("/exploration/obstacle_cloud", 5);
@@ -270,6 +351,7 @@ public:
         std::vector<Vec2> pois;
         bool turning; int turn_dir;
         bool unreach_valid; Vec2 unreach_pos;
+        CorridorVisualState corridor_visual;
         {
             std::lock_guard<std::mutex> lk(mtx_);
             px = px_; py = py_; yaw = yaw_; pose_valid = has_pose_;
@@ -281,6 +363,45 @@ public:
             for (const auto& q : poi_queue_) pois.push_back(q);
             turning = turning_for_solution_; turn_dir = turn_dir_;
             unreach_valid = has_unreachable_marker_; unreach_pos = unreachable_pos_;
+            corridor_visual.configured = corridor_->configured();
+            corridor_visual.active = corridor_->active();
+            corridor_visual.entry = corridor_->entry();
+            corridor_visual.h = corridor_->goal();
+            // A startup route is a display preview only. Execution still requires
+            // the current goal's matching timestamp in apply_corridor_route().
+            if (!corridor_visual.configured && corridor_route_received_ &&
+                pending_corridor_route_.header.frame_id == "camera_init" &&
+                pending_corridor_route_.poses.size() == 2) {
+                const auto& entry = pending_corridor_route_.poses[0].pose.position;
+                const auto& h = pending_corridor_route_.poses[1].pose.position;
+                if (std::isfinite(entry.x) && std::isfinite(entry.y) &&
+                    std::isfinite(h.x) && std::isfinite(h.y) &&
+                    std::hypot(h.x - entry.x, h.y - entry.y) >= 0.5) {
+                    corridor_visual.configured = true;
+                    corridor_visual.entry = {entry.x, entry.y};
+                    corridor_visual.h = {h.x, h.y};
+                }
+            }
+            corridor_visual.width = ccfg_.perception.corridor_width;
+            corridor_visual.phase = corridor_command_.status;
+            if (!corridor_visual.active)
+                corridor_visual.phase = has_goal_ ? "EXPLORATION" : "WAITING";
+            corridor_visual.points = corridor_->points();
+            corridor_visual.route = corridor_command_.path;
+            corridor_visual.gates_passed = corridor_->gatesPassed();
+            const auto& door = corridor_->gateLocked() ? corridor_->gate() : corridor_->observation();
+            corridor_visual.gate_valid = door.gate_passable;
+            corridor_visual.gate_center = door.gate_center;
+            const double dx = corridor_visual.h.x - corridor_visual.entry.x;
+            const double dy = corridor_visual.h.y - corridor_visual.entry.y;
+            const double length = std::hypot(dx, dy);
+            if (length > 1e-6) {
+                const double half_gap = door.gap_width * 0.5;
+                corridor_visual.gate_left = {door.gate_center.x - dy / length * half_gap,
+                                             door.gate_center.y + dx / length * half_gap};
+                corridor_visual.gate_right = {door.gate_center.x + dy / length * half_gap,
+                                              door.gate_center.y - dx / length * half_gap};
+            }
         }
 
         // 障碍圆（obs_map_ 自带锁，无需持 mtx_）→ 弹窗画绿圆
@@ -293,7 +414,7 @@ public:
         cv::Mat img = viz_obj_->render(grid_snap, traj, goal, goal_valid,
                                        px, py, yaw, pose_valid, look, look_valid,
                                        pois, obstacles,
-                                       turning, turn_dir, unreach_valid, unreach_pos);
+                                       turning, turn_dir, unreach_valid, unreach_pos, corridor_visual);
         cv::imshow("Exploration", img);
         const int key = cv::waitKey(params::VIZ_PERIOD_MS);
         if (key == 27 /*ESC*/) return false;
@@ -301,14 +422,23 @@ public:
     }
 
 private:
+    static double steady_seconds()
+    {
+        return std::chrono::duration<double>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+    }
+
     // ---------- 回调 ----------
     void on_odom(const nav_msgs::msg::Odometry::SharedPtr msg)
     {
         const auto& p = msg->pose.pose.position;
         const auto& q = msg->pose.pose.orientation;
+        const double received_at = steady_seconds();
 
         double yaw = 0.0;
         const double qn = q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w;
+        if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z) ||
+            !std::isfinite(qn) || qn <= 1e-9) return;
         if (qn > 1e-9) {
             tf2::Quaternion tq(q.x, q.y, q.z, q.w);
             tf2::Matrix3x3 m(tq);
@@ -318,9 +448,10 @@ private:
         const rclcpp::Time stamp = msg->header.stamp;
 
         std::lock_guard<std::mutex> lk(mtx_);
+        if (!pose_freshness_.observe(stamp.nanoseconds(), received_at)) return;
         // 位置差分估速度（local 系），再转机体系给 tracker 当 D 项参考
         if (has_prev_pose_) {
-            const double dt = (stamp - prev_stamp_).seconds();
+            const double dt = pose_freshness_.source_interval();
             if (dt > 1e-3) {
                 const double vx = (p.x - prev_x_) / dt;
                 const double vy = (p.y - prev_y_) / dt;
@@ -334,19 +465,56 @@ private:
                 const double dyaw = wrap_pi(yaw - prev_yaw_);
                 const double wz = dyaw / dt;
                 yaw_rate_est_ = v_est_alpha_ * wz + (1.0 - v_est_alpha_) * yaw_rate_est_;
+            } else if (dt == 0.0) {
+                v_fwd_est_ = v_lat_est_ = yaw_rate_est_ = 0.0;
             }
         }
-        prev_x_ = p.x; prev_y_ = p.y; prev_yaw_ = yaw; prev_stamp_ = stamp; has_prev_pose_ = true;
+        prev_x_ = p.x; prev_y_ = p.y; prev_yaw_ = yaw; has_prev_pose_ = true;
 
-        px_ = p.x; py_ = p.y; yaw_ = yaw;
+        px_ = p.x; py_ = p.y; pz_ = p.z; yaw_ = yaw;
         has_pose_ = true;
+    }
+
+    void apply_corridor_route()
+    {
+        if (!has_goal_ || !corridor_route_received_ || corridor_->startedMoving()) return;
+        const auto& route = pending_corridor_route_;
+        if (route.header.stamp.sec != goal_stamp_.sec ||
+            route.header.stamp.nanosec != goal_stamp_.nanosec || route.header.frame_id != "camera_init") return;
+        if (route.poses.empty()) {
+            corridor_disabled_for_goal_ = true;
+            return;
+        }
+        if (route.poses.size() != 2) {
+            RCLCPP_WARN(get_logger(), "走廊路线需要且仅需要入口/H两个点");
+            return;
+        }
+        const auto& a = route.poses[0].pose.position;
+        const auto& b = route.poses[1].pose.position;
+        if (corridor_->configure({a.x, a.y}, {b.x, b.y})) {
+            corridor_disabled_for_goal_ = false;
+            RCLCPP_INFO(get_logger(), "走廊路线: 入口(%.2f,%.2f), H(%.2f,%.2f)", a.x, a.y, b.x, b.y);
+        } else RCLCPP_WARN(get_logger(), "走廊坐标无效，到探索终点后悬停等待有效路线");
     }
 
     void on_goal(const geometry_msgs::msg::PointStamped::SharedPtr msg)
     {
         std::lock_guard<std::mutex> lk(mtx_);
         goal_ = {msg->point.x, msg->point.y};
+        goal_stamp_ = msg->header.stamp;
         has_goal_ = true;
+        finished_ = false;
+        homing_ = false;
+        global_has_ = false;
+        corridor_disabled_for_goal_ = false;
+        corridor_->reset();
+        cloud_freshness_ = SensorFreshness{};
+        corridor_command_ = {};
+        apply_corridor_route();
+        std_msgs::msg::Bool reset;
+        reset.data = false;
+        finished_pub_->publish(reset);
+        corridor_active_pub_->publish(reset);
         plan_pending_ = true;   // 下一拍在有位姿时规划
         unreachable_.clear();            // 换终点=换任务：清空够不到黑名单，所有区重新给机会
         last_unreach_clear_cov_ = 0.0;
@@ -394,13 +562,37 @@ private:
     //   → 喂给 obstacle_map 累计聚类。独立线程跑，不阻塞主循环。
     void on_cloud(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
     {
+        const double received_at = steady_seconds();
         // 取一份当前位姿(滤自身回波用 px,py；latch 回收判视野用 yaw) + 角速度(高角速度门控用)
-        double px, py, yaw, wz; bool ok;
+        double px, py, pz, yaw, wz; bool ok, corridor_active;
         {
             std::lock_guard<std::mutex> lk(mtx_);
             px = px_; py = py_; yaw = yaw_; ok = has_pose_;
+            pz = pz_;
             wz = yaw_rate_est_;
+            corridor_active = corridor_->active();
         }
+
+        // 走廊使用独立的机身高度切片，保留墙/横档的实际点，不做障碍圆拟合和探索膨胀。
+        if (ok && corridor_enabled_ &&
+            (msg->header.frame_id.empty() || msg->header.frame_id == "camera_init") &&
+            std::fabs(wz) <= corridor_cloud_max_yaw_rate_) {
+            Path2 corridor_points;
+            sensor_msgs::PointCloud2ConstIterator<float> x(*msg, "x"), y(*msg, "y"), z(*msg, "z");
+            for (; x != x.end(); ++x, ++y, ++z) {
+                if (!std::isfinite(*x) || !std::isfinite(*y) || !std::isfinite(*z)) continue;
+                if (*z < pz - corridor_z_below_ || *z > pz + corridor_z_above_) continue;
+                const double d = std::hypot(*x - px, *y - py);
+                if (d < corridor_self_radius_ || d > corridor_sensor_range_) continue;
+                corridor_points.push_back({*x, *y});
+            }
+            std::lock_guard<std::mutex> lk(mtx_);
+            if (cloud_freshness_.observe(rclcpp::Time(msg->header.stamp).nanoseconds(), received_at))
+                corridor_->observe(corridor_points, received_at, {px, py});
+            else if (!cloud_freshness_.fresh(received_at, ccfg_.cloud_timeout))
+                corridor_->observe({}, received_at);
+        }
+        if (corridor_active) return;
 
         // ★高角速度门控★：飞机快速旋转时点云拖影(点被甩到障碍外侧)会污染累积、被 latch 钉成虚胖大圆。
         //   整帧丢弃(不累积、不 latch)；旋转停下后正常帧补回真实边界。阈值<=0 关闭。
@@ -676,6 +868,14 @@ private:
     void replan_locked(const Vec2& cur)
     {
         bool all_explored = false;
+        const Obstacles obs = obs_map_->snapshot();
+        // Keep a safe reference while braking/turning. A new obstacle or an
+        // explicit mission request still interrupts the recovery immediately.
+        if (!plan_pending_ && tracker_->reorienting() && explore_has_committed_ &&
+            path_clear(cur, tracker_->remaining_path(cur.x, cur.y), obs, ggcfg_)) {
+            last_plan_time_ = now();
+            return;
+        }
 
         // 栅格快照：本次规划期间只读一次地图(一把锁+一次拷贝)，
         //   下面的覆盖率判定与 plan_explore 逐格选点都基于【同一时刻】的视图，不会半新半旧。
@@ -701,8 +901,6 @@ private:
                 break;
             }
         }
-
-        const Obstacles obs = obs_map_->snapshot();
 
         // ★路径承诺/迟滞★：已有绕障折线时，先判旧折线是否仍无碰撞、目标是否漂移。
         //   仅在【目标大幅移动(换区)】或【旧折线被挡(会撞)】时才考虑重算 A*。
@@ -823,7 +1021,10 @@ private:
             e_yaw = yaw_des - yaw_;
             while (e_yaw >  M_PI) e_yaw -= 2.0 * M_PI;
             while (e_yaw <= -M_PI) e_yaw += 2.0 * M_PI;
-            yaw_rate = std::clamp(gains_.kp_yaw * e_yaw, -gains_.max_yaw_rate, gains_.max_yaw_rate);
+            const double predicted_error = e_yaw - (carlike_mode_ ? gains_.prediction_time * yaw_rate_est_ : 0.0);
+            const double damping = carlike_mode_ ? gains_.kd_yaw * yaw_rate_est_ : 0.0;
+            yaw_rate = std::clamp(gains_.kp_yaw * predicted_error - damping,
+                                  -gains_.max_yaw_rate, gains_.max_yaw_rate);
         }
 
         Vec2 vb{0.0, 0.0};
@@ -835,8 +1036,15 @@ private:
             // ★先转再走·朝向门控★：机头偏离目标方向越大,越压住移动(前进+横向都乘),先转够再走。
             //   |e_yaw| > 阈值 → 门=0,本拍只转身不移动(防身后/大角度目标时机体平移甩出去撞柱);
             //   阈值内 cos(e_yaw) 平滑过渡。光压前进不压横向→飞机仍侧移甩出去,故横向也乘。
-            const double head_gate =
-                (std::fabs(e_yaw) > gains_.heading_gate_rad) ? 0.0 : std::max(0.0, std::cos(e_yaw));
+            double head_gate = (std::fabs(e_yaw) > gains_.heading_gate_rad)
+                ? 0.0 : std::max(0.0, std::cos(e_yaw));
+            if (carlike_mode_) {
+                const double ratio = std::clamp((std::fabs(e_yaw) - gains_.heading_gate_rad) /
+                    std::max(1e-3, gains_.stop_align_rad - gains_.heading_gate_rad), 0.0, 1.0);
+                head_gate = 1.0 - ratio * ratio * (3.0 - 2.0 * ratio);
+                const double turning_rate = std::max(std::fabs(yaw_rate), std::fabs(yaw_rate_est_));
+                if (turning_rate > 1e-3) v_des = std::min(v_des, gains_.max_lateral_accel / turning_rate);
+            }
             vb.x = v_des * fwd * head_gate;
             vb.y = std::clamp(v_des * lat, -gains_.max_v_lat, gains_.max_v_lat) * head_gate;
         }
@@ -1026,6 +1234,7 @@ private:
         cmd.header.frame_id = "base_link";   // 机体系
 
         bool publish_finished = false;
+        bool corridor_active = false;
 
         {
             std::lock_guard<std::mutex> lk(mtx_);
@@ -1036,6 +1245,48 @@ private:
                 return;
             }
 
+            corridor_active = corridor_->active();
+            if (corridor_active && corridor_disabled_for_goal_ && !corridor_->startedMoving()) {
+                if (!finished_) { finished_ = true; publish_finished = true; }
+                corridor_command_ = {};
+                corridor_command_.status = "Corridor disabled for this mission";
+            } else if (corridor_active) {
+                const double local_now = steady_seconds();
+                const bool pose_fresh = pose_freshness_.fresh(local_now, ccfg_.pose_timeout);
+                if (!pose_fresh) {
+                    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                        "[走廊里程计] 距本机收到新有效帧 %.3fs，超时阈值 %.3fs；检查 /aft_mapped_to_init 是否断流或时间戳停止推进",
+                        pose_freshness_.age(local_now), ccfg_.pose_timeout);
+                }
+                corridor_command_ = corridor_->update({px_, py_}, yaw_, v_fwd_est_, v_lat_est_,
+                                                       local_now, pose_fresh);
+                cmd.twist.linear.x = corridor_command_.forward;
+                cmd.twist.linear.y = corridor_command_.lateral;
+                cmd.twist.angular.z = corridor_command_.yaw_rate;
+                last_look_ = corridor_command_.target;
+                look_valid_ = true;
+                traj_.clear();
+                for (const auto& p : corridor_command_.path) {
+                    TrajPoint tp{};
+                    tp.p = p;
+                    traj_.push_back(tp);
+                }
+                if (corridor_command_.finished && !finished_) { finished_ = true; publish_finished = true; }
+                if (corridor_command_.status != last_corridor_status_) {
+                    last_corridor_status_ = corridor_command_.status;
+                    RCLCPP_INFO(get_logger(), "[走廊] %s (已过门 %d)",
+                                last_corridor_status_.c_str(), corridor_->gatesPassed());
+                }
+                if (corridor_->phase() == CorridorPhase::Search &&
+                    corridor_command_.forward == 0.0 && corridor_command_.lateral == 0.0) {
+                    const auto& observed = corridor_->observation();
+                    RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 2000,
+                        "[走廊识别] reason=%s cloud=%zu walls=%d bounds=[%.2f,%.2f] observed_s=%.2f gate=%d gate_s=%.2f gap=%.2f rays=%d body=%.2f",
+                        observed.reason.c_str(), corridor_->points().size(), observed.walls_observed,
+                        observed.right_wall, observed.left_wall, observed.observed_until,
+                        observed.gate_observed, observed.gate_s, observed.gap_width, observed.clear_rays, ccfg_.perception.robot_width);
+                }
+            } else {
             // 取一份当前障碍圆（DWA 避障 + 视野遮挡 + 可视化共用）
             const Obstacles obstacles = obs_map_->snapshot();
 
@@ -1148,7 +1399,14 @@ private:
                 const bool stopped = (d <= goal_tol_) && (v_now <= goal_stop_v_);
                 if (stopped) {
                     cmd.twist.linear.x = 0.0; cmd.twist.linear.y = 0.0; cmd.twist.angular.z = 0.0;
-                    if (!finished_) { finished_ = true; publish_finished = true; }
+                    if (corridor_enabled_ && !corridor_disabled_for_goal_) {
+                        corridor_->start({px_, py_}, steady_seconds());
+                        corridor_active = true;
+                        tracker_->set_trajectory({});
+                        traj_.clear();
+                        last_look_ = {px_, py_};
+                        RCLCPP_INFO(get_logger(), "到达探索交接点，开始转向/入口横移/穿门/H任务");
+                    } else if (!finished_) { finished_ = true; publish_finished = true; }
                 }
             } else {
                 // ---- 探索：周期/偏离重规划(A* 绕障重铺覆盖路径) + tracker 跟随 ----
@@ -1180,7 +1438,12 @@ private:
                     // tracker 跟随当前 traj_(已是 A* 绕障轨迹)。A* 无解时 traj_ 被清空。
                     if (tracker_->has_trajectory()) {
                         retreating_ = false;   // 有轨迹可走 → 退出后退态
-                        VelCmd vc = tracker_->update(px_, py_, yaw_, v_fwd_est_, v_lat_est_, goal_tol_);
+                        const bool was_reorienting = tracker_->reorienting();
+                        VelCmd vc = tracker_->update(px_, py_, yaw_, v_fwd_est_, v_lat_est_, goal_tol_, yaw_rate_est_);
+                        if (tracker_->reorienting() != was_reorienting) {
+                            RCLCPP_INFO(get_logger(), "[探索纠偏] %s",
+                                tracker_->reorienting() ? "大角度偏差：先刹稳、转稳再前进" : "航向与角速度稳定，平滑恢复前进");
+                        }
                         last_look_ = tracker_->last_lookahead();
                         look_valid_ = true;
                         cmd.twist.linear.x  = vc.v_fwd;
@@ -1201,13 +1464,18 @@ private:
                 }
             }
 
+            } // 常规探索/归航；走廊任务独立处理墙与门。
+
         }
 
+        std_msgs::msg::Bool active_msg;
+        active_msg.data = corridor_active;
+        corridor_active_pub_->publish(active_msg);
         cmd_pub_->publish(cmd);
 
         // 位置环模式：发布当前轨迹前瞻点(作为 SLAM 位置目标)。速度话题仍继续发布，
         // 便于关闭位置环时无缝退回原有速度控制链。
-        if (use_position_control_) {
+        if (use_position_control_ && !corridor_active) {
             geometry_msgs::msg::PoseStamped target;
             target.header.stamp = cmd.header.stamp;
             target.header.frame_id = "camera_init";
@@ -1242,7 +1510,7 @@ private:
         if (publish_finished) {
             std_msgs::msg::Bool b; b.data = true;
             finished_pub_->publish(b);
-            RCLCPP_INFO(get_logger(), "归航完成：已在终点停稳 → finished=true");
+            RCLCPP_INFO(get_logger(), "任务完成：已在%s停稳 → finished=true", corridor_active ? "H点" : "探索终点");
         }
     }
 
@@ -1294,6 +1562,19 @@ private:
 
     // ---- 配置 / 模块 ----
     GridConfig    gcfg_;
+    CorridorConfig ccfg_;
+    std::unique_ptr<CorridorController> corridor_;
+    CorridorCommand corridor_command_;
+    bool corridor_enabled_ = true;
+    bool corridor_disabled_for_goal_ = false;
+    bool corridor_route_received_ = false;
+    nav_msgs::msg::Path pending_corridor_route_;
+    builtin_interfaces::msg::Time goal_stamp_;
+    double corridor_z_below_ = 0.3, corridor_z_above_ = 0.3;
+    double corridor_self_radius_ = 0.1, corridor_sensor_range_ = 6.0;
+    double corridor_cloud_max_yaw_rate_ = 0.6;
+    SensorFreshness pose_freshness_, cloud_freshness_;
+    std::string last_corridor_status_;
     bool          use_position_control_ = params::USE_POSITION_CONTROL;
     bool          carlike_mode_ = params::EXPLORATION_CARLIKE_MODE;
     double        turn_blend_m_ = params::CARLIKE_TURN_BLEND_M;
@@ -1340,6 +1621,8 @@ private:
     rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr cmd_pub_;
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr target_pose_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr              finished_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr corridor_active_pub_;
+    rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr corridor_route_sub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr    obs_cloud_pub_;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr  boundary_pub_;
     bool boundary_sent_ = false;   // 边界框只需发一次(latched)
@@ -1353,7 +1636,7 @@ private:
 
     // ---- 共享状态（mtx_ 保护）----
     std::mutex mtx_;
-    double px_ = 0.0, py_ = 0.0, yaw_ = 0.0;
+    double px_ = 0.0, py_ = 0.0, pz_ = 0.0, yaw_ = 0.0;
     bool   has_pose_ = false;
     Vec2   goal_;
     bool   has_goal_ = false;
@@ -1430,7 +1713,6 @@ private:
     // 估速度
     double prev_x_ = 0.0, prev_y_ = 0.0;
     double prev_yaw_ = 0.0;                       // 上一帧 yaw(差分算角速度)
-    rclcpp::Time prev_stamp_;
     bool   has_prev_pose_ = false;
     double v_fwd_est_ = 0.0, v_lat_est_ = 0.0;
     double yaw_rate_est_ = 0.0;                   // yaw 差分+低通得到的角速度(rad/s)，给点云高角速度门控用

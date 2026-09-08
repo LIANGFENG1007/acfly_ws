@@ -10,6 +10,7 @@
 #pragma once
 
 #include <cstddef>
+#include <limits>
 
 #include "exploration_planner/types.hpp"
 #include "exploration_planner/bezier.hpp"
@@ -20,7 +21,7 @@ struct TrackerGains {
     double v_max, v_min, k_curv, lookahead, endpoint_slow_r;
     double kp_yaw, kd_yaw, max_yaw_rate;
     double kp_lat, kd_lat, max_v_lat;
-    double heading_gate_rad;   // 机头偏离超此角度→前进+横向全清零,只原地转身(防大角度甩出线外撞柱)
+    double heading_gate_rad;   // 车式模式开始减速的角度；全向模式仍使用停车门限
     bool   forward_only = false; // 车式模式：只允许机体前向速度，禁止横向侧移
     // ★控制周期 (s)★：D 项数值差分的分母。★必须等于 update() 的真实调用周期★
     //   (= TIMER_PERIOD_MS/1000)，由节点构造时按 TIMER_PERIOD_MS 推导填入，勿写死。
@@ -28,6 +29,18 @@ struct TrackerGains {
     //   (KD_YAW=0.50 实际只等效 0.20)。现改为显式传入并把 KD 同步缩放，输出逐位不变；
     //   之后再改 TIMER_PERIOD_MS，阻尼会跟着正确变化，不再隐性跳变。
     double dt;
+    double max_accel = 0.30;
+    double max_yaw_accel = 1.20;
+    double yaw_filter_tau = 0.12;
+    double prediction_time = 0.20;
+    double lateral_prediction_time = 0.50;
+    double stop_align_rad = 1.3089969389957472;
+    double corner_stop_rad = 0.3490658503988659;
+    double max_lateral_accel = 0.35;
+    double align_resume_rad = 0.4363323129985824;
+    double align_stop_speed = 0.06;
+    double align_stop_yaw_rate = 0.12;
+    double align_settle_s = 0.06;
 };
 
 struct VelCmd {
@@ -49,7 +62,11 @@ public:
     // goal_tol：到终点容差 (m)。
     VelCmd update(double px, double py, double yaw,
                   double v_fwd_est, double v_lat_est,
-                  double goal_tol);
+                  double goal_tol,
+                  double measured_yaw_rate = std::numeric_limits<double>::quiet_NaN());
+
+    bool reorienting() const { return aligning_; }
+    Path2 remaining_path(double px, double py) const;
 
     // 最近一次用到的前瞻参考点（给可视化）
     Vec2 last_lookahead() const { return last_look_; }
@@ -61,16 +78,33 @@ private:
     TrackerGains g_;
     Trajectory   traj_;
     size_t       progress_idx_ = 0;   // 沿轨迹推进的最近点索引（单调前进）
+    double       progress_s_ = 0.0;
+    double       passed_corner_s_ = -1.0;
+    bool         progress_valid_ = false;
+    Vec2         progress_position_{};
     double       last_nearest_dist_ = 0.0;
 
     double prev_e_yaw_ = 0.0;
     double prev_e_ct_  = 0.0;
     bool   prev_valid_ = false;
 
+    bool motion_valid_ = false;
+    double prev_yaw_ = 0.0;
+    double filtered_yaw_rate_ = 0.0;
+    double previous_yaw_command_ = 0.0;
+    double previous_forward_command_ = 0.0;
+    bool aligning_ = false;
+    bool alignment_heading_valid_ = false;
+    double alignment_heading_ = 0.0;
+    double alignment_settled_ = 0.0;
+    int turn_direction_ = 0;
+
     Vec2   last_look_;
 
     // 从 progress_idx_ 起找离当前位置最近的轨迹点（只向前搜，禁止倒退）
-    size_t advance_to_nearest(double px, double py);
+    void advance_to_nearest(double px, double py);
+    TrajPoint sample_at(double s) const;
+    size_t next_corner() const;
 };
 
 }  // namespace exploration

@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include <string>
 #include <vector>
 
 #include <opencv2/opencv.hpp>
@@ -26,6 +27,19 @@
 #include "exploration_planner/grid_map.hpp"
 
 namespace exploration {
+
+struct CorridorVisualState {
+    bool configured = false;
+    bool active = false;
+    Vec2 entry, h;
+    double width = 2.0;
+    std::string phase;
+    std::vector<Vec2> points;
+    Path2 route;
+    bool gate_valid = false;
+    Vec2 gate_left, gate_right, gate_center;
+    int gates_passed = 0;
+};
 
 class Visualizer
 {
@@ -46,13 +60,20 @@ public:
                    const std::vector<Vec2>& pois,
                    const Obstacles& obstacles,
                    bool turning, int turn_dir,
-                   bool unreachable_valid, const Vec2& unreachable_pos);
+                   bool unreachable_valid, const Vec2& unreachable_pos,
+                   const CorridorVisualState& corridor = {});
 
 private:
     GridConfig cfg_;
+    int canvas_px_;
     int   W_, H_;
+    static constexpr int status_height_ = 66;
+    double offset_x_ = 0.0;
     double scale_;          // 米 → 像素
     double field_w_, field_h_;
+    double view_min_x_, view_max_y_;
+
+    void update_bounds(const CorridorVisualState& corridor);
 
     // 世界(SLAM) → 像素。y 轴翻转（图像 y 向下）。
     cv::Point to_px(double x, double y) const;

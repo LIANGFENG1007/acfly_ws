@@ -2,28 +2,112 @@
 
 #include <cmath>
 #include <algorithm>
+#include <array>
+#include <cstdio>
 
 namespace exploration {
+namespace {
+
+bool finite_point(const Vec2& p)
+{
+    return std::isfinite(p.x) && std::isfinite(p.y);
+}
+
+std::array<Vec2, 4> corridor_corners(const CorridorVisualState& corridor)
+{
+    const double dx = corridor.h.x - corridor.entry.x;
+    const double dy = corridor.h.y - corridor.entry.y;
+    const double length = std::hypot(dx, dy);
+    const double half_width = std::isfinite(corridor.width)
+        ? std::max(0.05, corridor.width * 0.5) : 1.0;
+    const Vec2 normal = length > 1e-6
+        ? Vec2{-dy / length * half_width, dx / length * half_width}
+        : Vec2{half_width, 0.0};
+    return {{{corridor.entry.x + normal.x, corridor.entry.y + normal.y},
+             {corridor.h.x + normal.x, corridor.h.y + normal.y},
+             {corridor.h.x - normal.x, corridor.h.y - normal.y},
+             {corridor.entry.x - normal.x, corridor.entry.y - normal.y}}};
+}
+
+void dashed_line(cv::Mat& img, cv::Point from, cv::Point to,
+                 const cv::Scalar& color)
+{
+    const cv::Point2d delta = cv::Point2d(to) - cv::Point2d(from);
+    const double length = cv::norm(delta);
+    if (length < 1.0) return;
+    for (double d = 0; d < length; d += 13.0) {
+        const cv::Point a = cv::Point2d(from) + delta * (d / length);
+        const cv::Point b = cv::Point2d(from) + delta * (std::min(d + 7.0, length) / length);
+        cv::line(img, a, b, color, 1, cv::LINE_AA);
+    }
+}
+
+void status_line(cv::Mat& img, const std::string& text, int y,
+                 const cv::Scalar& color)
+{
+    std::string visible = text;
+    const double font_scale = 0.46;
+    int baseline = 0;
+    if (cv::getTextSize(visible, cv::FONT_HERSHEY_SIMPLEX,
+                        font_scale, 1, &baseline).width > img.cols - 16) {
+        while (!visible.empty() &&
+               cv::getTextSize(visible + "...", cv::FONT_HERSHEY_SIMPLEX,
+                               font_scale, 1, &baseline).width > img.cols - 16) {
+            visible.pop_back();
+        }
+        visible += "...";
+    }
+    cv::putText(img, visible, cv::Point(8, y), cv::FONT_HERSHEY_SIMPLEX,
+                font_scale, color, 1, cv::LINE_AA);
+}
+
+}  // namespace
 
 Visualizer::Visualizer(const GridConfig& grid_cfg, int canvas_px)
-    : cfg_(grid_cfg)
+    : cfg_(grid_cfg), canvas_px_(std::max(96, canvas_px))
 {
-    field_w_ = cfg_.max_x - cfg_.min_x;
-    field_h_ = cfg_.max_y - cfg_.min_y;
+    update_bounds({});
+}
 
-    // 按场地长边等比缩放到 canvas_px
-    const double longer = std::max(field_w_, field_h_);
-    scale_ = (longer > 1e-6) ? (canvas_px / longer) : 1.0;
+void Visualizer::update_bounds(const CorridorVisualState& corridor)
+{
+    double min_x = cfg_.min_x, max_x = cfg_.max_x;
+    double min_y = cfg_.min_y, max_y = cfg_.max_y;
+    const bool configured = corridor.configured && finite_point(corridor.entry) &&
+        finite_point(corridor.h);
+    if (configured) {
+        // Display bounds are independent of coverage-grid indices and do not
+        // follow noisy cloud extrema, so the map remains stable during flight.
+        for (const Vec2& p : corridor_corners(corridor)) {
+            min_x = std::min(min_x, p.x);
+            max_x = std::max(max_x, p.x);
+            min_y = std::min(min_y, p.y);
+            max_y = std::max(max_y, p.y);
+        }
+    }
+    constexpr double margin = 0.45;
+    min_x -= margin;
+    min_y -= margin;
+    max_x += margin;
+    max_y += margin;
+    view_min_x_ = min_x;
+    view_max_y_ = max_y;
+    field_w_ = std::max(1e-6, max_x - min_x);
+    field_h_ = std::max(1e-6, max_y - min_y);
+    scale_ = std::min((canvas_px_ - 1) / field_w_,
+                      (canvas_px_ - 1 - status_height_) / field_h_);
 
-    W_ = std::max(1, static_cast<int>(std::lround(field_w_ * scale_)));
-    H_ = std::max(1, static_cast<int>(std::lround(field_h_ * scale_)));
+    const int map_width = std::max(1, static_cast<int>(std::lround(field_w_ * scale_)) + 1);
+    W_ = std::max(std::min(400, canvas_px_), map_width);
+    H_ = std::max(1, static_cast<int>(std::lround(field_h_ * scale_)) + 1 + status_height_);
+    offset_x_ = (W_ - map_width) * 0.5;
 }
 
 cv::Point Visualizer::to_px(double x, double y) const
 {
-    const int px = static_cast<int>(std::lround((x - cfg_.min_x) * scale_));
+    const int px = static_cast<int>(std::lround((x - view_min_x_) * scale_ + offset_x_));
     // 图像 y 轴向下：场地上方(y大)对应像素上方(行小)
-    const int py = static_cast<int>(std::lround((cfg_.max_y - y) * scale_));
+    const int py = static_cast<int>(std::lround((view_max_y_ - y) * scale_)) + status_height_;
     return cv::Point(px, py);
 }
 
@@ -35,9 +119,26 @@ cv::Mat Visualizer::render(const GridSnapshot& grid,
                            const std::vector<Vec2>& pois,
                            const Obstacles& obstacles,
                            bool turning, int turn_dir,
-                           bool unreachable_valid, const Vec2& unreachable_pos)
+                           bool unreachable_valid, const Vec2& unreachable_pos,
+                           const CorridorVisualState& corridor)
 {
+    update_bounds(corridor);
     cv::Mat img(H_, W_, CV_8UC3, cv::Scalar(40, 40, 40));   // 深灰底
+    const bool corridor_configured = corridor.configured && finite_point(corridor.entry) &&
+        finite_point(corridor.h);
+    if (corridor_configured) {
+        std::vector<cv::Point> reference;
+        for (const Vec2& p : corridor_corners(corridor)) {
+            reference.push_back(to_px(p.x, p.y));
+        }
+        cv::fillConvexPoly(img, reference, cv::Scalar(62, 48, 48));
+        cv::rectangle(img, to_px(cfg_.min_x, cfg_.max_y),
+                      to_px(cfg_.max_x, cfg_.min_y), cv::Scalar(40, 40, 40), cv::FILLED);
+        for (size_t i = 0; i < reference.size(); ++i) {
+            dashed_line(img, reference[i], reference[(i + 1) % reference.size()],
+                        cv::Scalar(136, 119, 101));
+        }
+    }
 
     const int cpb = grid.cells_per_big();
     const double sc = grid.config().small_cell;
@@ -111,11 +212,11 @@ cv::Mat Visualizer::render(const GridSnapshot& grid,
     }
 
     // ---- 2) 规划轨迹 ----
-    if (traj.size() >= 2) {
+    if (!corridor.active && traj.size() >= 2) {
         for (size_t i = 1; i < traj.size(); ++i) {
             cv::line(img, to_px(traj[i - 1].p.x, traj[i - 1].p.y),
                           to_px(traj[i].p.x, traj[i].p.y),
-                     cv::Scalar(230, 200, 60), 2);   // 青黄色折线
+                     cv::Scalar(255, 185, 80), 2, cv::LINE_AA);
         }
     }
 
@@ -130,6 +231,38 @@ cv::Mat Visualizer::render(const GridSnapshot& grid,
         cv::Point qp = to_px(q.x, q.y);
         cv::circle(img, qp, 6, cv::Scalar(255, 0, 0), cv::FILLED);   // 蓝实心(BGR)
         cv::circle(img, qp, 6, cv::Scalar(255, 255, 255), 1);        // 白描边更醒目
+    }
+
+    if (corridor_configured) {
+        for (const Vec2& p : corridor.points) {
+            if (!finite_point(p)) continue;
+            cv::circle(img, to_px(p.x, p.y), 1, cv::Scalar(225, 225, 225), cv::FILLED);
+        }
+        for (size_t i = 1; corridor.active && i < corridor.route.size(); ++i) {
+            if (!finite_point(corridor.route[i - 1]) || !finite_point(corridor.route[i])) continue;
+            cv::line(img, to_px(corridor.route[i - 1].x, corridor.route[i - 1].y),
+                          to_px(corridor.route[i].x, corridor.route[i].y),
+                     cv::Scalar(255, 185, 80), 2, cv::LINE_AA);
+        }
+        if (corridor.gate_valid && finite_point(corridor.gate_left) &&
+            finite_point(corridor.gate_right) && finite_point(corridor.gate_center)) {
+            const cv::Point left = to_px(corridor.gate_left.x, corridor.gate_left.y);
+            const cv::Point right = to_px(corridor.gate_right.x, corridor.gate_right.y);
+            const cv::Point center = to_px(corridor.gate_center.x, corridor.gate_center.y);
+            const cv::Scalar opening_color(225, 90, 240);
+            cv::line(img, left, right, opening_color, 2, cv::LINE_AA);
+            cv::circle(img, left, 4, opening_color, 1, cv::LINE_AA);
+            cv::circle(img, right, 4, opening_color, 1, cv::LINE_AA);
+            cv::drawMarker(img, center, opening_color, cv::MARKER_CROSS, 14, 2, cv::LINE_AA);
+        }
+        const cv::Point entry = to_px(corridor.entry.x, corridor.entry.y);
+        const cv::Point h = to_px(corridor.h.x, corridor.h.y);
+        cv::circle(img, entry, 9, cv::Scalar(0, 210, 140), cv::FILLED, cv::LINE_AA);
+        cv::putText(img, "E", entry + cv::Point(-5, 5), cv::FONT_HERSHEY_SIMPLEX,
+                    0.45, cv::Scalar(20, 35, 25), 1, cv::LINE_AA);
+        cv::circle(img, h, 12, cv::Scalar(245, 245, 245), 2, cv::LINE_AA);
+        cv::putText(img, "H", h + cv::Point(-6, 6), cv::FONT_HERSHEY_SIMPLEX,
+                    0.55, cv::Scalar(245, 245, 245), 2, cv::LINE_AA);
     }
 
     // ---- 4) 飞机：位置 + 朝向箭头 + FOV_DEG 扇形视野 ----
@@ -159,7 +292,7 @@ cv::Mat Visualizer::render(const GridSnapshot& grid,
     }
 
     // ---- 5) 前瞻点 ----
-    if (look_valid) {
+    if (look_valid && !corridor.active) {
         cv::circle(img, to_px(lookahead.x, lookahead.y), 3, cv::Scalar(255, 0, 255), cv::FILLED);
     }
 
@@ -189,10 +322,31 @@ cv::Mat Visualizer::render(const GridSnapshot& grid,
     }
 
     // ---- 6) 覆盖率文本 ----
-    char buf[64];
-    std::snprintf(buf, sizeof(buf), "Coverage: %.1f%%", grid.coverage_ratio() * 100.0);
-    cv::putText(img, buf, cv::Point(8, 22), cv::FONT_HERSHEY_SIMPLEX, 0.6,
-                cv::Scalar(255, 255, 255), 2);
+    char buf[128];
+    const char* stage = corridor.active ? "CORRIDOR" : (pose_valid ? "EXPLORATION" : "WAITING");
+    std::snprintf(buf, sizeof(buf), "Coverage: %.1f%% | %s", grid.coverage_ratio() * 100.0, stage);
+    cv::rectangle(img, cv::Rect(0, 0, W_, status_height_), cv::Scalar(28, 28, 28), cv::FILLED);
+    status_line(img, buf, 17, cv::Scalar(190, 220, 190));
+    if (corridor_configured) {
+        const std::string phase = corridor.active
+            ? (corridor.phase.empty() ? "ACTIVE" : corridor.phase) : "READY";
+        status_line(img, "Corridor: " + phase + " | Passed: " + std::to_string(corridor.gates_passed),
+                    37, cv::Scalar(255, 220, 165));
+        if (corridor.gate_valid && finite_point(corridor.gate_left) &&
+            finite_point(corridor.gate_right)) {
+            const double width = std::hypot(corridor.gate_left.x - corridor.gate_right.x,
+                                            corridor.gate_left.y - corridor.gate_right.y);
+            std::snprintf(buf, sizeof(buf), "Gap: %.2f m | Cloud: %zu | Corridor ref: %.2f m",
+                          width, corridor.points.size(), corridor.width);
+        } else {
+            std::snprintf(buf, sizeof(buf), "Gap: -- | Cloud: %zu | Corridor ref: %.2f m",
+                          corridor.points.size(), corridor.width);
+        }
+        status_line(img, buf, 57, cv::Scalar(225, 195, 230));
+    } else {
+        status_line(img, "Corridor: -- | Passed: --", 37, cv::Scalar(255, 220, 165));
+        status_line(img, "Gap: -- | Cloud: 0 | Corridor ref: --", 57, cv::Scalar(225, 195, 230));
+    }
 
     return img;
 }

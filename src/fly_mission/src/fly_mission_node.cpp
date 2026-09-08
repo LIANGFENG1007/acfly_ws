@@ -27,6 +27,15 @@ FlyMissionNode::FlyMissionNode()
       rd_(this),
       car_(this)
 {
+    explore_goal_x_ = declare_parameter<double>("explore_goal_x", params::EXPLORE_GOAL_X);
+    explore_goal_y_ = declare_parameter<double>("explore_goal_y", params::EXPLORE_GOAL_Y);
+    corridor_enabled_ = declare_parameter<bool>(
+        "explore_corridor_enabled", params::EXPLORE_CORRIDOR_ENABLED);
+    corridor_entry_x_ = declare_parameter<double>("corridor_entry_x", params::CORRIDOR_ENTRY_X);
+    corridor_entry_y_ = declare_parameter<double>("corridor_entry_y", params::CORRIDOR_ENTRY_Y);
+    corridor_h_x_ = declare_parameter<double>("corridor_h_x", params::CORRIDOR_H_X);
+    corridor_h_y_ = declare_parameter<double>("corridor_h_y", params::CORRIDOR_H_Y);
+
     // 算法 → 主控：机体系速度命令（前进/横向/yaw_rate）
     cmd_sub_ = create_subscription<geometry_msgs::msg::TwistStamped>(
         "/exploration/cmd_vel", 10,
@@ -62,12 +71,33 @@ FlyMissionNode::FlyMissionNode()
     finished_sub_ = create_subscription<std_msgs::msg::Bool>(
         "/exploration/finished", latched,
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
-            if (msg->data) explore_done_ = true;
+            if (!explore_entered_) return;
+            if (!msg->data) {
+                explore_done_ = false;
+                explore_finished_reset_seen_ = true;
+            } else if (explore_finished_reset_seen_) {
+                explore_done_ = true;
+            }
+        });
+
+    corridor_active_sub_ = create_subscription<std_msgs::msg::Bool>(
+        "/exploration/corridor_active", latched,
+        [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            if (!explore_entered_) return;
+            corridor_active_ = msg->data;
+            if (corridor_active_) explore_pos_valid_ = false;
         });
 
     // 主控 → 算法：探索终点（latched，进入探索时发一次）
     goal_pub_ = create_publisher<geometry_msgs::msg::PointStamped>(
         "/exploration/goal", latched);
+    corridor_route_pub_ = create_publisher<nav_msgs::msg::Path>(
+        "/exploration/corridor_route", latched);
+    // Publish geometry before takeoff so the planner keeps one full-scene view.
+    // The actual exploration goal will replace this preview timestamp on entry.
+    exploration_goal_header_.frame_id = "camera_init";
+    exploration_goal_header_.stamp = now();
+    publish_exploration_corridor_route(true);
 
     // ★起飞前流程横幅★：START_CMD_REQUIRED 决定要不要等启动指令(见 params 该项说明)。
     if (params::START_CMD_REQUIRED) {
@@ -247,9 +277,9 @@ void FlyMissionNode::on_timer()
         break;
 
     case MissionState::EXPLORATION:
-        exploration(7.0, 4.25);    //4.7, 2.2          // 探索终点 (SLAM 系)，改这里即可
+        exploration(explore_goal_x_, explore_goal_y_);
         if (explore_done_) {
-            RCLCPP_INFO(get_logger(), "[探索] 算法报告完成，准备降落");
+            RCLCPP_INFO(get_logger(), "[探索] 探索及已启用的过门任务全部完成，准备降落");
             state_ = MissionState::LAND;
         }
         break;

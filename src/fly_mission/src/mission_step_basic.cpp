@@ -152,7 +152,7 @@ void FlyMissionNode::step_wait_after_takeoff()
 {
     // ★★★ 切换起飞后的任务：只改这一行即可（六选一）★★★
     //   ★注意★：这行赋值是唯一权威，别信别处注释里的"当前选中"标注。
-    //     EXPLORATION       = 自主探索(exploration_planner 给速度，扫完→降落)
+    //     EXPLORATION       = 自主探索 → 红点 → 入口 → 穿门 → H → 降落
     //     HOVER_3S          = 悬停3s → 追踪小车 → 投掷 → 返航(第一段主流程)
     //                         其后可接第二段(落移动平台)，见 MISSION2_ENABLE
     //     FOLLOW_LINE       = 视觉寻线(沿黑线飞，丢线超时→降落)
@@ -207,7 +207,7 @@ void FlyMissionNode::step_wait_after_takeoff()
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  探索：首次进入锁高 + 发一次终点；位置环模式下转发位置目标，兼容旧速度模式
+//  探索：首次进入锁高 + 发红点/入口/H；通道阶段强制转发速度，其余兼容位置目标
 //  gx,gy = 探索终点 (SLAM 系，原点=起飞点)
 // ════════════════════════════════════════════════════════════════════════════
 void FlyMissionNode::exploration(double gx, double gy)
@@ -216,21 +216,37 @@ void FlyMissionNode::exploration(double gx, double gy)
         drone_.enter_exploration();
         // 每次进入探索重新等待当前规划器的模式消息，避免沿用上一次任务的旧位置目标。
         explore_pos_valid_ = false;
+        ext_cmd_valid_ = false;
+        explore_done_ = false;
+        explore_finished_reset_seen_ = false;
+        corridor_active_ = false;
         geometry_msgs::msg::PointStamped goal;
         goal.header.stamp    = now();
         goal.header.frame_id = "camera_init";
         goal.point.x = gx;
         goal.point.y = gy;
         goal.point.z = 0.0;
+        exploration_goal_header_ = goal.header;
+        exploration_route_z_ = drone_.current_z();
         goal_pub_->publish(goal);
+        publish_exploration_corridor_route(true);
         explore_entered_ = true;
-        RCLCPP_INFO(get_logger(), "[探索] 开始，终点 (%.2f, %.2f)", gx, gy);
+        RCLCPP_INFO(get_logger(), "[探索] 开始，探索红点 (%.2f, %.2f)，后续过门 %s",
+            gx, gy, corridor_enabled_ ? "已启用" : "已关闭");
+    } else {
+        publish_exploration_corridor_route(false);
+    }
+
+    // 原地转向/过门必须用限速的速度命令；即使速度暂未到，也先停止追旧位置目标。
+    if (corridor_active_ && drone_.action_mode() == ActionMode::EXTERNAL_POS) {
+        drone_.set_velocity_body(0.0, 0.0, 0.0);
     }
     // 位置环模式：规划器发布 /exploration/target_pose。目标 z 由主控锁定为进入探索时高度，
     // 位置目标过期时由 DroneController 锁定当前位置，避免继续追旧目标。
     const bool pos_fresh = explore_pos_valid_ &&
         (now() - explore_pos_time_).seconds() <= params::EXPLORE_CMD_TIMEOUT_S;
-    if (pos_fresh || drone_.action_mode() == ActionMode::EXTERNAL_POS) {
+    if (!corridor_active_ &&
+        (pos_fresh || drone_.action_mode() == ActionMode::EXTERNAL_POS)) {
         if (pos_fresh) {
             drone_.set_exploration_position_slam(
                 explore_pos_x_, explore_pos_y_, drone_.current_z(), explore_pos_yaw_);
@@ -241,7 +257,7 @@ void FlyMissionNode::exploration(double gx, double gy)
     // 速度兼容模式：只转发【新鲜】的速度；数据过期就不转发，让 drone_ 的看门狗接管保高悬停。
     //
     //   ★为什么必须判新鲜度(勿改回只判 ext_cmd_valid_)★：
-    //   ext_cmd_valid_ 是"收到过速度"的一次性锁存标志，置真后永不清零。若只判它，
+    //   ext_cmd_valid_ 只表示本次任务"收到过速度"，不能证明当前仍有新命令。若只判它，
     //   规划节点挂掉/停发之后，这里每拍仍会拿【最后那个速度】调 set_velocity_body，
     //   而该函数内部会刷新 ext_cmd_time_(控制器自己那个) → drone_ 里的 0.3s 看门狗
     //   【永远不触发】→ 飞机带着最后一条速度命令一直飞下去(算法死了也没人叫停)。
@@ -259,6 +275,52 @@ void FlyMissionNode::exploration(double gx, double gy)
             "[探索] /exploration/cmd_vel 已 %.2fs 无更新(>%.2fs)：算法挂了/停发了? "
             "→ 停止转发，悬停保高等它恢复",
             (now() - ext_cmd_time_).seconds(), params::EXPLORE_CMD_TIMEOUT_S);
+    }
+}
+
+void FlyMissionNode::publish_exploration_corridor_route(bool force)
+{
+    const bool enabled = get_parameter("explore_corridor_enabled").as_bool();
+    const double entry_x = get_parameter("corridor_entry_x").as_double();
+    const double entry_y = get_parameter("corridor_entry_y").as_double();
+    const double h_x = get_parameter("corridor_h_x").as_double();
+    const double h_y = get_parameter("corridor_h_y").as_double();
+    const auto equal = [](double a, double b) {
+        return a == b || (std::isnan(a) && std::isnan(b));
+    };
+    if (!force && enabled == corridor_enabled_ && equal(entry_x, corridor_entry_x_) &&
+        equal(entry_y, corridor_entry_y_) && equal(h_x, corridor_h_x_) &&
+        equal(h_y, corridor_h_y_)) return;
+
+    corridor_enabled_ = enabled;
+    corridor_entry_x_ = entry_x;
+    corridor_entry_y_ = entry_y;
+    corridor_h_x_ = h_x;
+    corridor_h_y_ = h_y;
+    nav_msgs::msg::Path route;
+    route.header = exploration_goal_header_; // 与本次 goal 配对，防止使用上一任务的通道。
+    const bool route_valid = std::isfinite(entry_x) && std::isfinite(entry_y) &&
+        std::isfinite(h_x) && std::isfinite(h_y);
+    if (enabled && route_valid) {
+        geometry_msgs::msg::PoseStamped entry;
+        entry.header = route.header;
+        entry.pose.position.x = entry_x;
+        entry.pose.position.y = entry_y;
+        entry.pose.position.z = exploration_route_z_;
+        entry.pose.orientation.w = 1.0;
+        auto finish = entry;
+        finish.pose.position.x = h_x;
+        finish.pose.position.y = h_y;
+        route.poses = {entry, finish};
+        corridor_route_pub_->publish(route);
+        RCLCPP_INFO(get_logger(), "[过门] 发布入口 (%.2f, %.2f)，H 点 (%.2f, %.2f)",
+            entry_x, entry_y, h_x, h_y);
+    } else if (!enabled) {
+        corridor_route_pub_->publish(route); // 空路径显式关闭尚未开始的后续过门。
+    } else {
+        RCLCPP_WARN(get_logger(),
+            "[过门] 入口/H 坐标未配置：探索可继续，到红点后保高等待；"
+            "请填写 params.hpp 的 CORRIDOR_ENTRY_X/Y、CORRIDOR_H_X/Y 或对应 ROS 参数");
     }
 }
 
@@ -388,7 +450,7 @@ void FlyMissionNode::step_circle_around()
 // ════════════════════════════════════════════════════════════════════════════
 bool FlyMissionNode::step_land()
 {
-    land();
+    drone_.land(corridor_active_);
     return is_reached();      // LAND 到位判定 = 高度触底 且 已上锁
 }
 
