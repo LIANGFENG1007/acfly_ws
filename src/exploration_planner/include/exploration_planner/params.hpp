@@ -18,10 +18,10 @@ namespace params {
 //   例：起飞点世界 (-4,0)，10x10 场地世界 x,y ∈ [-5,5]
 //       → SLAM x ∈ [-5-(-4), 5-(-4)] = [-1, 9]，y ∈ [-5, 5]
 // ---------------------------------------------------------------------------
-inline constexpr double FIELD_MIN_X = -0.5;
-inline constexpr double FIELD_MIN_Y = -2.1;
-inline constexpr double FIELD_MAX_X =  4.8;
-inline constexpr double FIELD_MAX_Y =  2.3;
+inline constexpr double FIELD_MIN_X = -1.0;   //-0.5
+inline constexpr double FIELD_MIN_Y = -5.0;   //-2.1
+inline constexpr double FIELD_MAX_X =  7.5;   // 4.8
+inline constexpr double FIELD_MAX_Y =  5.0;   // 2.3
 
 // ★整套运动控制方式★
 //   true  = 使用位置环控制运动目标；
@@ -55,7 +55,7 @@ inline constexpr double COVERAGE_THRESH = 0.90;   // 大格完成阈值（占比
 //   当前 100° → 半开角 ±50°
 // ---------------------------------------------------------------------------
 inline constexpr double FOV_DEG   = 100.0;   // 总开角 (度)
-inline constexpr double FOV_RANGE = 1.5;     // 可视半径 (m)
+inline constexpr double FOV_RANGE = 3.0;     // 可视半径 (m)
 
 // ---------------------------------------------------------------------------
 // 覆盖路径规划（牛耕往返）
@@ -120,7 +120,7 @@ inline constexpr double ARC_SAMPLE_DS = 0.05;  // 沿弧长采样步长 (m)
 //   v_fwd 上限 0.8，跟随曲率动态降：v_fwd = V_MAX / (1 + K_CURV*|κ|)
 //   全向模式横向只做低限纠偏；车式模式由 EXPLORATION_CARLIKE_MODE 强制关闭横移，主转向靠 yaw_rate
 // ---------------------------------------------------------------------------
-inline constexpr double V_MAX        = 0.40;   // 前进速度上限 (m/s)
+inline constexpr double V_MAX        = 0.80;   // 前进速度上限 (m/s)
 inline constexpr double V_MIN        = 0.00;   // 前进速度下限 (m/s)，防止过弯停死。
                                                //   ★当前为 0 = 该下限保护是空操作★(tracker 里那段 if 恒不生效)。
                                                //   若实测出现"过弯降速到几乎不动"，调到 0.05~0.10 即可启用兜底。
@@ -161,7 +161,7 @@ inline constexpr double V_EST_ALPHA  = 0.30;   // 位置差分估速度低通系
 //   覆盖率达标 → 进入"归航"：算法侧对到终点的位置误差跑 PD，平滑刹停，
 //   精确停在目标点（不再夹安全区）。停稳(到点+速度够小) → finished。
 // ---------------------------------------------------------------------------
-inline constexpr double DONE_COVERAGE   = 0.70;  // 完程度(已探索大格占比)达此值即"扫完"→归航
+inline constexpr double DONE_COVERAGE   = 0.90;  // 完程度(已探索大格占比)达此值即"扫完"→归航
 inline constexpr double GOAL_TOL_XY     = 0.10;  // 到终点位置容差 (m)，精确停所以收紧
 inline constexpr double GOAL_STOP_V     = 0.05;  // 停稳速度阈值 (m/s)，到点且慢于此才算停稳
 

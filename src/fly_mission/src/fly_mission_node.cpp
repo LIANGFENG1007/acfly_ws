@@ -247,7 +247,7 @@ void FlyMissionNode::on_timer()
         break;
 
     case MissionState::EXPLORATION:
-        exploration(4.7, 2.2);              // 探索终点 (SLAM 系)，改这里即可
+        exploration(7.0, 4.25);    //4.7, 2.2          // 探索终点 (SLAM 系)，改这里即可
         if (explore_done_) {
             RCLCPP_INFO(get_logger(), "[探索] 算法报告完成，准备降落");
             state_ = MissionState::LAND;
