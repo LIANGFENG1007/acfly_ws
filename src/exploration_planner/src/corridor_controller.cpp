@@ -32,7 +32,8 @@ CorridorController::CorridorController(const CorridorConfig& config)
                    cfg_.pose_timeout, p.corridor_width, p.robot_width, p.cell_size, p.lookahead,
                    p.wall_min_span, p.max_wall_gap, p.gate_min_span, p.gate_cluster_depth,
                    p.gate_max_depth, p.surface_sample_gap, p.min_observed_ahead}) ||
-        !nonnegative({cfg_.settle_time, cfg_.cloud_window, p.minimum_gap_extra, p.lookbehind,
+        !nonnegative({cfg_.settle_time, cfg_.cloud_window, cfg_.continuous_center_reserve,
+                      cfg_.continuous_time_margin, p.minimum_gap_extra, p.lookbehind,
                       p.wall_search_tolerance, p.wall_exclusion_band, p.endpoint_exclusion}) ||
         !std::isfinite(cfg_.initial_yaw) || cfg_.confirm_frames < 1 || p.wall_min_points < 2 ||
         p.gate_min_points < 2 || p.gate_min_clear_rays < 1 || p.corridor_width <= p.robot_width ||
@@ -137,7 +138,8 @@ CorridorCommand CorridorController::enter(const Vec2& position, double yaw,
 
 CorridorCommand CorridorController::translate(const Vec2& position, double yaw,
                                              const Vec2& target, double speed,
-                                             double vf, double vl, double dt)
+                                             double vf, double vl, double dt,
+                                             double longitudinal_limit)
 {
     const double error = angle(cfg_.initial_yaw - yaw);
     if (std::fabs(error) > cfg_.heading_stop && std::hypot(vf, vl) > cfg_.stop_speed)
@@ -156,6 +158,12 @@ CorridorCommand CorridorController::translate(const Vec2& position, double yaw,
     if (forward_corridor && perception_.longitudinal(position) < perception_.length()) {
         const double along = desired.x * axis.x + desired.y * axis.y;
         if (along < 0.0) { desired.x -= along * axis.x; desired.y -= along * axis.y; }
+    }
+    if (longitudinal_limit >= 0.0) {
+        const double along = desired.x * axis.x + desired.y * axis.y;
+        const double limited = std::clamp(along, 0.0, longitudinal_limit);
+        desired.x += (limited - along) * axis.x;
+        desired.y += (limited - along) * axis.y;
     }
     const double desired_speed = std::hypot(desired.x, desired.y);
     if (desired_speed > speed && desired_speed > 1e-9) {
@@ -204,6 +212,30 @@ CorridorCommand CorridorController::translate(const Vec2& position, double yaw,
     previous_velocity_ = velocity;
     previous_yaw_rate_ = cmd.yaw_rate;
     return cmd;
+}
+
+double CorridorController::approachForwardLimit(double lateral_error, double lateral_speed,
+                                                double remaining_distance) const
+{
+    if (remaining_distance <= 0.0) return 0.0;
+    const double component_speed = cfg_.align_speed / std::sqrt(2.0);
+    const double response_gain = cfg_.position_kp / (1.0 + cfg_.velocity_kd);
+    const double stop_time = std::fabs(lateral_speed) / cfg_.acceleration;
+    const double drift = lateral_speed * lateral_speed / (2.0 * cfg_.acceleration);
+    const double remaining_error = std::fabs(lateral_error) + drift;
+    const double threshold = cfg_.center_tolerance * 0.75;
+    const double saturation_error = component_speed / response_gain;
+    // Include both the speed-limited transfer and the slow PD tail. Treat
+    // existing lateral momentum as extra work even when it currently points inward.
+    double alignment_time = stop_time + cfg_.continuous_time_margin;
+    if (remaining_error > saturation_error)
+        alignment_time += (remaining_error - saturation_error) / component_speed;
+    const double settling_error = std::min(remaining_error, saturation_error);
+    if (settling_error > threshold)
+        alignment_time += std::log(settling_error / threshold) / response_gain;
+    const double time_limit = remaining_distance / std::max(0.02, alignment_time);
+    const double braking_limit = std::sqrt(2.0 * cfg_.acceleration * remaining_distance);
+    return std::min({component_speed, time_limit, braking_limit});
 }
 
 CorridorCommand CorridorController::update(const Vec2& position, double yaw, double vf,
@@ -322,6 +354,16 @@ CorridorCommand CorridorController::update(const Vec2& position, double yaw, dou
                 if (centered && std::fabs(angle(cfg_.initial_yaw - yaw)) <= cfg_.heading_tolerance) {
                     transition(CorridorPhase::Cross);
                     continue;
+                }
+                if (cfg_.continuous_approach) {
+                    const double remaining = last_clear_s - cfg_.continuous_center_reserve - s;
+                    const double forward_limit = approachForwardLimit(center_t - t, lateral_speed, remaining);
+                    const double target_s = std::min(perception_.length(),
+                        std::max(back + cfg_.exit_distance, s + cfg_.moving_lookahead));
+                    auto cmd = translate(position, yaw, perception_.toWorld(target_s, center_t),
+                                         cfg_.align_speed, vf, vl, dt, forward_limit);
+                    if (cmd.status.empty()) cmd.status = "Approaching door center continuously";
+                    return cmd;
                 }
                 // Do not reverse toward a staging point already behind the vehicle.
                 const double target_s = std::min(last_clear_s, std::max(s, approach));

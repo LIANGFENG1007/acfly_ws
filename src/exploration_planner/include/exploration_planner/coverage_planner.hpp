@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <limits>
+
 #include "exploration_planner/types.hpp"
 #include "exploration_planner/grid_map.hpp"
 
@@ -55,6 +57,17 @@ struct FrontierConfig {
     double band_tol;                     // 当前条带上下容差 (m)，选点时把略出带的格也纳入
     double along_bonus;                  // 沿条带主方向推进加成 (m/m)，越大越爱顺着横扫
     int    band_clear_cnt;               // 当前条带剩余未扫格 ≤ 此值才推进下一带(迟滞)
+    // Observation-target selection. These trailing defaults preserve the old
+    // aggregate configuration and plan_explore() behavior.
+    int    small_region_cells = 8;
+    double small_region_penalty = 2.0;   // Bounded preference; never excludes a region.
+    double observation_standoff = 1.0;
+    double preferred_clearance = 0.95;   // Center-to-obstacle surface / wall distance.
+    double minimum_clearance = 0.60;     // Hard obstacle clearance, including the aircraft.
+    double gain_weight = 0.15;
+    double clearance_weight = 2.0;
+    double observation_min_distance = 0.80;
+    double continuity_turn_penalty = 1.0; // Soft cost per radian away from a safe active route.
 };
 
 // unreachable/block_r: explore give-up blacklist. Skip candidate cells within
@@ -68,5 +81,32 @@ struct FrontierConfig {
 Path2 plan_explore(const GridSnapshot& grid, const FrontierConfig& cfg,
                    const Vec2& cur, double cur_yaw, int& cur_band, bool& all_explored,
                    const std::vector<Vec2>* unreachable = nullptr, double block_r = 0.0);
+
+struct FrontierSelection {
+    bool valid = false;
+    Vec2 point{};
+    int gain = 0;                       // Visible, unfinished big cells.
+    double clearance = 0.0;
+    int region_size = 0;
+    bool cleanup = false;
+    Vec2 look_at{};                     // Associated unknown region, for observation yaw.
+    bool requires_turn = false;         // Fallback: gain requires a turn after arrival.
+    double view_heading = 0.0;          // Heading used to evaluate this viewpoint's actual FOV.
+};
+
+// Select one safe observation waypoint rather than requesting entry into an
+// unknown cell. Neither this function nor visible_unknown_count changes grid
+// coverage. candidate_band is committed by the caller only after adopting a path.
+FrontierSelection select_observation_target(
+    const GridSnapshot& grid, const FrontierConfig& cfg, const Vec2& cur,
+    double cur_yaw, int& candidate_band, const Obstacles& obstacles,
+    const std::vector<Vec2>* unreachable = nullptr, double block_r = 0.0,
+    double route_heading = std::numeric_limits<double>::quiet_NaN());
+
+// Count unfinished big cells with genuinely unscanned representative points in
+// the given FOV and unobstructed by physical obstacle circles. Aircraft/planning
+// inflation is deliberately excluded from visibility rays.
+int visible_unknown_count(const GridSnapshot& grid, const Vec2& point, double heading,
+                          const Obstacles& obstacles, const FrontierConfig& cfg);
 
 }  // namespace exploration

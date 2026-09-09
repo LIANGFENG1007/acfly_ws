@@ -33,6 +33,105 @@ inline Vec2 bezier_at(const Vec2& b0, const Vec2& b1, const Vec2& b2, const Vec2
 
 }  // namespace
 
+Path2 round_path_corners(const Path2& path, const CornerRounding& options,
+                        const std::function<bool(const Path2&)>& valid)
+{
+    Path2 clean;
+    for (const Vec2& point : path) {
+        if (clean.empty() || dist(point, clean.back()) > 1e-6) clean.push_back(point);
+    }
+    if (clean.size() < 3 || options.max_distance <= 0.0) return clean;
+    Path2 result{clean.front()};
+    const double minimum = std::max(1e-3, options.min_distance);
+    for (size_t i = 1; i + 1 < clean.size(); ++i) {
+        const Vec2 previous = clean[i - 1], vertex = clean[i], next = clean[i + 1];
+        const double incoming = dist(previous, vertex), outgoing = dist(vertex, next);
+        const Vec2 u{(vertex.x - previous.x) / incoming, (vertex.y - previous.y) / incoming};
+        const Vec2 v{(next.x - vertex.x) / outgoing, (next.y - vertex.y) / outgoing};
+        const double angle = std::acos(std::clamp(u.x * v.x + u.y * v.y, -1.0, 1.0));
+        bool accepted = false;
+        if (angle >= options.min_angle && angle <= options.max_angle && angle < M_PI - 1e-3) {
+            // Each corner may use less than half of either adjacent segment,
+            // so independently accepted neighboring rounds cannot overlap.
+            double trim = std::min(options.max_distance, .45 * std::min(incoming, outgoing));
+            while (trim >= minimum - 1e-9) {
+                const double half_cos = std::cos(angle * .5);
+                const double peak_curvature = std::sin(angle * .5) / (trim * half_cos * half_cos);
+                // Shrinking a quadratic corner increases curvature. Do not
+                // hide an unexecutable sharp corner behind tiny curve samples.
+                if (peak_curvature > options.max_curvature) break;
+                const Vec2 start{vertex.x - trim * u.x, vertex.y - trim * u.y};
+                const Vec2 end{vertex.x + trim * v.x, vertex.y + trim * v.y};
+                const int count = std::max({4, options.samples,
+                    static_cast<int>(std::ceil(2.0 * trim / std::max(.005, options.sample_distance)))});
+                Path2 curve{start};
+                for (int sample = 1; sample <= count; ++sample) {
+                    const double t = static_cast<double>(sample) / count, s = 1.0 - t;
+                    curve.push_back({s * s * start.x + 2.0 * s * t * vertex.x + t * t * end.x,
+                                     s * s * start.y + 2.0 * s * t * vertex.y + t * t * end.y});
+                }
+                Path2 candidate{result.back()};
+                candidate.insert(candidate.end(), curve.begin(), curve.end());
+                candidate.push_back(next);
+                if (!valid || valid(candidate)) {
+                    result.insert(result.end(), curve.begin(), curve.end());
+                    accepted = true;
+                    break;
+                }
+                if (trim <= minimum + 1e-9) break;
+                trim = std::max(minimum, trim * .75);
+            }
+        }
+        if (!accepted) result.push_back(vertex);
+    }
+    result.push_back(clean.back());
+    return result;
+}
+
+Trajectory trajectory_from_polyline(const Path2& path, double sample_distance, double sharp_angle)
+{
+    Trajectory result;
+    double arc = 0.0;
+    for (const Vec2& point : path) {
+        if (result.empty()) {
+            result.push_back({point, 0.0, 0.0, arc});
+            continue;
+        }
+        const Vec2 start = result.back().p;
+        const double length = dist(start, point);
+        if (length < 1e-6) continue;
+        const int count = std::max(1, static_cast<int>(std::ceil(length / std::max(.005, sample_distance))));
+        // Sample every segment separately: even a very short segment endpoint
+        // is kept exactly, so a sharp fallback cannot lose its stop vertex.
+        for (int sample = 1; sample <= count; ++sample) {
+            const double t = static_cast<double>(sample) / count;
+            result.push_back({{start.x + t * (point.x - start.x), start.y + t * (point.y - start.y)},
+                              0.0, 0.0, arc + t * length});
+        }
+        arc += length;
+    }
+    for (size_t i = 0; i < result.size(); ++i) {
+        const Vec2 a = result[i == 0 ? i : i - 1].p;
+        const Vec2 b = result[i].p;
+        const Vec2 c = result[i + 1 == result.size() ? i : i + 1].p;
+        const double ab = dist(a, b), bc = dist(b, c), ac = dist(a, c);
+        const double incoming = ab > 1e-9 ? std::atan2(b.y - a.y, b.x - a.x) :
+                                         std::atan2(c.y - b.y, c.x - b.x);
+        const double outgoing = bc > 1e-9 ? std::atan2(c.y - b.y, c.x - b.x) : incoming;
+        const double turn = wrap_pi(outgoing - incoming);
+        result[i].theta = incoming + .5 * turn;
+        if (ab > 1e-9 && bc > 1e-9 && ac > 1e-9 &&
+            std::abs(turn) < std::max(.01, sharp_angle)) {
+            result[i].kappa = 2.0 * ((b.x - a.x) * (c.y - b.y) -
+                                    (b.y - a.y) * (c.x - b.x)) / (ab * bc * ac);
+        }
+        // At a discontinuous vertex the tracker already requires a complete
+        // stop before advancing. Assigning it a fabricated radius would add a
+        // long, sampling-dependent crawl to that explicit braking behavior.
+    }
+    return result;
+}
+
 Trajectory smooth_catmull_rom(const Path2& waypoints, double ds)
 {
     Trajectory traj;

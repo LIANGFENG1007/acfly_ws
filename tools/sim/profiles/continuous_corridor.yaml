@@ -1,0 +1,8 @@
+/**:
+  ros__parameters:
+    corridor_robot_width: 0.64
+    corridor_center_tol: 0.015
+    corridor_gate_speed: 0.30
+    corridor_continuous_approach: true
+    corridor_continuous_center_reserve: 0.15
+    corridor_continuous_time_margin: 0.50

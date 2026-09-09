@@ -31,6 +31,9 @@ struct CorridorConfig {
     double approach_distance = 1.20;
     double moving_lookahead = 0.80;
     double center_prediction_time = 0.25;
+    bool continuous_approach = false;
+    double continuous_center_reserve = 0.15;
+    double continuous_time_margin = 0.50;
     double exit_distance = 1.00;
     double center_tolerance = 0.04;
     double gate_association = 0.15;
@@ -104,7 +107,10 @@ private:
     CorridorCommand hold(const Vec2& position, const std::string& reason);
     CorridorCommand enter(const Vec2& position, double yaw, double vf, double vl, double dt);
     CorridorCommand translate(const Vec2& position, double yaw, const Vec2& target,
-                              double speed, double vf, double vl, double dt);
+                              double speed, double vf, double vl, double dt,
+                              double longitudinal_limit = -1.0);
+    double approachForwardLimit(double lateral_error, double lateral_speed,
+                                double remaining_distance) const;
 };
 
 }  // namespace exploration

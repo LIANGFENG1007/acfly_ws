@@ -34,9 +34,12 @@ void TrajectoryTracker::set_trajectory(const Trajectory& traj)
     passed_corner_s_ = -1.0;
     progress_valid_ = false;
     last_nearest_dist_ = 0.0;
+    last_heading_error_ = last_curvature_ = 0.0;
     prev_valid_ = false;
     alignment_heading_valid_ = false;
     alignment_settled_ = 0.0;
+    aligning_ = false;
+    turn_direction_ = 0;
     if (traj_.empty()) {
         motion_valid_ = false;
         filtered_yaw_rate_ = previous_yaw_command_ = previous_forward_command_ = 0.0;
@@ -76,7 +79,7 @@ size_t TrajectoryTracker::next_corner() const
     return traj_.size();
 }
 
-void TrajectoryTracker::advance_to_nearest(double px, double py)
+double TrajectoryTracker::projected_progress(double px, double py) const
 {
     const Vec2 cur{px, py};
     const double traveled = progress_valid_ ? dist(cur, progress_position_) : 0.0;
@@ -109,10 +112,16 @@ void TrajectoryTracker::advance_to_nearest(double px, double py)
             best_s = a.s + u * ds;
         }
     }
-    progress_s_ = best_s;
+    return best_s;
+}
+
+void TrajectoryTracker::advance_to_nearest(double px, double py)
+{
+    const Vec2 cur{px, py};
+    progress_s_ = projected_progress(px, py);
     while (progress_idx_ + 1 < traj_.size() &&
            traj_[progress_idx_ + 1].s <= progress_s_ + 1e-9) ++progress_idx_;
-    last_nearest_dist_ = best_distance;
+    last_nearest_dist_ = dist(cur, sample_at(progress_s_).p);
     progress_position_ = cur;
     progress_valid_ = true;
 }
@@ -121,12 +130,22 @@ Path2 TrajectoryTracker::remaining_path(double px, double py) const
 {
     if (traj_.empty()) return {};
     Path2 result{{px, py}};
-    const Vec2 projection = sample_at(progress_s_).p;
-    if (dist(result.back(), projection) > 1e-6) result.push_back(projection);
+    // Planning runs before update() in the node. Project the current pose with
+    // the same bounded progress rule instead of reconnecting to last tick's
+    // point behind us, which can falsely invalidate a safe obstacle escape.
+    const double remaining_s = projected_progress(px, py);
+    // Rejoin the next forward reference, not the perpendicular foot of the
+    // current pose. In a margin escape that perpendicular connection can point
+    // inward even though the commanded forward connection is clear.
+    const size_t corner = next_corner();
+    if (corner < traj_.size() && traj_[corner].s <= remaining_s + 1e-9 &&
+        dist(result.back(), traj_[corner].p) > 1e-6)
+        result.push_back(traj_[corner].p);  // Keep every unpassed hard corner.
     for (const auto& point : traj_) {
-        if (point.s > progress_s_ + 1e-9 && dist(result.back(), point.p) > 1e-6)
+        if (point.s > remaining_s + 1e-9 && dist(result.back(), point.p) > 1e-6)
             result.push_back(point.p);
     }
+    if (result.size() == 1) result.push_back(traj_.back().p);
     return result;
 }
 
@@ -164,6 +183,23 @@ VelCmd TrajectoryTracker::update(double px, double py, double yaw,
 
     const double speed = std::hypot(v_fwd_est, v_lat_est);
     size_t corner = next_corner();
+    if (corner < traj_.size()) {
+        const Vec2 before = traj_[corner - 1].p, vertex = traj_[corner].p;
+        const double incoming = dist(before, vertex);
+        const double passed = incoming > 1e-9
+            ? ((cur.x - vertex.x) * (vertex.x - before.x) +
+               (cur.y - vertex.y) * (vertex.y - before.y)) / incoming : 0.0;
+        if (passed > 0.0 && dist(cur, vertex) > std::max(.08, goal_tol)) {
+            // A short stale vertex behind us is not a new destination. Brake,
+            // then ask the obstacle-aware planner for a connection from here;
+            // never skip the corner blindly or circle back to chase its point.
+            previous_forward_command_ = previous_yaw_command_ = 0.0;
+            aligning_ = alignment_heading_valid_ = false;
+            last_look_ = cur;
+            cmd.needs_replan = speed <= g_.align_stop_speed;
+            return cmd;
+        }
+    }
     if (corner < traj_.size() && dist(cur, traj_[corner].p) <= std::max(0.08, goal_tol) &&
         speed <= g_.align_stop_speed) {
         passed_corner_s_ = traj_[corner].s;
@@ -185,11 +221,21 @@ VelCmd TrajectoryTracker::update(double px, double py, double yaw,
         const double nx = -std::sin(nearest.theta), ny = std::cos(nearest.theta);
         path_lateral_velocity = nx * vx + ny * vy;
         const double lateral_lead = std::max(0.0, g_.lateral_prediction_time - prediction);
-        const Vec2 predicted{px + prediction * vx + lateral_lead * path_lateral_velocity * nx,
-                             py + prediction * vy + lateral_lead * path_lateral_velocity * ny};
+        Vec2 predicted{px + prediction * vx + lateral_lead * path_lateral_velocity * nx,
+                       py + prediction * vy + lateral_lead * path_lateral_velocity * ny};
+        const double rx = ref.p.x - px, ry = ref.p.y - py;
+        const double distance2 = rx * rx + ry * ry;
+        if (distance2 > 1e-12) {
+            const double advance = ((predicted.x - px) * rx + (predicted.y - py) * ry) / distance2;
+            if (advance > .5) {
+                predicted.x -= (advance - .5) * rx;
+                predicted.y -= (advance - .5) * ry;
+            }
+        }
         if (dist(predicted, ref.p) > 1e-6) desired_theta = heading(predicted, ref.p);
     }
     double e_yaw = wrap_pi(desired_theta - yaw);
+    last_heading_error_ = e_yaw;
     const double e_ct = -std::sin(nearest.theta) * (px - nearest.p.x) +
                          std::cos(nearest.theta) * (py - nearest.p.y);
 
@@ -223,6 +269,7 @@ VelCmd TrajectoryTracker::update(double px, double py, double yaw,
     }
     if (aligning_ && alignment_heading_valid_) {
         e_yaw = wrap_pi(alignment_heading_ - yaw);
+        last_heading_error_ = e_yaw;
         // The shortest turn changes sign at pi. Keep the chosen turn through
         // that noisy boundary until there is an unambiguous shorter direction.
         if (std::abs(e_yaw) > 2.6 && turn_direction_ * e_yaw < 0.0)
@@ -273,6 +320,7 @@ VelCmd TrajectoryTracker::update(double px, double py, double yaw,
     double curvature = std::max(std::abs(nearest.kappa), std::abs(ref.kappa));
     for (size_t i = progress_idx_; i < traj_.size() && traj_[i].s <= look_s; ++i)
         curvature = std::max(curvature, std::abs(traj_[i].kappa));
+    last_curvature_ = curvature;
     double v = g_.v_max / (1.0 + g_.k_curv * curvature);
     double stop_distance = d_goal;
     if (corner < traj_.size()) stop_distance = std::min(stop_distance, dist(cur, traj_[corner].p));

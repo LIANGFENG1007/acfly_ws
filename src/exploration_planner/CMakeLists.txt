@@ -11,6 +11,7 @@ find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(diagnostic_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(tf2 REQUIRED)
@@ -38,6 +39,7 @@ ament_target_dependencies(exploration_planner_node
   geometry_msgs
   nav_msgs
   std_msgs
+  diagnostic_msgs
   sensor_msgs
   visualization_msgs
   tf2
@@ -53,7 +55,68 @@ install(DIRECTORY include/
   DESTINATION include/
 )
 
+# Keep the trial runner and installed launch on the same adapter/profile source.
+# These resources are part of the complete acfly_ws repository.
+set(ACFLY_SIM_TOOLS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../tools/sim")
+install(PROGRAMS "${ACFLY_SIM_TOOLS_DIR}/dense_cloud_bridge.py"
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME dense_cloud_bridge
+)
+install(FILES "${ACFLY_SIM_TOOLS_DIR}/profiles/physical_corridor.yaml"
+  DESTINATION share/${PROJECT_NAME}/config
+)
+install(DIRECTORY launch/
+  DESTINATION share/${PROJECT_NAME}/launch
+)
+
 if(BUILD_TESTING)
+  add_executable(frontier_observation_test tests/frontier_observation_test.cpp
+    src/coverage_planner.cpp src/grid_map.cpp)
+  target_compile_features(frontier_observation_test PRIVATE cxx_std_17)
+  add_test(NAME frontier_observation_test COMMAND frontier_observation_test)
+  add_executable(turn_rounding_test tests/turn_rounding_test.cpp
+    src/bezier.cpp src/trajectory_tracker.cpp src/global_planner.cpp)
+  target_compile_features(turn_rounding_test PRIVATE cxx_std_17)
+  add_test(NAME turn_rounding_test COMMAND turn_rounding_test)
+  add_executable(coverage_blacklist_test tests/coverage_blacklist_test.cpp src/coverage_planner.cpp)
+  target_compile_features(coverage_blacklist_test PRIVATE cxx_std_17)
+  add_test(NAME coverage_blacklist_test COMMAND coverage_blacklist_test)
+  add_executable(required_node_test
+    tests/required_node_test.cpp
+    src/grid_map.cpp
+    src/coverage_planner.cpp
+    src/bezier.cpp
+    src/trajectory_tracker.cpp
+    src/visualizer.cpp
+    src/obstacle_map.cpp
+    src/global_planner.cpp
+    src/corridor_perception.cpp
+    src/corridor_controller.cpp
+  )
+  target_compile_features(required_node_test PRIVATE cxx_std_17)
+  ament_target_dependencies(required_node_test
+    rclcpp geometry_msgs nav_msgs std_msgs diagnostic_msgs sensor_msgs visualization_msgs tf2
+  )
+  target_link_libraries(required_node_test ${OpenCV_LIBS})
+  add_test(NAME required_node_test COMMAND required_node_test
+    --ros-args -p viz:=false -p corridor_enabled:=false)
+  set_tests_properties(required_node_test PROPERTIES
+    ENVIRONMENT "ROS_DOMAIN_ID=203;ROS_LOCALHOST_ONLY=1;ROS_LOG_DIR=/tmp/acfly-required-node-ctest-logs"
+    RUN_SERIAL TRUE
+    TIMEOUT 60
+  )
+  add_executable(global_path_progress_test tests/global_path_progress_test.cpp src/global_planner.cpp)
+  target_compile_features(global_path_progress_test PRIVATE cxx_std_17)
+  add_test(NAME global_path_progress_test COMMAND global_path_progress_test)
+  add_executable(global_path_escape_test tests/global_path_escape_test.cpp src/global_planner.cpp)
+  target_compile_features(global_path_escape_test PRIVATE cxx_std_17)
+  add_test(NAME global_path_escape_test COMMAND global_path_escape_test)
+  add_executable(global_path_strict_test tests/global_path_strict_test.cpp src/global_planner.cpp)
+  target_compile_features(global_path_strict_test PRIVATE cxx_std_17)
+  add_test(NAME global_path_strict_test COMMAND global_path_strict_test)
+  add_executable(global_required_path_test tests/global_required_path_test.cpp src/global_planner.cpp)
+  target_compile_features(global_required_path_test PRIVATE cxx_std_17)
+  add_test(NAME global_required_path_test COMMAND global_required_path_test)
   add_executable(trajectory_overshoot_test tests/trajectory_overshoot_test.cpp
     src/trajectory_tracker.cpp)
   target_compile_features(trajectory_overshoot_test PRIVATE cxx_std_17)
@@ -94,6 +157,10 @@ if(BUILD_TESTING)
     src/corridor_controller.cpp src/corridor_perception.cpp)
   target_compile_features(corridor_exit_test PRIVATE cxx_std_17)
   add_test(NAME corridor_exit_test COMMAND corridor_exit_test)
+  add_executable(corridor_continuous_approach_test tests/corridor_continuous_approach_test.cpp
+    src/corridor_controller.cpp src/corridor_perception.cpp)
+  target_compile_features(corridor_continuous_approach_test PRIVATE cxx_std_17)
+  add_test(NAME corridor_continuous_approach_test COMMAND corridor_continuous_approach_test)
   find_package(ament_lint_auto REQUIRED)
   set(ament_cmake_copyright_FOUND TRUE)
   set(ament_cmake_cpplint_FOUND TRUE)

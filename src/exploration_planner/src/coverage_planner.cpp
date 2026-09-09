@@ -2,6 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <map>
+#include <utility>
 #include <vector>
 
 namespace exploration {
@@ -85,7 +88,7 @@ Path2 plan_explore(const GridSnapshot& grid, const FrontierConfig& cfg,
 {
     all_explored = false;
 
-    // give-up blacklist: skip candidate cells within block_r of any unreachable point
+    // Give-up locations are executable waypoints, after field-margin clamping.
     const double br2 = block_r * block_r;
     auto blacklisted = [&](const Vec2& p) {
         if (!unreachable || block_r <= 0.0) return false;
@@ -103,9 +106,12 @@ Path2 plan_explore(const GridSnapshot& grid, const FrontierConfig& cfg,
     // 飞机可达安全区（离墙 margin）
     const double x_lo = cfg.min_x + cfg.margin, x_hi = cfg.max_x - cfg.margin;
     const double y_lo = cfg.min_y + cfg.margin, y_hi = cfg.max_y - cfg.margin;
+    auto reachable_waypoint = [&](const Vec2& point) {
+        return Vec2{clampd(point.x, x_lo, x_hi), clampd(point.y, y_lo, y_hi)};
+    };
 
     // 收集未探索大格：中心坐标 + 8 邻域里"也未扫"的邻居数（衡量是否成片）+ 所属条带
-    struct Cell { Vec2 c; int nbr; int band; };
+    struct Cell { Vec2 c; Vec2 waypoint; int nbr; int band; };
     std::vector<Cell> un;
     un.reserve(static_cast<size_t>(NX) * NY);
 
@@ -143,7 +149,7 @@ Path2 plan_explore(const GridSnapshot& grid, const FrontierConfig& cfg,
             //   ★CAP 不可调太小★：CAP=4 有 2 组超时(+44.5%) —— 压得太狠会让飞机放弃
             //   "优先扫大片"的策略、在零散格之间乱跳。CAP≥8 等于关闭(8 邻域上限就是 8)。
             if (cfg.cluster_cap > 0) nbr = std::min(nbr, cfg.cluster_cap);
-            un.push_back({c, nbr, band_of(c.y)});
+            un.push_back({c, reachable_waypoint(c), nbr, band_of(c.y)});
         }
     }
 
@@ -213,7 +219,7 @@ Path2 plan_explore(const GridSnapshot& grid, const FrontierConfig& cfg,
         for (size_t i = 0; i < un.size(); ++i) {
             if (used[i]) continue;
             if (!in_active_band(un[i])) continue;
-            if (blacklisted(un[i].c)) continue;
+            if (blacklisted(un[i].waypoint)) continue;
             const double dx = un[i].c.x - from.x, dy = un[i].c.y - from.y;
             const double d = std::hypot(dx, dy);
             const double ang = std::fabs(wrap_pi(std::atan2(dy, dx) - head));
@@ -226,8 +232,7 @@ Path2 plan_explore(const GridSnapshot& grid, const FrontierConfig& cfg,
         }
         if (best < 0) break;
 
-        const Vec2 w{ clampd(un[best].c.x, x_lo, x_hi),
-                      clampd(un[best].c.y, y_lo, y_hi) };
+        const Vec2 w = un[best].waypoint;
         if (std::hypot(w.x - wp.back().x, w.y - wp.back().y) > 1e-3) wp.push_back(w);
 
         acc += std::hypot(w.x - from.x, w.y - from.y);
@@ -246,14 +251,321 @@ Path2 plan_explore(const GridSnapshot& grid, const FrontierConfig& cfg,
     if (wp.size() < 2) {
         int best = -1; double bd = 1e18;
         for (size_t i = 0; i < un.size(); ++i) {
-            if (blacklisted(un[i].c)) continue;
+            if (blacklisted(un[i].waypoint)) continue;
             const double d = std::hypot(un[i].c.x - cur.x, un[i].c.y - cur.y);
             if (d < bd) { bd = d; best = static_cast<int>(i); }
         }
         if (best >= 0)
-            wp.push_back({ clampd(un[best].c.x, x_lo, x_hi), clampd(un[best].c.y, y_lo, y_hi) });
+            wp.push_back(un[best].waypoint);
     }
     return wp;
+}
+
+namespace {
+struct UnknownCell {
+    Vec2 center;
+    std::vector<Vec2> samples;
+    int x = 0, y = 0, neighbors = 0, component = -1;
+};
+
+struct UnknownView {
+    std::vector<UnknownCell> cells;
+    std::vector<int> component_sizes;
+};
+
+UnknownView prepare_unknown_view(const GridSnapshot& grid)
+{
+    UnknownView view;
+    const int nx = grid.big_nx(), ny = grid.big_ny();
+    if (nx <= 0 || ny <= 0 || grid.cfg.big_cell <= 0.0 ||
+        grid.big.size() < static_cast<size_t>(nx) * ny) return view;
+    std::vector<int> lookup(static_cast<size_t>(nx) * ny, -1);
+    const bool have_small = grid.snx > 0 && grid.sny > 0 && grid.cpb > 0 &&
+        grid.cfg.small_cell > 0.0 &&
+        grid.small.size() >= static_cast<size_t>(grid.snx) * grid.sny;
+    const double quarter = grid.cfg.big_cell * 0.25;
+    for (int x = 0; x < nx; ++x) {
+        for (int y = 0; y < ny; ++y) {
+            if (grid.big_explored(x, y)) continue;
+            UnknownCell cell;
+            cell.x = x; cell.y = y;
+            cell.center = {grid.cfg.min_x + (x + 0.5) * grid.cfg.big_cell,
+                           grid.cfg.min_y + (y + 0.5) * grid.cfg.big_cell};
+            if (!have_small) {
+                cell.samples.push_back(cell.center);
+            } else {
+                // Retain up to five actual unscanned small cells, close to the
+                // center and four quadrants. Already observed parts of a nearly
+                // complete big cell cannot contribute imaginary information.
+                const Vec2 desired[] = {
+                    cell.center,
+                    {cell.center.x - quarter, cell.center.y - quarter},
+                    {cell.center.x - quarter, cell.center.y + quarter},
+                    {cell.center.x + quarter, cell.center.y - quarter},
+                    {cell.center.x + quarter, cell.center.y + quarter}};
+                double best_d2[5];
+                Vec2 best[5]{};
+                std::fill(std::begin(best_d2), std::end(best_d2),
+                          std::numeric_limits<double>::infinity());
+                for (int sx = x * grid.cpb; sx < std::min((x + 1) * grid.cpb, grid.snx); ++sx) {
+                    for (int sy = y * grid.cpb; sy < std::min((y + 1) * grid.cpb, grid.sny); ++sy) {
+                        if (grid.small_scanned(sx, sy)) continue;
+                        const Vec2 p{grid.cfg.min_x + (sx + 0.5) * grid.cfg.small_cell,
+                                     grid.cfg.min_y + (sy + 0.5) * grid.cfg.small_cell};
+                        for (int k = 0; k < 5; ++k) {
+                            const double dx = p.x - desired[k].x, dy = p.y - desired[k].y;
+                            const double d2 = dx * dx + dy * dy;
+                            if (d2 < best_d2[k]) { best_d2[k] = d2; best[k] = p; }
+                        }
+                    }
+                }
+                for (int k = 0; k < 5; ++k) {
+                    if (!std::isfinite(best_d2[k])) continue;
+                    bool duplicate = false;
+                    for (const auto& p : cell.samples)
+                        if (std::hypot(p.x - best[k].x, p.y - best[k].y) < 1e-9) duplicate = true;
+                    if (!duplicate) cell.samples.push_back(best[k]);
+                }
+            }
+            lookup[static_cast<size_t>(x) * ny + y] = static_cast<int>(view.cells.size());
+            view.cells.push_back(std::move(cell));
+        }
+    }
+    for (auto& cell : view.cells) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            for (int dy = -1; dy <= 1; ++dy) {
+                if ((dx == 0 && dy == 0) || cell.x + dx < 0 || cell.x + dx >= nx ||
+                    cell.y + dy < 0 || cell.y + dy >= ny) continue;
+                if (lookup[static_cast<size_t>(cell.x + dx) * ny + cell.y + dy] >= 0)
+                    ++cell.neighbors;
+            }
+        }
+    }
+    std::vector<int> queue;
+    for (size_t i = 0; i < view.cells.size(); ++i) {
+        if (view.cells[i].component >= 0) continue;
+        const int component = static_cast<int>(view.component_sizes.size());
+        queue.clear();
+        queue.push_back(static_cast<int>(i));
+        view.cells[i].component = component;
+        for (size_t q = 0; q < queue.size(); ++q) {
+            const UnknownCell& cell = view.cells[queue[q]];
+            for (int dx = -1; dx <= 1; ++dx) {
+                for (int dy = -1; dy <= 1; ++dy) {
+                    if ((dx == 0 && dy == 0) || cell.x + dx < 0 || cell.x + dx >= nx ||
+                        cell.y + dy < 0 || cell.y + dy >= ny) continue;
+                    const int neighbor = lookup[static_cast<size_t>(cell.x + dx) * ny + cell.y + dy];
+                    if (neighbor >= 0 && view.cells[neighbor].component < 0) {
+                        view.cells[neighbor].component = component;
+                        queue.push_back(neighbor);
+                    }
+                }
+            }
+        }
+        view.component_sizes.push_back(static_cast<int>(queue.size()));
+    }
+    return view;
+}
+
+bool clear_observation_ray(const Vec2& from, const Vec2& to, const Obstacles& obstacles)
+{
+    const double dx = to.x - from.x, dy = to.y - from.y;
+    const double length2 = dx * dx + dy * dy;
+    for (const auto& obstacle : obstacles) {
+        if (obstacle.r <= 0.0) continue;
+        const double t = length2 > 1e-12
+            ? std::clamp(((obstacle.cx - from.x) * dx +
+                          (obstacle.cy - from.y) * dy) / length2, 0.0, 1.0) : 0.0;
+        const double ox = from.x + t * dx - obstacle.cx;
+        const double oy = from.y + t * dy - obstacle.cy;
+        if (ox * ox + oy * oy < obstacle.r * obstacle.r) return false;
+    }
+    return true;
+}
+
+bool cell_visible(const UnknownCell& cell, const GridConfig& grid_config,
+                  const Vec2& point, double heading, const Obstacles& obstacles)
+{
+    if (!std::isfinite(heading) || grid_config.fov_range <= 0.0 || grid_config.fov_deg <= 0.0)
+        return false;
+    const double radius2 = grid_config.fov_range * grid_config.fov_range;
+    const double half_fov = std::min(M_PI, grid_config.fov_deg * M_PI / 360.0);
+    const double c = std::cos(heading), s = std::sin(heading);
+    const double cos_half = std::cos(half_fov);
+    const double cx = cell.center.x - point.x, cy = cell.center.y - point.y;
+    const double outer_range = grid_config.fov_range + grid_config.big_cell;
+    if (std::fabs(cx) > outer_range || std::fabs(cy) > outer_range) return false;
+    for (const auto& sample : cell.samples) {
+        const double dx = sample.x - point.x, dy = sample.y - point.y;
+        const double d2 = dx * dx + dy * dy;
+        if (d2 > radius2) continue;
+        if (dx * c + dy * s < cos_half * std::sqrt(d2) - 1e-12) continue;
+        if (!clear_observation_ray(point, sample, obstacles)) continue;
+        return true;
+    }
+    return false;
+}
+
+int count_visible(const UnknownView& view, const GridConfig& grid_config,
+                  const Vec2& point, double heading, const Obstacles& obstacles)
+{
+    int count = 0;
+    for (const auto& cell : view.cells)
+        if (cell_visible(cell, grid_config, point, heading, obstacles)) ++count;
+    return count;
+}
+
+double observation_clearance(const Vec2& point, const FrontierConfig& cfg,
+                             const Obstacles& obstacles)
+{
+    double clearance = std::min({point.x - cfg.min_x, cfg.max_x - point.x,
+                                 point.y - cfg.min_y, cfg.max_y - point.y});
+    for (const auto& obstacle : obstacles)
+        clearance = std::min(clearance,
+            std::hypot(point.x - obstacle.cx, point.y - obstacle.cy) - obstacle.r);
+    return clearance;
+}
+}  // namespace
+
+int visible_unknown_count(const GridSnapshot& grid, const Vec2& point, double heading,
+                          const Obstacles& obstacles, const FrontierConfig& cfg)
+{
+    (void)cfg;  // The actual coverage sensor model belongs to the grid.
+    return count_visible(prepare_unknown_view(grid), grid.config(), point, heading, obstacles);
+}
+
+FrontierSelection select_observation_target(
+    const GridSnapshot& grid, const FrontierConfig& cfg, const Vec2& cur,
+    double cur_yaw, int& candidate_band, const Obstacles& obstacles,
+    const std::vector<Vec2>* unreachable, double block_r, double route_heading)
+{
+    FrontierSelection result;
+    const UnknownView view = prepare_unknown_view(grid);
+    if (view.cells.empty() || !std::isfinite(cur_yaw)) return result;
+    // A band organizes which region to observe; its parity must not command
+    // an arbitrary reversal. Preserve progress along a safe route, even when
+    // its old viewpoint has just finished revealing its cells.
+    const bool continuing_route = std::isfinite(route_heading);
+    const double preferred_heading = continuing_route ? route_heading : cur_yaw;
+    const double x_lo = cfg.min_x + cfg.margin, x_hi = cfg.max_x - cfg.margin;
+    const double y_lo = cfg.min_y + cfg.margin, y_hi = cfg.max_y - cfg.margin;
+    if (x_lo > x_hi || y_lo > y_hi) return result;
+    const double bw = std::max(cfg.band_width, 1e-3);
+    const auto band_of = [&](double y) {
+        return std::max(0, static_cast<int>(std::floor((y - y_lo) / bw)));
+    };
+    const int band_count = std::max(1, band_of(y_hi) + 1);
+    int active_band = std::clamp(candidate_band < 0 ? band_of(cur.y) : candidate_band,
+                                 0, band_count - 1);
+    std::vector<int> band_sizes(static_cast<size_t>(band_count), 0);
+    for (const auto& cell : view.cells)
+        ++band_sizes[std::min(band_of(cell.center.y), band_count - 1)];
+    while (band_sizes[active_band] <= cfg.band_clear_cnt) {
+        int next = active_band + 1;
+        while (next < band_count && band_sizes[next] == 0) ++next;
+        if (next >= band_count) { active_band = -2; break; }
+        active_band = next;
+    }
+    const auto in_active_band = [&](const UnknownCell& cell) {
+        return active_band < 0 ||
+            (cell.center.y >= y_lo + active_band * bw - cfg.band_tol &&
+             cell.center.y <= y_lo + (active_band + 1) * bw + cfg.band_tol);
+    };
+    const int small_limit = std::max(0, cfg.small_region_cells);
+    bool any_large = false, active_large = false;
+    for (const auto& cell : view.cells) {
+        if (view.component_sizes[cell.component] > small_limit) {
+            any_large = true;
+            if (in_active_band(cell)) active_large = true;
+        }
+    }
+    const auto blacklisted = [&](const Vec2& point) {
+        if (!unreachable || block_r <= 0.0) return false;
+        for (const auto& blocked : *unreachable)
+            if (std::hypot(point.x - blocked.x, point.y - blocked.y) <= block_r) return true;
+        return false;
+    };
+    struct Evaluation { bool valid = false; double distance = 0, turn = 0, clearance = 0; int gain = 0; };
+    std::map<std::pair<long long, long long>, Evaluation> cache;
+    double best_cost = std::numeric_limits<double>::infinity();
+    int selected_band = active_band;
+    // Pass 1 restores candidates outside a locally blocked band. Pass 2 is an
+    // explicit observation-turn fallback only when no waypoint has forward
+    // gain anywhere; it cannot compete against a normal flowing observation.
+    for (int pass = 0; pass < 3 && !result.valid; ++pass) {
+        for (const auto& cell : view.cells) {
+            const int region_size = view.component_sizes[cell.component];
+            const bool local = in_active_band(cell);
+            if (pass == 0 && !local && (active_large || region_size <= small_limit)) continue;
+            const double dx = cell.center.x - cur.x, dy = cell.center.y - cur.y;
+            const double d = std::hypot(dx, dy);
+            const double ux = d > 1e-6 ? dx / d : std::cos(cur_yaw);
+            const double uy = d > 1e-6 ? dy / d : std::sin(cur_yaw);
+            const double standoff = std::max(0.0, cfg.observation_standoff);
+            const Vec2 points[] = {
+                cell.center,
+                {cell.center.x - standoff * ux, cell.center.y - standoff * uy},
+                {cell.center.x - 1.5 * standoff * ux, cell.center.y - 1.5 * standoff * uy},
+                {cell.center.x - standoff * uy, cell.center.y + standoff * ux},
+                {cell.center.x + standoff * uy, cell.center.y - standoff * ux}};
+            for (auto point : points) {
+                point.x = clampd(point.x, x_lo, x_hi);
+                point.y = clampd(point.y, y_lo, y_hi);
+                const auto key = std::make_pair(std::llround(point.x * 10000.0),
+                                                std::llround(point.y * 10000.0));
+                auto entry = cache.emplace(key, Evaluation{});
+                Evaluation& evaluation = entry.first->second;
+                if (entry.second) {
+                    evaluation.distance = std::hypot(point.x - cur.x, point.y - cur.y);
+                    evaluation.clearance = observation_clearance(point, cfg, obstacles);
+                    evaluation.valid = evaluation.distance >= std::max(0.0, cfg.observation_min_distance) &&
+                        evaluation.distance > 1e-4 &&
+                        evaluation.clearance + 1e-9 >= std::max(0.0, cfg.minimum_clearance) &&
+                        !blacklisted(point);
+                    if (evaluation.valid) {
+                        const double heading = std::atan2(point.y - cur.y, point.x - cur.x);
+                        evaluation.turn = std::fabs(wrap_pi(heading - cur_yaw));
+                        evaluation.gain = count_visible(view, grid.config(), point, heading, obstacles);
+                    }
+                }
+                if (!evaluation.valid) continue;
+                const double arrival_heading = std::atan2(point.y - cur.y, point.x - cur.x);
+                const double observation_heading = pass == 2
+                    ? std::atan2(cell.center.y - point.y, cell.center.x - point.x) : arrival_heading;
+                if (!cell_visible(cell, grid.config(), point, observation_heading, obstacles)) continue;
+                const int gain = pass == 2
+                    ? count_visible(view, grid.config(), point, observation_heading, obstacles) : evaluation.gain;
+                if (gain == 0) continue;
+                const double clearance_range = std::max(0.05, cfg.preferred_clearance - cfg.minimum_clearance);
+                const double clearance_deficit = clampd(
+                    (cfg.preferred_clearance - evaluation.clearance) / clearance_range, 0.0, 1.0);
+                const double small_deficit = small_limit > 0 && region_size <= small_limit
+                    ? static_cast<double>(small_limit + 1 - region_size) / (small_limit + 1) : 0.0;
+                const int cell_band = std::min(band_of(cell.center.y), band_count - 1);
+                const double band_penalty = !local && active_band >= 0
+                    ? 0.5 * std::min(2, std::abs(cell_band - active_band)) : 0.0;
+                const double along = std::max(0.0,
+                    std::cos(preferred_heading) * (point.x - cur.x) +
+                    std::sin(preferred_heading) * (point.y - cur.y));
+                const double route_turn = continuing_route
+                    ? std::fabs(wrap_pi(arrival_heading - route_heading)) : 0.0;
+                const int neighbors = cfg.cluster_cap > 0
+                    ? std::min(cell.neighbors, cfg.cluster_cap) : cell.neighbors;
+                const double cost = cfg.near_weight * evaluation.distance +
+                    cfg.turn_penalty * evaluation.turn - cfg.along_bonus * along -
+                    cfg.cluster_weight * neighbors - cfg.gain_weight * gain +
+                    cfg.clearance_weight * clearance_deficit + cfg.small_region_penalty * small_deficit +
+                    band_penalty + std::max(0.0, cfg.continuity_turn_penalty) * route_turn;
+                if (cost >= best_cost) continue;
+                best_cost = cost;
+                result = {true, point, gain, evaluation.clearance, region_size,
+                          !any_large || pass == 2, cell.center, pass == 2, observation_heading};
+                selected_band = active_band < 0 ? active_band : (local ? active_band : cell_band);
+            }
+        }
+    }
+    if (result.valid) candidate_band = selected_band;
+    return result;
 }
 
 }  // namespace exploration

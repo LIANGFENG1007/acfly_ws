@@ -40,43 +40,204 @@ bool point_blocked(double x, double y, const Obstacles& obs, double rr)
     return false;
 }
 
-// 线段 a→b 全程无碰撞（按 step 采样，每个采样点都不在禁入圆内）。
-bool segment_free(const Vec2& a, const Vec2& b, const Obstacles& obs,
-                  double rr, double step)
+double segment_distance2(const Vec2& point, const Vec2& a, const Vec2& b)
 {
-    const double L = std::hypot(b.x - a.x, b.y - a.y);
-    const int n = std::max(1, static_cast<int>(std::ceil(L / std::max(step, 1e-3))));
-    for (int k = 0; k <= n; ++k) {
-        const double t = static_cast<double>(k) / n;
-        const double px = a.x + t * (b.x - a.x);
-        const double py = a.y + t * (b.y - a.y);
-        if (point_blocked(px, py, obs, rr)) return false;
+    const double dx = b.x - a.x, dy = b.y - a.y;
+    const double length2 = dx * dx + dy * dy;
+    const double t = length2 > 0.0
+        ? std::clamp(((point.x - a.x) * dx + (point.y - a.y) * dy) / length2, 0.0, 1.0)
+        : 0.0;
+    const double ex = a.x + t * dx - point.x;
+    const double ey = a.y + t * dy - point.y;
+    return ex * ex + ey * ey;
+}
+
+// A start inside the extra margin may escape only with nondecreasing distance
+// throughout this segment. Actual aircraft overlap is never an escape route.
+bool segment_free(const Vec2& a, const Vec2& b, const Obstacles& obs,
+                  double rr, double robot_radius)
+{
+    if (!std::isfinite(a.x) || !std::isfinite(a.y) ||
+        !std::isfinite(b.x) || !std::isfinite(b.y)) return false;
+    for (const auto& obstacle : obs) {
+        const double ax = a.x - obstacle.cx, ay = a.y - obstacle.cy;
+        const double start_distance2 = ax * ax + ay * ay;
+        const double radius = obstacle.r + rr;
+        const double physical_radius = obstacle.r + robot_radius;
+        if (start_distance2 < radius * radius) {
+            if (start_distance2 <= physical_radius * physical_radius) return false;
+            const double radial_derivative = ax * (b.x - a.x) + ay * (b.y - a.y);
+            if (radial_derivative < -1e-12) return false;
+        } else if (segment_distance2({obstacle.cx, obstacle.cy}, a, b) < radius * radius) {
+            return false;
+        }
     }
     return true;
 }
 
-// 线段 a→b 全程离任一障碍【边缘】的最小余量（按 step 采样；边距 = 点到圆心距 − 障碍r）。
-//   供 score_path 评"路径安全性"用：值越大，这段路离障碍越远越安全。obs 为空时返回 +inf。
-double segment_min_clear(const Vec2& a, const Vec2& b, const Obstacles& obs, double step)
+// Exact distance to obstacle surfaces, using the same continuous segments as
+// collision validation. No sampling interval can hide a narrow intersection.
+double segment_min_clear(const Vec2& a, const Vec2& b, const Obstacles& obs)
 {
-    const double L = std::hypot(b.x - a.x, b.y - a.y);
-    const int n = std::max(1, static_cast<int>(std::ceil(L / std::max(step, 1e-3))));
     double mn = std::numeric_limits<double>::infinity();
-    for (int k = 0; k <= n; ++k) {
-        const double t = static_cast<double>(k) / n;
-        const double px = a.x + t * (b.x - a.x);
-        const double py = a.y + t * (b.y - a.y);
-        for (const auto& o : obs) {
-            const double d = std::hypot(px - o.cx, py - o.cy) - o.r;
-            if (d < mn) mn = d;
-        }
+    for (const auto& o : obs) {
+        const double d = std::sqrt(segment_distance2({o.cx, o.cy}, a, b)) - o.r;
+        mn = std::min(mn, d);
     }
     return mn;
 }
 
+bool field_segment_free(const Vec2& a, const Vec2& b, const GlobalConfig& cfg)
+{
+    const double low[2]{cfg.min_x + cfg.wall_margin, cfg.min_y + cfg.wall_margin};
+    const double high[2]{cfg.max_x - cfg.wall_margin, cfg.max_y - cfg.wall_margin};
+    const double prior[2]{a.x, a.y}, values[2]{b.x, b.y};
+    for (size_t axis = 0; axis < 2; ++axis) {
+        if (!std::isfinite(prior[axis]) || !std::isfinite(values[axis]) || low[axis] > high[axis])
+            return false;
+        if (prior[axis] < low[axis]) {
+            if (values[axis] < prior[axis] || values[axis] > high[axis]) return false;
+        } else if (prior[axis] > high[axis]) {
+            if (values[axis] > prior[axis] || values[axis] < low[axis]) return false;
+        } else if (values[axis] < low[axis] || values[axis] > high[axis]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool inside_field_margin(const Vec2& point, const GlobalConfig& cfg, double margin)
+{
+    return std::isfinite(point.x) && std::isfinite(point.y) &&
+        point.x >= cfg.min_x + margin && point.x <= cfg.max_x - margin &&
+        point.y >= cfg.min_y + margin && point.y <= cfg.max_y - margin;
+}
+
+bool required_config_valid(const GlobalConfig& cfg)
+{
+    return std::isfinite(cfg.min_x) && std::isfinite(cfg.min_y) &&
+        std::isfinite(cfg.max_x) && std::isfinite(cfg.max_y) &&
+        std::isfinite(cfg.cell) && cfg.cell > 0.0 &&
+        std::isfinite(cfg.robot_radius) && cfg.robot_radius > 0.0 &&
+        std::isfinite(cfg.inflate) && cfg.inflate >= 0.0 &&
+        std::isfinite(cfg.wall_margin) && cfg.wall_margin >= cfg.robot_radius &&
+        cfg.max_x - cfg.min_x > 2.0 * cfg.wall_margin &&
+        cfg.max_y - cfg.min_y > 2.0 * cfg.wall_margin &&
+        std::isfinite(cfg.required_connector_length) && cfg.required_connector_length > 0.0;
+}
+
+bool terminal_extension_anchor(const Vec2& point, const Vec2& goal,
+                               const GlobalConfig& cfg, Vec2& anchor)
+{
+    const double low[2]{cfg.min_x + cfg.wall_margin, cfg.min_y + cfg.wall_margin};
+    const double high[2]{cfg.max_x - cfg.wall_margin, cfg.max_y - cfg.wall_margin};
+    const double origin[2]{goal.x, goal.y}, direction[2]{point.x - goal.x, point.y - goal.y};
+    if (std::hypot(direction[0], direction[1]) < 1e-9) {
+        anchor = {std::clamp(goal.x, low[0], high[0]), std::clamp(goal.y, low[1], high[1])};
+        return true;
+    }
+    double near = 0.0, far = std::numeric_limits<double>::infinity();
+    for (size_t axis = 0; axis < 2; ++axis) {
+        if (std::fabs(direction[axis]) < 1e-12) {
+            if (origin[axis] < low[axis] || origin[axis] > high[axis]) return false;
+            continue;
+        }
+        double first = (low[axis] - origin[axis]) / direction[axis];
+        double last = (high[axis] - origin[axis]) / direction[axis];
+        if (first > last) std::swap(first, last);
+        near = std::max(near, first);
+        far = std::min(far, last);
+        if (near > far) return false;
+    }
+    anchor = {std::clamp(goal.x + near * direction[0], low[0], high[0]),
+              std::clamp(goal.y + near * direction[1], low[1], high[1])};
+    return true;
+}
+
+bool required_field_shape(const Path2& path, const Vec2& goal, const GlobalConfig& cfg,
+                          size_t& terminal_start)
+{
+    if (path.size() < 2 || !inside_field_margin(goal, cfg, cfg.robot_radius) ||
+        std::hypot(path.back().x - goal.x, path.back().y - goal.y) > 1e-6) return false;
+    terminal_start = path.size() - 1;
+    if (path_inside_safe_field(path, cfg)) return true;
+    if (inside_field_margin(goal, cfg, cfg.wall_margin)) return false;
+
+    Vec2 anchor;
+    bool found_inside = false;
+    for (size_t i = path.size() - 1; i-- > 0;) {
+        if (inside_field_margin(path[i], cfg, cfg.wall_margin)) {
+            terminal_start = i;
+            anchor = path[i];
+            found_inside = true;
+            break;
+        }
+    }
+    if (found_inside) {
+        const Path2 prefix(path.begin(), path.begin() + terminal_start + 1);
+        if (!path_inside_safe_field(prefix, cfg)) return false;
+    } else {
+        terminal_start = 0;
+        if (!terminal_extension_anchor(path.front(), goal, cfg, anchor)) return false;
+    }
+    const double dx = goal.x - anchor.x, dy = goal.y - anchor.y;
+    const double length2 = dx * dx + dy * dy;
+    if (length2 > cfg.required_connector_length * cfg.required_connector_length + 1e-12 ||
+        length2 < 1e-18) return false;
+    double progress = -1e-9;
+    for (size_t i = terminal_start; i < path.size(); ++i) {
+        if (!inside_field_margin(path[i], cfg, cfg.robot_radius) ||
+            segment_distance2(path[i], anchor, goal) > 1e-12) return false;
+        const double along = ((path[i].x - anchor.x) * dx + (path[i].y - anchor.y) * dy) / length2;
+        if (along < progress - 1e-9) return false;
+        progress = along;
+    }
+    return true;
+}
+
+// Project onto continuous segments, keeping the earliest segment on ties so a
+// crossing or return leg cannot skip still-pending path sections.
+template<typename Visitor>
+bool visit_remaining_segments(const Vec2& cur, const Path2& path, Visitor visit,
+                              size_t* projected_segment = nullptr)
+{
+    if (path.size() < 2) return false;
+
+    size_t nearest_segment = 0;
+    Vec2 projection = path.front();
+    double best_distance2 = std::numeric_limits<double>::infinity();
+    for (size_t i = 0; i + 1 < path.size(); ++i) {
+        const Vec2& a = path[i];
+        const Vec2& b = path[i + 1];
+        const double dx = b.x - a.x, dy = b.y - a.y;
+        const double length2 = dx * dx + dy * dy;
+        const double u = length2 > 0.0
+            ? std::clamp(((cur.x - a.x) * dx + (cur.y - a.y) * dy) / length2, 0.0, 1.0)
+            : 0.0;
+        const Vec2 candidate{a.x + u * dx, a.y + u * dy};
+        const double ex = cur.x - candidate.x, ey = cur.y - candidate.y;
+        const double distance2 = ex * ex + ey * ey;
+        if (distance2 < best_distance2 - 1e-12) {
+            best_distance2 = distance2;
+            nearest_segment = i;
+            projection = candidate;
+        }
+    }
+
+    // Keep zero-length connections: even at the endpoint, the current position
+    // must still be checked against a newly observed obstacle.
+    if (projected_segment) *projected_segment = nearest_segment;
+    if (!visit(cur, projection) || !visit(projection, path[nearest_segment + 1]))
+        return false;
+    for (size_t i = nearest_segment + 1; i + 1 < path.size(); ++i) {
+        if (!visit(path[i], path[i + 1])) return false;
+    }
+    return true;
+}
+
 // 视线串拉简化：把 A* 的逐格折线压成稀疏拐点（相邻拐点间直线可走），
 // 首尾必留。让 Catmull-Rom 平滑出柔顺曲线、PD 沿线 carrot 跟随不抖。
-Path2 simplify(const Path2& pts, const Obstacles& obs, double rr, double step)
+Path2 simplify(const Path2& pts, const Obstacles& obs, double rr, double robot_radius)
 {
     const int n = static_cast<int>(pts.size());
     if (n <= 2) return pts;
@@ -84,7 +245,7 @@ Path2 simplify(const Path2& pts, const Obstacles& obs, double rr, double step)
     out.push_back(pts[0]);
     int anchor = 0;
     for (int i = 2; i < n; ++i) {
-        if (!segment_free(pts[anchor], pts[i], obs, rr, step)) {
+        if (!segment_free(pts[anchor], pts[i], obs, rr, robot_radius)) {
             out.push_back(pts[i - 1]);   // anchor→i 撞了 → 保留上一个可直达点
             anchor = i - 1;
         }
@@ -97,11 +258,25 @@ Path2 simplify(const Path2& pts, const Obstacles& obs, double rr, double step)
 
 }  // namespace
 
-GlobalResult plan_global_path(const Vec2& start, const Vec2& goal,
-                              const Obstacles& obs, const GlobalConfig& cfg,
-                              double start_yaw)
+static GlobalResult plan_path(const Vec2& start, const Vec2& goal,
+                              const Obstacles& obs, GlobalConfig cfg,
+                              double start_yaw, bool required_goal)
 {
     GlobalResult res;
+    if (required_goal) {
+        cfg.validate_complete_path = true;
+        if (!required_config_valid(cfg)) return res;
+        if (!inside_field_margin(goal, cfg, cfg.robot_radius) ||
+            point_blocked(goal.x, goal.y, obs, cfg.robot_radius + cfg.inflate)) {
+            res.goal_blocked = true;
+            return res;
+        }
+    }
+    if (cfg.validate_complete_path &&
+        (!std::isfinite(start.x) || !std::isfinite(start.y) ||
+         !std::isfinite(goal.x) || !std::isfinite(goal.y) ||
+         !segment_free(start, start, obs, cfg.robot_radius + cfg.inflate, cfg.robot_radius)))
+        return res;
 
     // ---- 建栅格 + 膨胀障碍 + 四面墙 ----
     //   ★热点★：本函数在【原地转身找解】期间每拍(50Hz)都跑，且持有节点 mtx_。
@@ -114,6 +289,16 @@ GlobalResult plan_global_path(const Vec2& start, const Vec2& goal,
     g.min_x = cfg.min_x; g.min_y = cfg.min_y; g.cell = cfg.cell;
     g.nx = std::max(1, static_cast<int>(std::ceil((cfg.max_x - cfg.min_x) / cfg.cell)));
     g.ny = std::max(1, static_cast<int>(std::ceil((cfg.max_y - cfg.min_y) / cfg.cell)));
+    if (cfg.validate_complete_path) {
+        // Centre a search cell on the exact current pose. At a virtual wall
+        // inset, a fixed half-cell offset can make every first edge approach
+        // an obstacle even when a tangential escape exists. Physical bounds
+        // remain cfg's bounds and are checked independently on every edge.
+        const int ix = std::clamp(static_cast<int>(std::floor((start.x - cfg.min_x) / g.cell)), 0, g.nx - 1);
+        const int iy = std::clamp(static_cast<int>(std::floor((start.y - cfg.min_y) / g.cell)), 0, g.ny - 1);
+        g.min_x = start.x - (ix + .5) * g.cell;
+        g.min_y = start.y - (iy + .5) * g.cell;
+    }
     g.blocked.assign(static_cast<size_t>(g.nx) * g.ny, 0);
 
     // ① 墙禁入：cell 中心距任一场地边界 < wall_margin。x 侧只与 ix 有关、y 侧只与 iy 有关。
@@ -170,19 +355,36 @@ GlobalResult plan_global_path(const Vec2& start, const Vec2& goal,
     res.start_blocked = g.blocked[start_idx];
 
     // 终点落在膨胀障碍内 → 环形外扩找最近可达格当搜索目标（真目标末尾再补，PD 精确逼近）。
-    int goal_idx = g.idx(gx, gy);
-    if (g.blocked[goal_idx]) {
+    int goal_idx = required_goal ? g.nx * g.ny : g.idx(gx, gy);
+    const bool exact_goal_blocked = cfg.validate_complete_path &&
+        (point_blocked(goal.x, goal.y, obs, rr) || !path_inside_safe_field({goal}, cfg));
+    if (!required_goal && (g.blocked[goal_idx] || exact_goal_blocked)) {
         res.goal_blocked = true;
         bool found = false;
-        const int max_ring = std::max(g.nx, g.ny);
-        for (int rad = 1; rad <= max_ring && !found; ++rad) {
-            for (int dx = -rad; dx <= rad && !found; ++dx)
-                for (int dy = -rad; dy <= rad && !found; ++dy) {
-                    if (std::max(std::abs(dx), std::abs(dy)) != rad) continue;  // 只看当前环
-                    const int nxc = gx + dx, nyc = gy + dy;
-                    if (!g.in_bounds(nxc, nyc)) continue;
-                    if (!g.blocked[g.idx(nxc, nyc)]) { gx = nxc; gy = nyc; found = true; }
+        if (cfg.validate_complete_path) {
+            double nearest2 = std::numeric_limits<double>::infinity();
+            for (int ix = 0; ix < g.nx; ++ix) {
+                for (int iy = 0; iy < g.ny; ++iy) {
+                    if (g.blocked[g.idx(ix, iy)]) continue;
+                    const double dx = g.cx(ix) - goal.x, dy = g.cy(iy) - goal.y;
+                    const double distance2 = dx * dx + dy * dy;
+                    if (distance2 < nearest2) {
+                        nearest2 = distance2;
+                        gx = ix; gy = iy; found = true;
+                    }
                 }
+            }
+        } else {
+            const int max_ring = std::max(g.nx, g.ny);
+            for (int rad = 1; rad <= max_ring && !found; ++rad) {
+                for (int dx = -rad; dx <= rad && !found; ++dx)
+                    for (int dy = -rad; dy <= rad && !found; ++dy) {
+                        if (std::max(std::abs(dx), std::abs(dy)) != rad) continue;
+                        const int nxc = gx + dx, nyc = gy + dy;
+                        if (!g.in_bounds(nxc, nyc)) continue;
+                        if (!g.blocked[g.idx(nxc, nyc)]) { gx = nxc; gy = nyc; found = true; }
+                    }
+            }
         }
         if (!found) return res;   // 全场无可达格 → ok=false，节点回退 DWA
         goal_idx = g.idx(gx, gy);
@@ -198,12 +400,24 @@ GlobalResult plan_global_path(const Vec2& start, const Vec2& goal,
         if (!g.in_bounds(ix, iy)) return true;
         const int id = g.idx(ix, iy);
         if (id == start_idx || id == goal_idx) return false;
-        // 起点 relax 邻域：放行，但障碍【圆心实体】附近不放行(防直接穿柱心)。
-        if (std::abs(ix - sx) <= relax && std::abs(iy - sy) <= relax) {
+        if (cfg.validate_complete_path && !g.blocked[id]) return false;
+        // Strict search already checks every edge for monotonic recovery.
+        // Do not truncate a safe field-entry detour to the old start-cell box.
+        if (cfg.validate_complete_path ||
+            (std::abs(ix - sx) <= relax && std::abs(iy - sy) <= relax)) {
             for (const auto& o : obs) {
                 const double dx = g.cx(ix) - o.cx, dy = g.cy(iy) - o.cy;
-                if (dx * dx + dy * dy < o.r * o.r) return true;   // 落在障碍实体圆内仍禁
+                if (cfg.validate_complete_path) {
+                    const double ax = start.x - o.cx, ay = start.y - o.cy;
+                    const double physical = o.r + cfg.robot_radius;
+                    const double inflated = o.r + rr;
+                    const double minimum2 = std::max(physical * physical,
+                        std::min(ax * ax + ay * ay, inflated * inflated));
+                    if (dx * dx + dy * dy < minimum2) return true;
+                } else if (dx * dx + dy * dy < o.r * o.r) return true;
             }
+            if (cfg.validate_complete_path &&
+                !field_segment_free(start, {g.cx(ix), g.cy(iy)}, cfg)) return true;
             return false;   // 否则放行(让飞机从窄区挪出第一步)
         }
         return g.blocked[id] != 0;
@@ -231,15 +445,35 @@ GlobalResult plan_global_path(const Vec2& start, const Vec2& goal,
         while (da <= -M_PI) da += 2.0 * M_PI;
         return std::fabs(da) > cfg.head_cone_half;                      // 楔形外 → 禁入
     };
+    auto connector_cone_clear = [&](const Vec2& a, const Vec2& b) {
+        if (!cone_active) return true;
+        const int steps = std::max(1, static_cast<int>(std::ceil(
+            std::hypot(b.x - a.x, b.y - a.y) / (0.5 * g.cell))));
+        for (int i = 1; i <= steps; ++i) {
+            const double t = static_cast<double>(i) / steps;
+            const double dx = a.x + t * (b.x - a.x) - start.x;
+            const double dy = a.y + t * (b.y - a.y) - start.y;
+            const double radius = std::hypot(dx, dy);
+            if (radius <= cone_inner || radius > cfg.head_cone_radius) continue;
+            const double error = std::atan2(std::sin(std::atan2(dy, dx) - start_yaw),
+                                           std::cos(std::atan2(dy, dx) - start_yaw));
+            if (std::fabs(error) > cfg.head_cone_half) return false;
+        }
+        return true;
+    };
 
     // ---- A*（8 邻，欧氏启发，禁止贴角斜穿） ----
-    const int N = g.nx * g.ny;
+    const int N = g.nx * g.ny + (required_goal ? 1 : 0);
     const double INF = std::numeric_limits<double>::infinity();
     std::vector<double> gscore(N, INF);
     std::vector<int>    came(N, -1);
     std::vector<char>   closed(N, 0);
 
     auto heur = [&](int ix, int iy) -> double {
+        if (required_goal) {
+            const Vec2 point = g.idx(ix, iy) == start_idx ? start : Vec2{g.cx(ix), g.cy(iy)};
+            return std::hypot(point.x - goal.x, point.y - goal.y);
+        }
         const double dx = g.cx(ix) - g.cx(gx), dy = g.cy(iy) - g.cy(gy);
         return std::hypot(dx, dy);
     };
@@ -251,6 +485,13 @@ GlobalResult plan_global_path(const Vec2& start, const Vec2& goal,
 
     const double diag = std::sqrt(2.0) * g.cell;
     const int dirs[8][2] = {{1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1}};
+    const Vec2 final_goal = res.goal_blocked ? Vec2{g.cx(gx), g.cy(gy)} : goal;
+    auto exact_point = [&](int ix, int iy) {
+        const int id = g.idx(ix, iy);
+        if (id == start_idx) return start;
+        if (id == goal_idx) return final_goal;
+        return Vec2{g.cx(ix), g.cy(iy)};
+    };
 
     bool reached = false;
     while (!open.empty()) {
@@ -260,6 +501,25 @@ GlobalResult plan_global_path(const Vec2& start, const Vec2& goal,
         if (cur == goal_idx) { reached = true; break; }
 
         const int cix = cur / g.ny, ciy = cur % g.ny;
+        if (required_goal) {
+            const Vec2 point = exact_point(cix, ciy);
+            const double distance = std::hypot(point.x - goal.x, point.y - goal.y);
+            size_t terminal_start = 0;
+            // The virtual goal can only be reached by a verified final connector;
+            // normal grid expansion keeps the unchanged full field inset.
+            if (distance <= cfg.required_connector_length + 1e-9 &&
+                (cur == start_idx || inside_field_margin(point, cfg, cfg.wall_margin)) &&
+                required_field_shape({point, goal}, goal, cfg, terminal_start) &&
+                connector_cone_clear(point, goal) &&
+                segment_free(point, goal, obs, rr, cfg.robot_radius)) {
+                const double ng = gscore[cur] + distance;
+                if (ng < gscore[goal_idx]) {
+                    gscore[goal_idx] = ng;
+                    came[goal_idx] = cur;
+                    open.push({ng, goal_idx});
+                }
+            }
+        }
         for (const auto& d : dirs) {
             const int nix = cix + d[0], niy = ciy + d[1];
             if (cell_blocked(nix, niy)) continue;
@@ -269,7 +529,14 @@ GlobalResult plan_global_path(const Vec2& start, const Vec2& goal,
             }
             const int nid = g.idx(nix, niy);
             if (closed[nid]) continue;
-            const double step = (d[0] != 0 && d[1] != 0) ? diag : g.cell;
+            if (cfg.validate_complete_path) {
+                const Vec2 a = exact_point(cix, ciy), b = exact_point(nix, niy);
+                if (!segment_free(a, b, obs, rr, cfg.robot_radius) ||
+                    !field_segment_free(a, b, cfg)) continue;
+            }
+            const Vec2 a = exact_point(cix, ciy), b = exact_point(nix, niy);
+            const double step = required_goal ? std::hypot(a.x - b.x, a.y - b.y)
+                : ((d[0] != 0 && d[1] != 0) ? diag : g.cell);
             const double ng = gscore[cur] + step;
             if (ng < gscore[nid]) {
                 gscore[nid] = ng;
@@ -284,69 +551,129 @@ GlobalResult plan_global_path(const Vec2& start, const Vec2& goal,
     // ---- 回溯逐格路径 → 世界点（首尾换成精确 start/goal） ----
     Path2 raw;
     for (int cur = goal_idx; cur != -1; cur = came[cur]) {
+        if (required_goal && cur == goal_idx) {
+            raw.push_back(goal);
+            continue;
+        }
         const int cix = cur / g.ny, ciy = cur % g.ny;
         raw.push_back({g.cx(cix), g.cy(ciy)});
     }
     std::reverse(raw.begin(), raw.end());
     raw.front() = start;        // 精确起点(飞机当前位置)
-    if (!res.goal_blocked) raw.back() = goal;
-    else                   raw.push_back(goal);   // 真目标在障碍内：末尾补一段直奔(PD 尽力逼近)
+    if (cfg.validate_complete_path) {
+        if (raw.size() == 1) raw.push_back(final_goal);
+        else raw.back() = final_goal;
+    } else if (!res.goal_blocked) raw.back() = goal;
+    else raw.push_back(goal);   // 默认必达点模式保留真目标。
 
     // ---- 串拉简化成稀疏拐点 ----
-    res.path = simplify(raw, obs, rr, g.cell * 0.5);
+    if (required_goal) {
+        // Preserve the connector anchor so string pulling cannot enlarge the
+        // locally authorized exception to the virtual boundary margin.
+        const Path2 prefix(raw.begin(), raw.end() - 1);
+        res.path = simplify(prefix, obs, rr, cfg.robot_radius);
+        res.path.push_back(goal);
+        if (!required_path_clear(start, res.path, goal, obs, cfg)) {
+            res.path.clear();
+            return res;
+        }
+        res.ok = true;
+        return res;
+    }
+    // Keep geometric guide vertices sparse. Heading continuity is handled by
+    // the validated start curve, not by retaining a near-origin grid corner.
+    res.path = simplify(raw, obs, rr, cfg.robot_radius);
+    if (cfg.validate_complete_path &&
+        (!path_clear(start, res.path, obs, cfg) || !path_inside_safe_field(res.path, cfg))) {
+        res.path.clear();
+        return res;
+    }
     res.ok = true;
     return res;
+}
+
+GlobalResult plan_global_path(const Vec2& start, const Vec2& goal,
+                              const Obstacles& obs, const GlobalConfig& cfg,
+                              double start_yaw)
+{
+    return plan_path(start, goal, obs, cfg, start_yaw, false);
+}
+
+GlobalResult plan_required_path(const Vec2& start, const Vec2& goal,
+                                const Obstacles& obs, const GlobalConfig& cfg,
+                                double start_yaw)
+{
+    return plan_path(start, goal, obs, cfg, start_yaw, true);
+}
+
+bool required_path_clear(const Vec2& cur, const Path2& path, const Vec2& goal,
+                         const Obstacles& obs, const GlobalConfig& cfg)
+{
+    if (!required_config_valid(cfg) || !std::isfinite(cur.x) || !std::isfinite(cur.y) ||
+        point_blocked(goal.x, goal.y, obs, cfg.robot_radius + cfg.inflate)) return false;
+    size_t terminal_start = 0;
+    if (!required_field_shape(path, goal, cfg, terminal_start)) return false;
+    size_t projected_segment = 0;
+    bool first = true;
+    return visit_remaining_segments(cur, path, [&](const Vec2& a, const Vec2& b) {
+        if (first) {
+            first = false;
+            const bool terminal_rejoin = projected_segment >= terminal_start &&
+                terminal_start + 1 < path.size() &&
+                (!inside_field_margin(a, cfg, cfg.wall_margin) ||
+                 !inside_field_margin(b, cfg, cfg.wall_margin));
+            if (terminal_rejoin) {
+                if (!inside_field_margin(a, cfg, cfg.robot_radius) ||
+                    std::hypot(a.x - goal.x, a.y - goal.y) > cfg.required_connector_length + 1e-9)
+                    return false;
+            } else if (!field_segment_free(a, b, cfg)) return false;
+        }
+        return segment_free(a, b, obs, cfg.robot_radius + cfg.inflate, cfg.robot_radius);
+    }, &projected_segment);
+}
+
+bool obstacle_segment_clear(const Vec2& start, const Vec2& end,
+                             const Obstacles& obs, const GlobalConfig& cfg)
+{
+    if (!std::isfinite(cfg.robot_radius) || cfg.robot_radius <= 0.0 ||
+        !std::isfinite(cfg.inflate) || cfg.inflate < 0.0) return false;
+    return segment_free(start, end, obs, cfg.robot_radius + cfg.inflate, cfg.robot_radius);
 }
 
 bool path_clear(const Vec2& cur, const Path2& path,
                 const Obstacles& obs, const GlobalConfig& cfg)
 {
-    if (path.size() < 2) return false;
     const double rr = cfg.robot_radius + cfg.inflate;
-    const double step = cfg.cell * 0.5;
+    if (path.size() < 2 || point_blocked(path.back().x, path.back().y, obs, rr)) return false;
+    return visit_remaining_segments(cur, path, [&](const Vec2& a, const Vec2& b) {
+        return segment_free(a, b, obs, rr, cfg.robot_radius);
+    });
+}
 
-    // 找路径上离飞机当前位置最近的采样点，只校验"它之后"的剩余段
-    //   （飞机已走过的前半段不必查；这样飞机沿途偏移也不会误判旧路径失效）。
-    size_t ni = 0; double best = std::numeric_limits<double>::infinity();
-    for (size_t i = 0; i < path.size(); ++i) {
-        const double dx = path[i].x - cur.x, dy = path[i].y - cur.y;
-        const double d2 = dx * dx + dy * dy;
-        if (d2 < best) { best = d2; ni = i; }
+bool path_inside_safe_field(const Path2& path, const GlobalConfig& cfg)
+{
+    if (path.empty()) return false;
+    Vec2 previous = path.front();
+    for (const Vec2& point : path) {
+        if (!field_segment_free(previous, point, cfg)) return false;
+        previous = point;
     }
-
-    // 飞机当前位置 → 最近点：先确认这一跳本身无碰撞（飞机可能偏离了旧线）
-    if (!segment_free(cur, path[ni], obs, rr, step)) return false;
-    // 剩余拐点逐段
-    for (size_t i = ni; i + 1 < path.size(); ++i)
-        if (!segment_free(path[i], path[i + 1], obs, rr, step)) return false;
-    return true;
+    return previous.x >= cfg.min_x + cfg.wall_margin && previous.x <= cfg.max_x - cfg.wall_margin &&
+           previous.y >= cfg.min_y + cfg.wall_margin && previous.y <= cfg.max_y - cfg.wall_margin;
 }
 
 PathScore score_path(const Vec2& cur, const Path2& path,
-                     const Obstacles& obs, const GlobalConfig& cfg)
+                     const Obstacles& obs, const GlobalConfig&)
 {
     PathScore s;
     if (path.size() < 2) return s;        // length=0, min_clear=0
-    const double step = cfg.cell * 0.5;
-
-    // 找路径上离 cur 最近的点，只评估"它之后"的剩余段（与 path_clear 同口径：已走过的不算；
-    //   候选路 gr.path 起点≈cur→最近点就是首点，旧路则从飞机当前所在处往后量——两条同起点可比）。
-    size_t ni = 0; double best = std::numeric_limits<double>::infinity();
-    for (size_t i = 0; i < path.size(); ++i) {
-        const double dx = path[i].x - cur.x, dy = path[i].y - cur.y;
-        const double d2 = dx * dx + dy * dy;
-        if (d2 < best) { best = d2; ni = i; }
-    }
-
     double len = 0.0;
     double mn  = std::numeric_limits<double>::infinity();
-    auto accum = [&](const Vec2& a, const Vec2& b) {
+    visit_remaining_segments(cur, path, [&](const Vec2& a, const Vec2& b) {
         len += std::hypot(b.x - a.x, b.y - a.y);
-        if (!obs.empty()) mn = std::min(mn, segment_min_clear(a, b, obs, step));
-    };
-    accum(cur, path[ni]);                                 // 飞机当前位置 → 最近点
-    for (size_t i = ni; i + 1 < path.size(); ++i)         // 之后的剩余拐点逐段
-        accum(path[i], path[i + 1]);
+        if (!obs.empty()) mn = std::min(mn, segment_min_clear(a, b, obs));
+        return true;
+    });
 
     s.length    = len;
     s.min_clear = obs.empty() ? 1e6 : mn;                 // 无障碍：安全性视为很大（不参与"更安全"门）

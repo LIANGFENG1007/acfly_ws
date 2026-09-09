@@ -34,11 +34,15 @@ struct GlobalConfig {
     //   楔形内)，走出此半径恢复全向 A*(不扭曲远处绕障路径)。两值任一 ≤0 即关闭锥(退化老行为)。
     double head_cone_half   = 0.0;      // 锥半角 (rad)，≤0 关闭
     double head_cone_radius = 0.0;      // 锥作用半径 (m)，≤0 关闭
+    // Exploration may stop at a safe proxy for an occupied goal. In this mode
+    // every edge and the complete result must satisfy aircraft/field clearance.
+    bool validate_complete_path = false;
+    double required_connector_length = 1.0;
 };
 
 struct GlobalResult {
     bool  ok = false;            // 找到一条到目标(或其最近可达格)的绕障路径
-    Path2 path;                  // 绕障折线（已简化为稀疏拐点，含起点≈飞机、终点=目标）
+    Path2 path;                  // 绕障折线；严格模式的被挡目标使用安全代理终点
     bool  start_blocked = false; // 起点落在膨胀障碍内（飞机紧贴障碍）→ 已就近放行起点
     bool  goal_blocked  = false; // 目标落在膨胀障碍内（目标贴/陷障碍）→ 路由到最近可达格
 };
@@ -50,19 +54,50 @@ struct GlobalResult {
 //   返回 ok=false 表示目标被完全围死/不连通——上层据此处理：探索→放弃该区跳带；
 //   POI/终点(必达)→报警悬停(无解属异常，不乱撞)。
 //   起点/终点即便落在膨胀障碍/墙内也尽力求解（就近放行），避免贴障碍/墙时直接判死。
+//   validate_complete_path=true: every edge respects physical aircraft clearance,
+//   initially violated margins may only recover outward/inward as appropriate,
+//   and ok guarantees path_clear + path_inside_safe_field on the final result.
 GlobalResult plan_global_path(const Vec2& start, const Vec2& goal,
                               const Obstacles& obs, const GlobalConfig& cfg,
                               double start_yaw = NAN);
 
+// Exact mission targets never fall back to a proxy. A strictly checked prefix
+// may end with one straight connector across the virtual field inset, bounded
+// by required_connector_length. The goal and connector keep physical field/body
+// clearance, and obstacle robot_radius + inflate applies to every edge.
+// The final connector anchor is retained as the penultimate result point.
+GlobalResult plan_required_path(const Vec2& start, const Vec2& goal,
+                                const Obstacles& obs, const GlobalConfig& cfg,
+                                double start_yaw = NAN);
+
+// Revalidate the actual remaining path to an exact required goal. Collinear
+// resampling of the terminal connector is accepted. A current pose already on
+// its outside-inset portion may rejoin it without relaxing unrelated boundaries.
+bool required_path_clear(const Vec2& cur, const Path2& path, const Vec2& goal,
+                         const Obstacles& obs, const GlobalConfig& cfg);
+
+// Analytic obstacle-only check for a short motion/braking segment. An existing
+// extra-margin violation may recover monotonically without having fully exited
+// by the end of this segment. Field policy must be checked separately.
+bool obstacle_segment_clear(const Vec2& start, const Vec2& end,
+                             const Obstacles& obs, const GlobalConfig& cfg);
+
 // 校验一条【已采纳的绕障折线】在当前障碍图下是否仍全程无碰撞（不含墙——墙准静态，
 //   靠 plan_global_path 重算时处理；这里只防"旧路径被新出现/移动的障碍挡住"）。
-//   用法（路径承诺/迟滞）：飞机当前位置 cur 接到 path 上"最近拐点之后的剩余拐点"逐段查；
+//   用法（路径承诺/迟滞）：cur 接到 path 连续线段上的最近投影，再逐段检查剩余路径；
+//   等距时保留最早线段，避免交叉点跳过未走路径；到终点仍检查 cur 本身是否碰撞。
 //   仍 clear → 续用旧路径，绝不因 near-tie 翻边；返回 false(被挡) → 上层重算 A* 换边。
-//   判定与 plan_global_path 内部一致（只查障碍圆 r+robot+inflate），自洽不误杀。
+//   起点若仅在额外 inflate 余量内，允许单调远离障碍退出；机身与实体重叠、向内或重新入圈均禁止。
+//   终点必须在完整 r+robot+inflate 安全圈之外；线段碰撞检查使用解析最短距离。
 bool path_clear(const Vec2& cur, const Path2& path,
                 const Obstacles& obs, const GlobalConfig& cfg);
 
-// 路径评分（★换路评估/迟滞★用）：只评"从 cur 接到路径最近点之后的剩余段"(与 path_clear 同口径,
+// Static field-margin validation. An initially violated boundary may only be
+// approached monotonically inward; after entering it cannot be crossed again.
+// All other boundaries remain enforced, and the final point must be inside.
+bool path_inside_safe_field(const Path2& path, const GlobalConfig& cfg);
+
+// 路径评分（★换路评估/迟滞★用）：只评"从 cur 接到连续线段最近投影之后的剩余段"(与 path_clear 同口径,
 //   已走过的不计，cur 与候选两条路才是同起点、可公平比)。
 //     length    = 剩余弧长 (m)，越短→时间效益越高(走得越快)。
 //     min_clear = 剩余段全程离任一障碍【边缘】的最小余量 (m)，越大→越安全；无障碍记一个大值。

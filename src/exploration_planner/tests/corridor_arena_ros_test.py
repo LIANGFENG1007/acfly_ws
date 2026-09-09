@@ -53,6 +53,7 @@ def run(binary, scene_binary):
                     binary, '--ros-args', '-p', 'viz:=false', '-p', 'done_coverage:=0.0',
                     '-p', 'corridor_enabled:=true', '-p', 'field_max_x:=7.5',
                     '-p', 'corridor_width:=1.5', '-p', 'corridor_robot_width:=0.5',
+                    '-p', 'corridor_cloud_topic:=/cloud_registered',
                 ], stdout=output, stderr=subprocess.STDOUT, env=os.environ.copy())
                 sent = False
                 started = time.monotonic()

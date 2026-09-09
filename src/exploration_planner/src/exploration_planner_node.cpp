@@ -23,6 +23,8 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <nav_msgs/msg/path.hpp>
 #include <std_msgs/msg/bool.hpp>
+#include <std_msgs/msg/float64.hpp>
+#include <diagnostic_msgs/msg/diagnostic_array.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sensor_msgs/point_cloud2_iterator.hpp>
 #include <visualization_msgs/msg/marker.hpp>
@@ -73,6 +75,7 @@ public:
         use_position_control_ = declare_parameter<bool>(
             "use_position_control", params::USE_POSITION_CONTROL);
         corridor_enabled_ = declare_parameter<bool>("corridor_enabled", params::CORRIDOR_ENABLED);
+        corridor_cloud_topic_ = declare_parameter<std::string>("corridor_cloud_topic", params::CORRIDOR_CLOUD_TOPIC);
         ccfg_.initial_yaw = dd("corridor_initial_yaw_deg", params::CORRIDOR_INITIAL_YAW_DEG) * M_PI / 180.0;
         ccfg_.entry_speed = dd("corridor_entry_speed", params::CORRIDOR_ENTRY_SPEED);
         ccfg_.cruise_speed = dd("corridor_cruise_speed", params::CORRIDOR_CRUISE_SPEED);
@@ -93,6 +96,9 @@ public:
         ccfg_.settle_time = dd("corridor_settle_s", params::CORRIDOR_SETTLE_S);
         ccfg_.lookahead = dd("corridor_lookahead", params::CORRIDOR_LOOKAHEAD);
         ccfg_.approach_distance = dd("corridor_approach_m", params::CORRIDOR_APPROACH_M);
+        ccfg_.continuous_approach = declare_parameter<bool>("corridor_continuous_approach", params::CORRIDOR_CONTINUOUS_APPROACH);
+        ccfg_.continuous_center_reserve = dd("corridor_continuous_center_reserve", params::CORRIDOR_CONTINUOUS_CENTER_RESERVE);
+        ccfg_.continuous_time_margin = dd("corridor_continuous_time_margin", params::CORRIDOR_CONTINUOUS_TIME_MARGIN);
         ccfg_.moving_lookahead = dd("corridor_moving_lookahead", params::CORRIDOR_MOVING_LOOKAHEAD);
         ccfg_.center_prediction_time = dd("corridor_center_prediction_s", params::CORRIDOR_CENTER_PREDICTION_S);
         ccfg_.exit_distance = dd("corridor_exit_m", params::CORRIDOR_EXIT_M);
@@ -169,8 +175,13 @@ public:
         turn_blend_m_ = dd("carlike_turn_blend_m", params::CARLIKE_TURN_BLEND_M);
         turn_blend_min_angle_rad_ =
             dd("carlike_turn_blend_angle_deg", params::CARLIKE_TURN_BLEND_ANGLE_DEG) * M_PI / 180.0;
+        turn_blend_max_angle_rad_ = std::clamp(
+            dd("turn_blend_max_angle_deg", params::TURN_BLEND_MAX_ANGLE_DEG), 0.0, 180.0) * M_PI / 180.0;
         turn_blend_samples_ = static_cast<int>(std::lround(
             dd("carlike_turn_blend_samples", static_cast<double>(params::CARLIKE_TURN_BLEND_SAMPLES))));
+        turn_round_min_m_ = std::max(0.0, dd("turn_round_min_m", params::TURN_ROUND_MIN_M));
+        turn_round_max_curvature_ = std::max(0.0,
+            dd("turn_round_max_curvature", params::TURN_ROUND_MAX_CURVATURE));
         // D 项差分周期 = 主循环真实周期。★与 timer 同源推导★，勿写死常数(见 TrackerGains::dt)。
         gains_.dt = params::TIMER_PERIOD_MS / 1000.0;
 
@@ -200,8 +211,25 @@ public:
         fcfg_.along_bonus    = dd("along_bonus",       params::ALONG_BONUS);
         fcfg_.band_clear_cnt = static_cast<int>(std::lround(
                                dd("band_clear_cnt", static_cast<double>(params::BAND_CLEAR_CNT))));
+        frontier_observation_enabled_ = declare_parameter<bool>(
+            "frontier_observation_enabled", params::FRONTIER_OBSERVATION_ENABLED);
+        fcfg_.small_region_cells = declare_parameter<int>("frontier_small_region_cells", params::FRONTIER_SMALL_REGION_CELLS);
+        fcfg_.small_region_penalty = dd("frontier_small_region_penalty", params::FRONTIER_SMALL_REGION_PENALTY);
+        fcfg_.observation_standoff = dd("frontier_observation_standoff", params::FRONTIER_OBSERVATION_STANDOFF);
+        fcfg_.preferred_clearance = dd("frontier_preferred_clearance", params::FRONTIER_PREFERRED_CLEARANCE);
+        fcfg_.gain_weight = dd("frontier_gain_weight", params::FRONTIER_GAIN_WEIGHT);
+        fcfg_.clearance_weight = dd("frontier_clearance_weight", params::FRONTIER_CLEARANCE_WEIGHT);
+        fcfg_.observation_min_distance = dd("frontier_observation_min_distance", params::FRONTIER_OBSERVATION_MIN_DISTANCE);
+        fcfg_.continuity_turn_penalty = dd("frontier_continuity_turn_pen", params::FRONTIER_CONTINUITY_TURN_PEN);
+        guide_min_segment_ = std::max(0.0, dd("explore_guide_min_segment_m", params::EXPLORE_GUIDE_MIN_SEGMENT_M));
+        guide_max_deviation_ = std::max(0.0, dd("explore_guide_max_deviation_m", params::EXPLORE_GUIDE_MAX_DEVIATION_M));
+        explore_plan_reserve_ = std::max(0.0, dd("explore_plan_reserve_m", params::EXPLORE_PLAN_RESERVE_M));
+        frontier_continuity_lookahead_ = std::max(0.10,
+            dd("frontier_continuity_lookahead_m", params::FRONTIER_CONTINUITY_LOOKAHEAD_M));
         replan_period_ = dd("replan_period_s", params::REPLAN_PERIOD_S);
         replan_dev_    = dd("replan_dev_m",    params::REPLAN_DEV_M);
+        candidate_period_ = std::max(0.0,
+            dd("replan_candidate_period_s", params::REPLAN_CANDIDATE_PERIOD_S));
         // 目标失效检测：承诺目标邻域此半径内已无未扫大格 → 放弃承诺改投别处。0=关闭
         target_stale_r_ = dd("target_stale_r", params::TARGET_STALE_R);
 
@@ -255,7 +283,15 @@ public:
         ggcfg_.cell         = dd("global_cell",        params::GLOBAL_CELL);
         ggcfg_.robot_radius = robot_radius_;
         ggcfg_.inflate      = dd("global_margin",      params::GLOBAL_MARGIN);
+        fcfg_.minimum_clearance = ggcfg_.robot_radius + ggcfg_.inflate;
         ggcfg_.wall_margin  = dd("global_wall_margin", params::GLOBAL_WALL_MARGIN);
+        ggcfg_.required_connector_length = std::max(0.0,
+            dd("required_connector_length", params::REQUIRED_CONNECTOR_LENGTH_M));
+        required_motion_inflate_ = std::clamp(
+            dd("required_motion_inflate", params::REQUIRED_MOTION_INFLATE),
+            0.0, std::max(0.0, ggcfg_.inflate));
+        required_blocked_replan_s_ = std::max(0.0,
+            dd("required_blocked_replan_s", params::REQUIRED_BLOCKED_REPLAN_S));
         // ★机头锥★：A* 起点段只朝机头延伸(根除新路从侧后方起步→边转边走横切撞柱)
         ggcfg_.head_cone_half   = dd("global_head_cone_deg", params::GLOBAL_HEADING_CONE_DEG) * M_PI / 180.0;
         ggcfg_.head_cone_radius = dd("global_head_cone_radius", params::GLOBAL_HEADING_CONE_RADIUS);
@@ -272,6 +308,14 @@ public:
         // ---- 模块 ----
         grid_    = std::make_unique<GridMap>(gcfg_);
         tracker_ = std::make_unique<TrajectoryTracker>(gains_);
+        global_gains_ = gains_;
+        global_gains_.v_max = v_goal_max_;
+        global_gains_.v_min = std::min(global_gains_.v_min, v_goal_max_);
+        global_gains_.lookahead = global_lookahead_;
+        global_gains_.endpoint_slow_r = std::max(global_gains_.endpoint_slow_r,
+            std::max(0.0, gains_.prediction_time) * v_goal_max_ +
+            v_goal_max_ * v_goal_max_ / (2.0 * std::max(1e-3, gains_.max_accel)));
+        global_tracker_ = std::make_unique<TrajectoryTracker>(global_gains_);
         obs_map_ = std::make_unique<ObstacleMap>(ocfg_);
         if (viz_) viz_obj_ = std::make_unique<Visualizer>(gcfg_, 1000);  // 1000px：小格(0.05m≈5px)能看清
 
@@ -283,6 +327,9 @@ public:
         rclcpp::QoS latched(1);
         latched.transient_local();
         finished_pub_ = create_publisher<std_msgs::msg::Bool>("/exploration/finished", latched);
+        coverage_pub_ = create_publisher<std_msgs::msg::Float64>("/exploration/coverage", 1);
+        active_path_pub_ = create_publisher<nav_msgs::msg::Path>("/exploration/active_path", 1);
+        diagnostics_pub_ = create_publisher<diagnostic_msgs::msg::DiagnosticArray>("/exploration/diagnostics", 1);
         corridor_active_pub_ = create_publisher<std_msgs::msg::Bool>("/exploration/corridor_active", latched);
         corridor_route_sub_ = create_subscription<nav_msgs::msg::Path>(
             "/exploration/corridor_route", latched,
@@ -321,6 +368,11 @@ public:
         cloud_sub_ = create_subscription<sensor_msgs::msg::PointCloud2>(
             "/cloud_registered", rclcpp::SensorDataQoS(),
             std::bind(&ExplorationNode::on_cloud, this, std::placeholders::_1), cloud_opt);
+        if (corridor_cloud_topic_ != "/cloud_registered") {
+            corridor_cloud_sub_ = create_subscription<sensor_msgs::msg::PointCloud2>(
+                corridor_cloud_topic_, rclcpp::SensorDataQoS(),
+                std::bind(&ExplorationNode::on_corridor_cloud, this, std::placeholders::_1), cloud_opt);
+        }
 
         timer_ = create_wall_timer(
             std::chrono::milliseconds(params::TIMER_PERIOD_MS),
@@ -506,6 +558,10 @@ private:
         finished_ = false;
         homing_ = false;
         global_has_ = false;
+        global_failed_ = global_goal_blocked_ = global_at_goal_ = global_braking_blocked_ = false;
+        command_projection_blocked_ = measured_projection_blocked_ = false;
+        required_blocked_time_valid_ = false;
+        global_tracker_->set_trajectory({});
         corridor_disabled_for_goal_ = false;
         corridor_->reset();
         cloud_freshness_ = SensorFreshness{};
@@ -516,9 +572,13 @@ private:
         finished_pub_->publish(reset);
         corridor_active_pub_->publish(reset);
         plan_pending_ = true;   // 下一拍在有位姿时规划
+        candidate_time_valid_ = false;
         unreachable_.clear();            // 换终点=换任务：清空够不到黑名单，所有区重新给机会
         last_unreach_clear_cov_ = 0.0;
         turning_for_solution_ = false;   // 换任务：打断原地转身找解
+        have_observation_target_ = false;
+        observation_arrived_ = false;
+        observation_yaw_rate_ = 0.0;
         has_unreachable_marker_ = false; // 清红叉
         RCLCPP_INFO(get_logger(), "收到探索终点: (%.2f, %.2f)，待规划", goal_.x, goal_.y);
     }
@@ -558,19 +618,15 @@ private:
         return (static_cast<uint64_t>(gx) << 32) | static_cast<uint64_t>(gy & 0xffffffff);
     }
 
-    // 雷达点云回调（世界系 /cloud_registered）：滤地面 + 自身回波 → 投影到 2D
-    //   → 喂给 obstacle_map 累计聚类。独立线程跑，不阻塞主循环。
-    void on_cloud(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
+    void on_corridor_cloud(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
     {
         const double received_at = steady_seconds();
-        // 取一份当前位姿(滤自身回波用 px,py；latch 回收判视野用 yaw) + 角速度(高角速度门控用)
-        double px, py, pz, yaw, wz; bool ok, corridor_active;
+        double px, py, pz, wz; bool ok;
         {
             std::lock_guard<std::mutex> lk(mtx_);
-            px = px_; py = py_; yaw = yaw_; ok = has_pose_;
+            px = px_; py = py_; ok = has_pose_;
             pz = pz_;
             wz = yaw_rate_est_;
-            corridor_active = corridor_->active();
         }
 
         // 走廊使用独立的机身高度切片，保留墙/横档的实际点，不做障碍圆拟合和探索膨胀。
@@ -591,6 +647,18 @@ private:
                 corridor_->observe(corridor_points, received_at, {px, py});
             else if (!cloud_freshness_.fresh(received_at, ccfg_.cloud_timeout))
                 corridor_->observe({}, received_at);
+        }
+    }
+
+    // Registered downsampled scans still feed the exploration obstacle map.
+    void on_cloud(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
+    {
+        if (corridor_cloud_topic_ == "/cloud_registered") on_corridor_cloud(msg);
+        double px, py, yaw, wz; bool ok, corridor_active;
+        {
+            std::lock_guard<std::mutex> lk(mtx_);
+            px = px_; py = py_; yaw = yaw_; wz = yaw_rate_est_;
+            ok = has_pose_; corridor_active = corridor_->active();
         }
         if (corridor_active) return;
 
@@ -628,14 +696,20 @@ private:
 
     // 采纳一条探索绕障路径(replan 成功 与 转身重搜成功 共用)：设激活轨迹、清失败态、撤红叉。
     //   需在持有 mtx_ 时调用。
-    void adopt_explore_path(const GlobalResult& gr, const Vec2& scan_target)
+    bool adopt_explore_path(const GlobalResult& gr, const Vec2& scan_target,
+                            const FrontierSelection* observation = nullptr)
     {
-        // 新目标换线时保留上一条路径的末端方向，在当前点与新 A* 路段之间
-        // 插入一段经过碰撞校验的 Bézier 过渡。这样下一条直线不会从飞机侧后方
-        // 突然接入，车式跟踪器可以先转弯再顺滑进入新线。
+        explore_handoff_deferred_ = false;
+        // Restore one continuously sampled curve. Validate both the resulting
+        // curve and its fallback; a rejected curve must never be executed.
         const Obstacles transition_obs = obs_map_->snapshot();
-        const Path2 blended = blend_explore_transition(gr.path, transition_obs);
-        explore_raw_            = blended;                       // 裸折线/采样折线(供下拍 path_clear 校验)
+        if (gr.path.size() < 2 || !path_inside_safe_field(gr.path) ||
+            !path_clear(gr.path.front(), gr.path, transition_obs, ggcfg_)) {
+            ++invalid_paths_;
+            return false;
+        }
+        const Path2 blended = blend_explore_transition(clean_explore_guides(gr.path, transition_obs), transition_obs);
+        // Intermediate samples describe a single curve, not stop waypoints.
         const Trajectory smooth_traj = smooth_catmull_rom(blended, arc_ds_);
         Path2 smooth_points;
         smooth_points.reserve(smooth_traj.size());
@@ -643,12 +717,37 @@ private:
 
         // Catmull-Rom 可能在急弯处向障碍内侧切入；最终执行轨迹也必须满足同一
         // 安全口径。若平滑轨迹不安全，退回已经逐段校验过的采样折线。
-        bool smooth_safe = smooth_points.size() >= 2 && path_inside_safe_field(smooth_points);
-        if (smooth_safe) smooth_safe = path_clear(blended.front(), smooth_points, transition_obs, ggcfg_);
+        const bool field_safe = smooth_points.size() >= 2 && path_inside_safe_field(smooth_points);
+        const bool obstacle_safe = field_safe && path_clear(blended.front(), smooth_points, transition_obs, ggcfg_);
+        const bool smooth_safe = field_safe && obstacle_safe;
+        const Trajectory execution = smooth_safe ? smooth_traj : make_polyline_trajectory(blended);
+        if (carlike_mode_ && explore_has_committed_ && tracker_->has_trajectory() &&
+            tracker_->remaining_distance() <= global_lookahead_ &&
+            std::hypot(v_fwd_est_, v_lat_est_) > gains_.align_stop_speed &&
+            path_clear({px_, py_}, tracker_->remaining_path(px_, py_), transition_obs, ggcfg_)) {
+            // Near the old endpoint, an unavoidable reversal must not replace
+            // the reference while the aircraft is still at cruise speed.
+            // Use the actual candidate and tracker gate so flowing curves are
+            // unaffected; the old validated endpoint provides its normal brake.
+            TrajectoryTracker preview(gains_);
+            preview.set_trajectory(execution);
+            preview.update(px_, py_, yaw_, v_fwd_est_, v_lat_est_, goal_tol_, yaw_rate_est_);
+            if (preview.reorienting()) {
+                explore_handoff_deferred_ = true;
+                last_replan_reason_ = "brake_before_reverse_handoff";
+                plan_pending_ = false;
+                last_plan_time_ = now();
+                return false;
+            }
+        }
+        ++adoptions_;
+        explore_raw_ = blended;
+        smooth_failure_reason_ = smooth_safe ? "none" : (field_safe ? "obstacle" : "field");
         if (smooth_safe) {
-            traj_ = smooth_traj;
+            traj_ = execution;
         } else {
-            traj_ = make_polyline_trajectory(blended);
+            ++smooth_fallbacks_;
+            traj_ = execution;
             RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1500,
                 "平滑轨迹切入安全区 → 退回安全折线跟踪(障碍外表面余量 %.2fm)",
                 ggcfg_.inflate + ggcfg_.robot_radius);
@@ -656,23 +755,73 @@ private:
         explore_failed_         = false;
         explore_has_committed_  = true;
         explore_target_         = scan_target;
+        explore_goal_projected_ = std::hypot(gr.path.back().x - scan_target.x,
+                                             gr.path.back().y - scan_target.y) > 1e-6;
+        have_observation_target_ = observation && observation->valid;
+        observation_arrived_ = false;
+        if (have_observation_target_) {
+            observation_target_ = *observation;
+            observation_target_.point = gr.path.back();
+            explore_target_ = gr.path.back();
+            // Normal viewpoints observe along the executed arrival tangent.
+            // Only the explicit cleanup fallback requests a separate look-at turn.
+            observation_target_.view_heading = observation_target_.requires_turn
+                ? std::atan2(observation_target_.look_at.y - explore_target_.y,
+                             observation_target_.look_at.x - explore_target_.x)
+                : traj_.back().theta;
+        }
+        observation_yaw_rate_ = 0.0;
         tracker_->set_trajectory(traj_);
         plan_pending_           = false;
         last_plan_time_         = now();
         has_unreachable_marker_ = false;                         // 又有路了 → 撤红叉
+        return true;
     }
 
     // 检查轨迹采样点是否都在四面墙的安全内缩区域内。
     bool path_inside_safe_field(const Path2& path) const
     {
-        const double xlo = ggcfg_.min_x + ggcfg_.wall_margin;
-        const double xhi = ggcfg_.max_x - ggcfg_.wall_margin;
-        const double ylo = ggcfg_.min_y + ggcfg_.wall_margin;
-        const double yhi = ggcfg_.max_y - ggcfg_.wall_margin;
-        for (const auto& p : path) {
-            if (p.x < xlo || p.x > xhi || p.y < ylo || p.y > yhi) return false;
+        return exploration::path_inside_safe_field(path, ggcfg_);
+    }
+
+    void finish_observation(VelCmd& command, const Obstacles& obstacles)
+    {
+        if (!have_observation_target_ || (!command.at_goal && !observation_arrived_)) return;
+        observation_arrived_ = true;
+        const Vec2 cur{px_, py_};
+        const auto snapshot = grid_->snapshot();
+        const double heading = observation_target_.view_heading;
+        const double error = wrap_pi(heading - yaw_);
+        const bool need_turn = visible_unknown_count(snapshot, cur, yaw_, obstacles, fcfg_) == 0 &&
+            visible_unknown_count(snapshot, cur, heading, obstacles, fcfg_) > 0 && std::abs(error) > 0.10;
+        command = {};
+        if (std::hypot(v_fwd_est_, v_lat_est_) > goal_stop_v_) {
+            observation_yaw_rate_ = 0.0;
+            return;  // Keep the completed reference until translational inertia has settled.
         }
-        return true;
+        if (!need_turn) {
+            // This viewpoint has been sampled. Try another viewpoint if its
+            // partially occluded cells still need coverage; never mark them here.
+            unreachable_.push_back(explore_target_);
+            have_observation_target_ = false;
+            observation_arrived_ = false;
+            explore_has_committed_ = false;
+            tracker_->set_trajectory({});
+            traj_.clear();
+            plan_pending_ = true;
+            observation_yaw_rate_ = 0.0;
+            return;
+        }
+        if (std::hypot(v_fwd_est_, v_lat_est_) > goal_stop_v_ ||
+            !obstacle_segment_clear(cur, cur, obstacles, ggcfg_)) {
+            observation_yaw_rate_ = 0.0;
+            return;
+        }
+        const double rate = std::clamp(gains_.kp_yaw * error - gains_.kd_yaw * yaw_rate_est_,
+                                       -gains_.max_yaw_rate, gains_.max_yaw_rate);
+        observation_yaw_rate_ += std::clamp(rate - observation_yaw_rate_,
+            -gains_.max_yaw_accel * gains_.dt, gains_.max_yaw_accel * gains_.dt);
+        command.yaw_rate = observation_yaw_rate_;
     }
 
     // 把已经碰撞校验过的折线转换成 tracker 可用的轨迹，作为平滑曲线不安全时的兜底。
@@ -705,68 +854,70 @@ private:
         return out;
     }
 
-    // 给一条新 A* 路径补“当前方向→新路方向”的 Bézier 过渡。
-    // 返回的仍是折线采样点，path_clear() 会逐段检查障碍；任何不安全或几何退化
-    // 都直接返回原 A* 路径，安全优先。
+    Path2 clean_explore_guides(const Path2& path, const Obstacles& obs) const
+    {
+        Path2 result = path;
+        for (size_t i = 1; i + 1 < result.size();) {
+            const Vec2 a = result[i - 1], b = result[i], c = result[i + 1];
+            const double dx = c.x - a.x, dy = c.y - a.y;
+            const double length2 = dx * dx + dy * dy;
+            const double shorter = std::min(std::hypot(b.x - a.x, b.y - a.y),
+                                            std::hypot(c.x - b.x, c.y - b.y));
+            const double u = length2 > 1e-12
+                ? ((b.x - a.x) * dx + (b.y - a.y) * dy) / length2 : -1.0;
+            const double deviation = std::hypot(b.x - a.x - u * dx, b.y - a.y - u * dy);
+            const Path2 shortcut{a, c};
+            if (shorter < guide_min_segment_ && u >= 0.0 && u <= 1.0 &&
+                deviation <= guide_max_deviation_ && path_inside_safe_field(shortcut) &&
+                path_clear(a, shortcut, obs, ggcfg_)) {
+                result.erase(result.begin() + i);
+                if (i > 1) --i;
+            } else {
+                ++i;
+            }
+        }
+        return result;
+    }
+
+    // 用实际航向接入第一条引导段，再对完整引导路线统一生成连续曲线。
+    // 起步连接必须经过障碍和场界检查，不插入需要回追的单格起步点。
     Path2 blend_explore_transition(const Path2& path, const Obstacles& obs)
     {
         if (!carlike_mode_ || path.size() < 2 || turn_blend_m_ <= 0.0)
             return path;
 
-        const Vec2 p0 = path.front();
-        const Vec2 p3 = path[1];
-        const double d03 = std::hypot(p3.x - p0.x, p3.y - p0.y);
-        if (d03 < 1e-3) return path;
-
-        auto normalize = [](Vec2 v) {
-            const double n = std::hypot(v.x, v.y);
-            if (n < 1e-9) return Vec2{1.0, 0.0};
-            return Vec2{v.x / n, v.y / n};
+        const auto safe = [&](const Path2& candidate) {
+            return candidate.size() >= 2 && path_inside_safe_field(candidate) &&
+                path_clear(candidate.front(), candidate, obs, ggcfg_);
         };
+        // Keep original guide vertices for continuous Catmull-Rom smoothing.
+        const Path2 rounded = path;
+        if (rounded.size() < 2) return path;
 
-        // 当前方向优先取旧承诺路径在飞机附近的切线；没有旧路径时用实际机头方向。
-        Vec2 old_dir{std::cos(yaw_), std::sin(yaw_)};
-        if (explore_has_committed_ && explore_raw_.size() >= 2) {
-            size_t best_i = 0;
-            double best_d2 = std::numeric_limits<double>::infinity();
-            for (size_t i = 0; i + 1 < explore_raw_.size(); ++i) {
-                const Vec2 a = explore_raw_[i], b = explore_raw_[i + 1];
-                const double vx = b.x - a.x, vy = b.y - a.y;
-                const double vv = vx * vx + vy * vy;
-                const double t = (vv > 1e-9)
-                    ? std::clamp(((px_ - a.x) * vx + (py_ - a.y) * vy) / vv, 0.0, 1.0)
-                    : 0.0;
-                const double qx = a.x + t * vx, qy = a.y + t * vy;
-                const double dx = px_ - qx, dy = py_ - qy;
-                const double d2 = dx * dx + dy * dy;
-                if (d2 < best_d2) { best_d2 = d2; best_i = i; }
-            }
-            old_dir = normalize({explore_raw_[best_i + 1].x - explore_raw_[best_i].x,
-                                 explore_raw_[best_i + 1].y - explore_raw_[best_i].y});
-        }
+        const Vec2 p0 = rounded.front();
+        const Vec2 p3 = rounded[1];
+        const double d03 = std::hypot(p3.x - p0.x, p3.y - p0.y);
+        if (d03 < 1e-3) return rounded;
 
-        // 新方向取过渡终点之后的 A* 段方向；只有两点时退化为指向终点方向。
-        Vec2 new_dir = normalize({p3.x - p0.x, p3.y - p0.y});
-        if (path.size() >= 3) {
-            new_dir = normalize({path[2].x - p3.x, path[2].y - p3.y});
-        }
-
+        // Only join the measured body heading to the first line. An old raw
+        // tangent may already be stale, and the next line belongs to its own
+        // interior corner; neither may bend this initial segment backwards.
+        const Vec2 old_dir{std::cos(yaw_), std::sin(yaw_)};
+        const Vec2 new_dir{(p3.x - p0.x) / d03, (p3.y - p0.y) / d03};
         const double dot = std::clamp(old_dir.x * new_dir.x + old_dir.y * new_dir.y, -1.0, 1.0);
         const double angle = std::acos(dot);
-        if (angle < turn_blend_min_angle_rad_) return path;
+        if (angle < turn_blend_min_angle_rad_ || angle > turn_blend_max_angle_rad_) return rounded;
 
-        // 控制柄长度受当前第一段和下一段长度约束，避免短段过冲。
-        const double next_len = (path.size() >= 3)
-            ? std::hypot(path[2].x - p3.x, path[2].y - p3.y) : d03;
-        const double handle = std::min(turn_blend_m_, std::min(d03 * 0.45, next_len * 0.45));
-        if (handle < 0.05) return path;
+        const double handle = std::min(turn_blend_m_, d03 * 0.45);
+        if (handle < turn_round_min_m_) return rounded;
 
         const Vec2 c1{p0.x + old_dir.x * handle, p0.y + old_dir.y * handle};
         const Vec2 c2{p3.x - new_dir.x * handle, p3.y - new_dir.y * handle};
 
-        const int samples = std::max(4, turn_blend_samples_);
+        const int samples = std::max({4, turn_blend_samples_,
+            static_cast<int>(std::ceil((d03 + 2.0 * handle) / std::max(.005, arc_ds_)))});
         Path2 blended;
-        blended.reserve(static_cast<size_t>(samples) + path.size());
+        blended.reserve(static_cast<size_t>(samples) + rounded.size());
         blended.push_back(p0);
         for (int k = 1; k <= samples; ++k) {
             const double t = static_cast<double>(k) / samples;
@@ -779,20 +930,39 @@ private:
                 w0 * p0.x + w1 * c1.x + w2 * c2.x + w3 * p3.x,
                 w0 * p0.y + w1 * c1.y + w2 * c2.y + w3 * p3.y});
         }
-        for (size_t i = 2; i < path.size(); ++i) blended.push_back(path[i]);
+        // Evaluate the cubic derivatives more densely than the executed
+        // samples before accepting a start transition. Curvature clipping
+        // would conceal a hook rather than make it flyable.
+        for (int sample = 0; sample <= samples * 4; ++sample) {
+            const double t = static_cast<double>(sample) / (samples * 4), u = 1.0 - t;
+            const Vec2 derivative{
+                3 * u * u * (c1.x - p0.x) + 6 * u * t * (c2.x - c1.x) + 3 * t * t * (p3.x - c2.x),
+                3 * u * u * (c1.y - p0.y) + 6 * u * t * (c2.y - c1.y) + 3 * t * t * (p3.y - c2.y)};
+            const Vec2 second{
+                6 * u * (c2.x - 2 * c1.x + p0.x) + 6 * t * (p3.x - 2 * c2.x + c1.x),
+                6 * u * (c2.y - 2 * c1.y + p0.y) + 6 * t * (p3.y - 2 * c2.y + c1.y)};
+            const double speed = std::hypot(derivative.x, derivative.y);
+            if (speed < 1e-6 || derivative.x * new_dir.x + derivative.y * new_dir.y < -1e-9 ||
+                std::abs(derivative.x * second.y - derivative.y * second.x) /
+                    (speed * speed * speed) > turn_round_max_curvature_) return rounded;
+        }
+        for (size_t i = 2; i < rounded.size(); ++i) blended.push_back(rounded[i]);
 
-        // 墙边也要检查：A* 原始路径考虑了墙，过渡曲线不能切出安全区。
-        if (!path_inside_safe_field(blended)) return path;
-        if (!path_clear(p0, blended, obs, ggcfg_)) return path;
+        if (!safe(blended)) return rounded;
         return blended;
     }
 
     // 进入【原地转身找解】：锥内无解但无锥 probe 有解(=有路只是不在机头方向)时调用。
     //   转身方向取朝 probe 给出的"开口"方向(最短转到位)。需在持有 mtx_ 时调用。
-    void enter_turn_for_solution(const Vec2& cur, const Vec2& scan_target, const GlobalResult& probe)
+    void enter_turn_for_solution(const Vec2& cur, const Vec2& scan_target,
+                                 const GlobalResult& probe, int candidate_band,
+                                 const FrontierSelection* observation = nullptr)
     {
+        ++turn_entries_;
         turning_for_solution_   = true;
         turn_target_            = scan_target;
+        turn_candidate_band_    = candidate_band;
+        turn_observation_ = observation ? *observation : FrontierSelection{};
         retreating_             = false;          // 与后退互斥
         turn_prev_yaw_          = yaw_;
         turn_accum_             = 0.0;
@@ -804,6 +974,11 @@ private:
         double by = (probe.path.size() >= 2) ? probe.path[1].y - cur.y : scan_target.y - cur.y;
         const double bearing = (std::hypot(bx, by) > 1e-6) ? std::atan2(by, bx)
                                                            : std::atan2(scan_target.y - cur.y, scan_target.x - cur.x);
+        turn_heading_ = bearing;
+        turn_heading_valid_ = false;  // Recompute after braking at the actual stopped position.
+        turn_probe_path_.clear();
+        turn_command_rate_ = 0.0;
+        turn_settled_s_ = 0.0;
         turn_dir_ = (wrap_pi(bearing - yaw_) >= 0.0) ? +1 : -1;
     }
 
@@ -818,13 +993,78 @@ private:
         turn_accum_   += turn_dir_ * wrap_pi(yaw_ - turn_prev_yaw_);
         turn_prev_yaw_ = yaw_;
 
-        // 2) 节流重搜：用当前 yaw 加锥再搜，锥内出解→采纳、退出转身、本拍即交外层跟随
-        if (++turn_research_tick_ >= turn_solve_research_every_) {
-            turn_research_tick_ = 0;
-            GlobalResult gr = plan_global_path(cur, turn_target_, obs, ggcfg_, yaw_);
-            if (gr.ok && gr.path.size() >= 2) {
+        const double speed = std::hypot(v_fwd_est_, v_lat_est_);
+        if (!turn_heading_valid_ && speed <= gains_.align_stop_speed &&
+            std::abs(yaw_rate_est_) <= gains_.align_stop_yaw_rate) {
+            auto fresh = search_explore_global(cur, turn_target_, obs);
+            if (fresh.ok && fresh.path.size() >= 2) {
+                fresh.path = clean_explore_guides(fresh.path, obs);
+                turn_probe_path_ = fresh.path;
+                turn_heading_ = std::atan2(fresh.path[1].y - cur.y, fresh.path[1].x - cur.x);
+                turn_heading_valid_ = true;
+                turn_dir_ = wrap_pi(turn_heading_ - yaw_) >= 0 ? 1 : -1;
+                turn_accum_ = 0.0;
+                turn_settled_s_ = 0.0;
+                turn_research_tick_ = 0;
+            } else {
                 turning_for_solution_ = false;
-                adopt_explore_path(gr, turn_target_);
+                unreachable_.push_back(turn_target_);
+                plan_pending_ = false;
+                last_plan_time_ = now();
+                last_replan_reason_ = "stopped_probe_unavailable";
+                cmd.twist.linear.x = cmd.twist.linear.y = cmd.twist.angular.z = 0.0;
+                RCLCPP_WARN(get_logger(), "刹停后当前观察点暂无路径，等待下一轮选点 (%.2f,%.2f)",
+                    turn_target_.x, turn_target_.y);
+                return true;
+            }
+        }
+        const double error = wrap_pi(turn_heading_ - yaw_);
+        const double heading_tolerance = std::min(gains_.align_resume_rad,
+            ggcfg_.head_cone_half > 0 ? ggcfg_.head_cone_half * .5 : gains_.align_resume_rad);
+        const bool settled = turn_heading_valid_ && speed <= gains_.align_stop_speed &&
+            std::abs(yaw_rate_est_) <= gains_.align_stop_yaw_rate &&
+            std::abs(error) <= heading_tolerance;
+        turn_settled_s_ = settled ? turn_settled_s_ + gains_.dt : 0.0;
+        // A transient open cone while still spinning is not a safe handoff.
+        // Keep one heading target until angular momentum has settled.
+        if (++turn_research_tick_ >= turn_solve_research_every_ &&
+            turn_settled_s_ >= std::max(gains_.dt, gains_.align_settle_s)) {
+            turn_research_tick_ = 0;
+            GlobalResult gr;
+            if (turn_probe_path_.size() >= 2) {
+                Path2 cached = turn_probe_path_;
+                cached.front() = cur;
+                const double bearing = std::atan2(cached[1].y - cur.y, cached[1].x - cur.x);
+                if (std::abs(wrap_pi(bearing - yaw_)) <= heading_tolerance &&
+                    path_inside_safe_field(cached) && path_clear(cur, cached, obs, ggcfg_)) {
+                    gr.ok = true;
+                    gr.path = std::move(cached);
+                }
+            }
+            if (!gr.ok) gr = search_explore_global(cur, turn_target_, obs, yaw_);
+            if (!gr.ok) {
+                auto aligned = search_explore_global(cur, turn_target_, obs);
+                if (aligned.ok && aligned.path.size() >= 2) {
+                    aligned.path = clean_explore_guides(aligned.path, obs);
+                    const auto& a = aligned.path[0];
+                    const auto& b = aligned.path[1];
+                    const double fresh_heading = std::atan2(b.y - a.y, b.x - a.x);
+                    if (std::abs(wrap_pi(fresh_heading - yaw_)) <= heading_tolerance) {
+                        gr = std::move(aligned);
+                    } else {
+                        // The obstacle view or stopping position changed. A
+                        // reachable target is not made unreachable by facing
+                        // the stale probe bearing from before that change.
+                        turn_heading_ = fresh_heading;
+                        turn_probe_path_ = aligned.path;
+                        turn_settled_s_ = 0.0;
+                        turn_dir_ = wrap_pi(fresh_heading - yaw_) >= 0 ? 1 : -1;
+                    }
+                }
+            }
+            if (gr.ok && gr.path.size() >= 2 && adopt_explore_path(gr, turn_target_, &turn_observation_)) {
+                turning_for_solution_ = false;
+                cur_band_ = turn_candidate_band_;
                 RCLCPP_INFO(get_logger(),
                     "原地转身找解成功 → 机头方向出现可走路径，沿新方向继续 (目标 %.2f,%.2f)",
                     turn_target_.x, turn_target_.y);
@@ -832,27 +1072,40 @@ private:
             }
         }
 
-        // 3) 转满一圈 / 超时 → 目标真被围死：红叉 + 拉黑 + 跳带，本拍悬停
+        // A turn timeout is not proof that a whole region is unreachable.
         const bool full_circle = std::fabs(turn_accum_) >= 2.0 * M_PI * turn_solve_max_rev_;
         const bool timed_out   = (now() - turn_start_time_).seconds() > turn_solve_timeout_;
         if (full_circle || timed_out) {
             turning_for_solution_   = false;
             unreachable_.push_back(turn_target_);
-            cur_band_++;
-            plan_pending_           = true;
+            plan_pending_           = false;
+            last_plan_time_ = now();
+            last_replan_reason_ = "turn_timeout_retry";
             has_unreachable_marker_ = true;
             unreachable_pos_        = turn_target_;
             cmd.twist.linear.x = 0.0; cmd.twist.linear.y = 0.0; cmd.twist.angular.z = 0.0;
             RCLCPP_WARN(get_logger(),
-                "原地转身找解：转满一圈仍无解 → 目标 (%.2f,%.2f) 真被围死，画红叉 + 跳带去别处",
+                "本轮转向未完成 → 暂缓观察点 (%.2f,%.2f)，下一规划周期重新选点",
                 turn_target_.x, turn_target_.y);
             return true;
         }
 
-        // 4) 否则继续原地转：前进/横向清零，只发 yaw_rate(画旋转标志)
+        // Brake translation first, then approach the fixed heading with rate
+        // damping and angular acceleration limits instead of spinning at a
+        // constant rate until a path happens to appear.
+        double desired_rate = 0.0;
+        if (turn_heading_valid_ && speed <= gains_.align_stop_speed) {
+            const double predicted = error - gains_.prediction_time * yaw_rate_est_;
+            const double limit = std::sqrt(2.0 * gains_.max_yaw_accel * std::abs(predicted));
+            const double maximum = std::min(turn_solve_yaw_rate_, gains_.max_yaw_rate);
+            desired_rate = std::clamp(std::clamp(gains_.kp_yaw * predicted, -limit, limit) -
+                gains_.kd_yaw * yaw_rate_est_, -maximum, maximum);
+        }
+        turn_command_rate_ += std::clamp(desired_rate - turn_command_rate_,
+            -gains_.max_yaw_accel * gains_.dt, gains_.max_yaw_accel * gains_.dt);
         cmd.twist.linear.x  = 0.0;
         cmd.twist.linear.y  = 0.0;
-        cmd.twist.angular.z = turn_dir_ * turn_solve_yaw_rate_;
+        cmd.twist.angular.z = turn_command_rate_;
         last_look_ = turn_target_; look_valid_ = true;
         RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
             "原地转身找解中…(已转 %.0f°，朝 %s)", std::fabs(turn_accum_) * 180.0 / M_PI,
@@ -867,8 +1120,18 @@ private:
     //   需在持有 mtx_ 时调用（读写 px_/yaw_/cur_band_/traj_ 等）。
     void replan_locked(const Vec2& cur)
     {
+        if (!plan_pending_ && !tracker_->has_trajectory() &&
+            (now() - last_plan_time_).seconds() < replan_period_) return;
+        ++replan_checks_;
         bool all_explored = false;
         const Obstacles obs = obs_map_->snapshot();
+        if (!plan_pending_ && have_observation_target_ && explore_has_committed_ &&
+            (observation_arrived_ || (tracker_->remaining_distance() <= goal_tol_ &&
+             std::hypot(cur.x - explore_target_.x, cur.y - explore_target_.y) <= goal_tol_)) &&
+            obstacle_segment_clear(cur, cur, obs, ggcfg_)) {
+            last_plan_time_ = now();
+            return;  // Finish the observation at this safe viewpoint before selecting another.
+        }
         // Keep a safe reference while braking/turning. A new obstacle or an
         // explicit mission request still interrupts the recovery immediately.
         if (!plan_pending_ && tracker_->reorienting() && explore_has_committed_ &&
@@ -889,13 +1152,72 @@ private:
             last_unreach_clear_cov_ = cov_now;
         }
 
-        Path2 wp = plan_explore(gsnap, fcfg_, cur, yaw_, cur_band_, all_explored,
-                                &unreachable_, unreach_block_r_);
+        const bool have_commit = tracker_->has_trajectory() && explore_has_committed_ && !explore_failed_;
+        const Path2 remaining = have_commit ? tracker_->remaining_path(cur.x, cur.y) : Path2{};
+        const bool old_clear = have_commit && path_clear(cur, remaining, obs, ggcfg_);
+        const double view_heading = have_observation_target_ ? observation_target_.view_heading : yaw_;
+        active_target_gain_ = have_commit && have_observation_target_
+            ? visible_unknown_count(gsnap, explore_target_, view_heading, obs, fcfg_) : -1;
+        const bool target_stale = have_commit && (have_observation_target_
+            ? active_target_gain_ == 0
+            : (target_stale_r_ > 0.0 && !gsnap.has_gain_within(explore_target_, target_stale_r_)));
+        const PathScore old_score = have_commit ? score_path(cur, remaining, obs, ggcfg_) : PathScore{};
+        const bool handoff_due = have_commit && old_score.length < global_lookahead_;
+        const auto decision_time = now();
+        const double candidate_age = candidate_time_valid_
+            ? (decision_time - last_candidate_time_).seconds() : candidate_period_;
+        if (!plan_pending_ && old_clear && !target_stale && !handoff_due &&
+            candidate_age >= 0.0 && candidate_age < candidate_period_) {
+            ++candidate_skips_;
+            last_plan_time_ = decision_time;
+            return;
+        }
+        last_candidate_time_ = decision_time;
+        candidate_time_valid_ = true;
+
+        // Candidate selection may advance bands, but rejected plans must not
+        // change the band followed by the still-active route.
+        int candidate_band = cur_band_;
+        FrontierSelection observation;
+        Path2 wp;
+        if (frontier_observation_enabled_) {
+            double route_heading = std::numeric_limits<double>::quiet_NaN();
+            if (!plan_pending_ && old_clear && tracker_->remaining_distance() > goal_tol_) {
+                const double ahead_s = tracker_->progress_distance() + frontier_continuity_lookahead_;
+                Vec2 ahead = traj_.back().p;
+                for (const auto& point : traj_) {
+                    if (point.s >= ahead_s) { ahead = point.p; break; }
+                }
+                if (std::hypot(ahead.x - cur.x, ahead.y - cur.y) > goal_tol_)
+                    route_heading = std::atan2(ahead.y - cur.y, ahead.x - cur.x);
+            }
+            observation = select_observation_target(gsnap, fcfg_, cur, yaw_, candidate_band,
+                                                   obs, &unreachable_, unreach_block_r_, route_heading);
+            wp.push_back(cur);
+            if (observation.valid) wp.push_back(observation.point);
+        } else {
+            wp = plan_explore(gsnap, fcfg_, cur, yaw_, candidate_band, all_explored,
+                              &unreachable_, unreach_block_r_);
+        }
+        if (wp.size() < 2) {
+            // An empty candidate list is not a request to A* back to cur.
+            // Retry after a normal planning period as observations update.
+            if (!old_clear) {
+                traj_.clear();
+                tracker_->set_trajectory({});
+                explore_has_committed_ = false;
+                explore_failed_ = true;
+            }
+            unreachable_.clear();
+            plan_pending_ = false;
+            last_plan_time_ = now();
+            return;
+        }
 
         // 挑覆盖路径上第一个距当前 ≥ explore_target_min_dist_ 的点作 A* 终点：
         //   太近绕行无意义、易频繁过期；只需绕近处障碍，到了自然周期重规划接力。
         Vec2 scan_target = wp.empty() ? cur : wp.back();
-        for (size_t i = 1; i < wp.size(); ++i) {
+        for (size_t i = 1; !frontier_observation_enabled_ && i < wp.size(); ++i) {
             if (std::hypot(wp[i].x - cur.x, wp[i].y - cur.y) >= explore_target_min_dist_) {
                 scan_target = wp[i];
                 break;
@@ -904,8 +1226,6 @@ private:
 
         // ★路径承诺/迟滞★：已有绕障折线时，先判旧折线是否仍无碰撞、目标是否漂移。
         //   仅在【目标大幅移动(换区)】或【旧折线被挡(会撞)】时才考虑重算 A*。
-        const bool have_commit  = tracker_->has_trajectory() && explore_has_committed_ && !explore_failed_;
-        const bool old_clear    = have_commit && path_clear(cur, explore_raw_, obs, ggcfg_);
         const bool target_moved = have_commit &&
             std::hypot(scan_target.x - explore_target_.x,
                        scan_target.y - explore_target_.y) > commit_target_tol_;
@@ -918,22 +1238,13 @@ private:
         //   ★半径口径★：看邻域而非仅目标格自身。仿真(6 场景, 主指标=达 90% 覆盖用时)：
         //     基线 281.0s | 仅看目标格 283.3s(无改善,3 场景更慢) | 邻域 R=1.0m 242.3s(-13.8%,全面更快)
         //     R=2.0m 反而 293.3s —— 半径过大会过早放弃仍有价值的目标。故取 R=1.0m。
-        const bool target_stale = have_commit &&
-            !gsnap.has_gain_within(explore_target_, target_stale_r_);
-
         // 目标几乎没动 且 旧折线仍无碰撞 且 目标仍有收益 → 直接续用，连 A* 都不搜(最省、最稳，绝不翻边)。
         if (have_commit && !target_moved && old_clear && !target_stale) {
             plan_pending_ = false;
             last_plan_time_ = now();   // 续命，避免下一拍又因 age 触发重搜
             return;
         }
-        if (target_stale) {
-            RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1500,
-                "目标失效(邻域 %.1fm 内已无未扫格) (%.2f,%.2f) → 放弃承诺，改投 (%.2f,%.2f)",
-                target_stale_r_, explore_target_.x, explore_target_.y, scan_target.x, scan_target.y);
-        }
-
-        GlobalResult gr = plan_global_path(cur, scan_target, obs, ggcfg_, yaw_);  // ★机头锥★：起点段只朝机头延伸
+        GlobalResult gr = search_explore_global(cur, scan_target, obs, yaw_);
         if (gr.ok && gr.path.size() >= 2) {
             // ★换路评估(迟滞第二道闸)★：目标漂移触发了重算，但只要旧折线【仍无碰撞】就别急着换——
             //   给旧路/新路各打分(score_path: 剩余弧长=时间效益, 最小障碍边距=安全性)，新路需
@@ -944,7 +1255,7 @@ private:
             //   ★target_stale 必须在这里也短路★：否则失效目标虽被识别，却仍可能因
             //   "新路不够安全/不够快"被这道闸打回、继续咬着零收益目标飞 —— 修了等于没修。
             if (old_clear && !target_stale) {
-                const PathScore so = score_path(cur, explore_raw_, obs, ggcfg_);   // 旧路(剩余段)
+                const PathScore& so = old_score;   // 当前真正执行轨迹的剩余段
                 const PathScore sn = score_path(cur, gr.path,      obs, ggcfg_);   // 新路
                 const bool exhausted = so.length < global_lookahead_;             // 旧路快走完→无可咬死，放行换路
                 const bool safer  = sn.min_clear >= so.min_clear * (1.0 + path_switch_safety_gain_);
@@ -960,18 +1271,37 @@ private:
                     return;                    // 不够好 → 续用旧轨迹，绝不翻边
                 }
             }
-            adopt_explore_path(gr, scan_target);   // 设激活轨迹/清失败态/撤红叉
-        } else {
+            if (adopt_explore_path(gr, scan_target, &observation)) {
+                last_replan_reason_ = !have_commit ? "initial_or_recovery" :
+                    (!old_clear ? "route_blocked" : (target_stale ? "view_exhausted" :
+                    (handoff_due ? "route_end" : "better_route")));
+                RCLCPP_INFO(get_logger(), "探索换路[%s] → (%.2f, %.2f)，原目标可见未扫格=%d",
+                    last_replan_reason_.c_str(), scan_target.x, scan_target.y, active_target_gain_);
+                cur_band_ = candidate_band;
+                return;
+            }
+            if (explore_handoff_deferred_) return;
+        }
+        if (old_clear && !target_stale) {
+            // Failure of a speculative candidate does not invalidate the
+            // safe, productive trajectory already being flown.
+            last_replan_reason_ = "keep_route_candidate_failed";
+            ++kept_after_candidate_failure_;
+            plan_pending_ = false;
+            last_plan_time_ = now();
+            return;
+        }
+        {
             // ★机头锥内无解★：先用【无锥 probe】判定到底是"任何朝向都没路"还是"有路只是不在机头方向"。
             explore_failed_ = true;
             explore_has_committed_ = false;
             traj_ = Trajectory{};
             tracker_->set_trajectory(traj_);
 
-            GlobalResult probe = plan_global_path(cur, scan_target, obs, ggcfg_);  // 不传 yaw → 无锥
+            GlobalResult probe = search_explore_global(cur, scan_target, obs);
             if (probe.ok && probe.path.size() >= 2) {
                 // 有路，只是不在机头方向 → 原地转身找解(改朝向重搜)，不后退/不跳带。
-                enter_turn_for_solution(cur, scan_target, probe);
+                enter_turn_for_solution(cur, scan_target, probe, candidate_band, &observation);
                 RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
                     "机头方向无路但侧向有路 → 原地转身找解 (目标 %.2f,%.2f)", scan_target.x, scan_target.y);
             } else {
@@ -988,12 +1318,12 @@ private:
                     // 不是贴脸卡死/已退到极限仍无路 = 真够不到 → 放弃该区：拉黑 + 跳带 + 红叉 + 去别处。
                     retreating_ = false;
                     unreachable_.push_back(scan_target);   // 拉黑够不到的目标：选点不再回头试这条死路
-                    cur_band_++;
-                    plan_pending_ = true;
+                    plan_pending_ = false;
+                    last_plan_time_ = now();
                     has_unreachable_marker_ = true;        // ★画红叉★
                     unreachable_pos_ = scan_target;
                     RCLCPP_WARN(get_logger(),
-                        "探索目标 (%.2f, %.2f) A* 无解(任何朝向都被围死) → 画红叉 + 放弃该区域跳带去别处",
+                        "探索观察点 (%.2f, %.2f) 暂无路径 → 暂缓此点，下一规划周期重试其他观察点",
                         scan_target.x, scan_target.y);
                 }
             }
@@ -1058,68 +1388,218 @@ private:
         return pd_core(target, std::hypot(target.x - px_, target.y - py_));
     }
 
-    // 沿全局绕障轨迹 gtraj 用 carrot 跟随：方向取轨迹上前瞻 global_lookahead_ 的点，
-    //   速度按到 final_target 距离刹停。逼近真目标(剩余≤前瞻)时直接朝真目标 → 精确停。
-    //   写 last_look_=carrot。返回机体系 {v_fwd, v_lat}（yaw_rate 进 last_yaw_rate_）。
-    Vec2 pd_follow_path(const Trajectory& gtraj, const Vec2& final_target)
+    void hold_required_path(const std::string& reason)
     {
-        const double d_goal = std::hypot(final_target.x - px_, final_target.y - py_);
-        Vec2 carrot = final_target;
-        if (gtraj.size() >= 2 && d_goal > global_lookahead_) {
-            // 轨迹上离飞机最近的点
-            size_t ni = 0; double best = 1e18;
-            for (size_t i = 0; i < gtraj.size(); ++i) {
-                const double dd2 = std::hypot(gtraj[i].p.x - px_, gtraj[i].p.y - py_);
-                if (dd2 < best) { best = dd2; ni = i; }
-            }
-            // 沿弧长向前取 global_lookahead_ 作 carrot
-            const double s_target = gtraj[ni].s + global_lookahead_;
-            size_t ci = gtraj.size() - 1;
-            for (size_t i = ni; i < gtraj.size(); ++i)
-                if (gtraj[i].s >= s_target) { ci = i; break; }
-            carrot = gtraj[ci].p;
-        }
-        last_look_ = carrot; look_valid_ = true;
-        return pd_core(carrot, d_goal);
+        global_failed_ = true;
+        global_has_ = global_at_goal_ = global_braking_blocked_ = false;
+        command_projection_blocked_ = measured_projection_blocked_ = false;
+        required_blocked_time_valid_ = false;
+        global_raw_.clear();
+        global_traj_.clear();
+        global_tracker_->set_trajectory({});
+        global_block_reason_ = reason;
+        traj_.clear();
+        last_look_ = {px_, py_};
+        look_valid_ = true;
+        last_yaw_rate_ = 0.0;
+        retreating_ = false;
     }
 
-    // 全局绕障直奔 target：A*(承诺式)搜绕障折线 → Catmull-Rom 平滑 → 沿线 carrot PD 跟随精确刹停。
-    //   ★路径承诺/迟滞★：一旦采纳一条绕障路径(选了从障碍某侧绕过)，只要它在当前障碍图下【仍无碰撞】
-    //   就续用，绝不因左右绕代价 near-tie 而每次重搜翻边(根因:A* 无记忆,飞机/点云/量化微抖→最短路翻边
-    //   →carrot 甩到另一侧→横切撞柱)。仅在【目标大幅移动】或【旧路径真被挡(会撞)】时才重算 A* 换边。
-    //   写 traj_(可视化激活轨迹) 与 last_look_；A* 无解(目标被围死)时置 global_failed_=true，
-    //   供调用方报警悬停(POI/终点必达，无解属异常，不乱撞)。
-    //   需在持有 mtx_ 时调用（读写 px_/py_/global_* 等）。
+    bool required_motion_clear(const Vec2& stop, const Obstacles& obs) const
+    {
+        const Vec2 cur{px_, py_};
+        GlobalConfig motion_config = ggcfg_;
+        motion_config.inflate = required_motion_inflate_;
+        const auto physical_field = [this](const Vec2& p) {
+            return p.x >= ggcfg_.min_x + ggcfg_.robot_radius &&
+                   p.x <= ggcfg_.max_x - ggcfg_.robot_radius &&
+                   p.y >= ggcfg_.min_y + ggcfg_.robot_radius &&
+                   p.y <= ggcfg_.max_y - ggcfg_.robot_radius;
+        };
+        if (!physical_field(cur) || !physical_field(stop) ||
+            !obstacle_segment_clear(cur, stop, obs, motion_config)) return false;
+        const double low[2]{ggcfg_.min_x + ggcfg_.wall_margin, ggcfg_.min_y + ggcfg_.wall_margin};
+        const double high[2]{ggcfg_.max_x - ggcfg_.wall_margin, ggcfg_.max_y - ggcfg_.wall_margin};
+        const double a[2]{cur.x, cur.y}, b[2]{stop.x, stop.y};
+        bool monotonic_entry = true;
+        for (size_t axis = 0; axis < 2; ++axis) {
+            if (a[axis] < low[axis]) {
+                monotonic_entry = monotonic_entry && b[axis] >= a[axis] && b[axis] <= high[axis];
+            } else if (a[axis] > high[axis]) {
+                monotonic_entry = monotonic_entry && b[axis] <= a[axis] && b[axis] >= low[axis];
+            } else {
+                monotonic_entry = monotonic_entry && b[axis] >= low[axis] && b[axis] <= high[axis];
+            }
+        }
+        if (monotonic_entry) return true;
+
+        // Only the approved straight terminal connector can leave the full
+        // field inset. Its execution capsule uses the existing arrival tolerance.
+        const auto in_connector = [this](const Vec2& p) {
+            const double dx = global_target_.x - global_connector_start_.x;
+            const double dy = global_target_.y - global_connector_start_.y;
+            const double length2 = dx * dx + dy * dy;
+            const double u = length2 > 1e-12
+                ? std::clamp(((p.x - global_connector_start_.x) * dx +
+                              (p.y - global_connector_start_.y) * dy) / length2, 0.0, 1.0)
+                : 0.0;
+            return std::hypot(p.x - global_connector_start_.x - u * dx,
+                              p.y - global_connector_start_.y - u * dy) <= goal_tol_;
+        };
+        return in_connector(cur) && in_connector(stop);
+    }
+
+    bool required_velocity_clear(const Vec2& world_velocity, const Obstacles& obs) const
+    {
+        const double speed = std::hypot(world_velocity.x, world_velocity.y);
+        if (!std::isfinite(speed)) return false;
+        const double horizon = std::max(0.0, global_gains_.prediction_time) +
+            speed / (2.0 * std::max(1e-3, global_gains_.max_accel));
+        return required_motion_clear({px_ + world_velocity.x * horizon,
+                                      py_ + world_velocity.y * horizon}, obs);
+    }
+
+    // Required points keep an exact, independently validated terminal segment.
+    // Position errors affect speed only; heading always follows the checked path.
     Vec2 pd_to_point_avoid(const Vec2& target, const Obstacles& obs)
     {
         const Vec2 cur{px_, py_};
-        const bool target_moved =
-            std::hypot(target.x - global_target_.x, target.y - global_target_.y) > commit_target_tol_;
-        // 旧路径仍无碰撞？(只查障碍圆，与 A* 自洽) —— 无缓存/目标动则无需校验、直接重算
-        const bool stale = !global_has_ || target_moved ||
-                           !path_clear(cur, global_raw_, obs, ggcfg_);
-        if (stale) {
-            // ★机头锥优先★：先约束起点段朝机头延伸搜(让 POI/归航起步也偏好机头方向，不侧移撞柱)；
-            //   锥内无解则回退【无锥】再搜一次(与今日行为完全一致，零回归)。POI/归航必达，不在此走转身。
-            GlobalResult gr = plan_global_path(cur, target, obs, ggcfg_, yaw_);
-            if (!(gr.ok && gr.path.size() >= 2))
-                gr = plan_global_path(cur, target, obs, ggcfg_);   // 回退：无锥(NaN)
-            if (gr.ok && gr.path.size() >= 2) {
-                global_raw_    = gr.path;                       // 裸折线(供下拍 path_clear 校验)
-                global_traj_   = smooth_catmull_rom(gr.path, arc_ds_);
-                global_failed_ = false;
-            } else {
-                // 目标被围死/不连通 → 直线兜底(仅可视化)，并置 global_failed_ 让调用方报警悬停
-                global_raw_    = Path2{ cur, target };
-                global_traj_   = smooth_catmull_rom(global_raw_, arc_ds_);
-                global_failed_ = true;
+        global_goal_blocked_ = !path_clear(target, Path2{target, target}, obs, ggcfg_) ||
+            target.x < ggcfg_.min_x + ggcfg_.robot_radius ||
+            target.x > ggcfg_.max_x - ggcfg_.robot_radius ||
+            target.y < ggcfg_.min_y + ggcfg_.robot_radius ||
+            target.y > ggcfg_.max_y - ggcfg_.robot_radius;
+        if (global_goal_blocked_) {
+            global_target_ = target;
+            hold_required_path("required_goal_blocked");
+            RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                "Required goal (%.2f, %.2f) is occupied or outside the safe field; holding",
+                target.x, target.y);
+            return {};
+        }
+        const bool target_moved = std::hypot(target.x - global_target_.x, target.y - global_target_.y) > 1e-6;
+        VelCmd command;
+        bool updated_existing = false;
+        if (global_has_ && !target_moved && global_tracker_->has_trajectory()) {
+            command = global_tracker_->update(px_, py_, yaw_, v_fwd_est_, v_lat_est_, goal_tol_, yaw_rate_est_);
+            updated_existing = true;
+            if (command.needs_replan) global_has_ = false;
+            Path2 remaining = global_tracker_->remaining_reference_path();
+            if (remaining.size() == 1) remaining.push_back(target);
+            if (!required_path_clear(cur, remaining, target, obs, ggcfg_)) global_has_ = false;
+        }
+        if (!global_has_ || target_moved) {
+            const double age = (now() - last_global_plan_time_).seconds();
+            if (global_failed_ && !target_moved && age >= 0.0 && age < replan_period_) {
+                hold_required_path("required_path_unavailable");
+                return {};
             }
             global_target_ = target;
-            global_has_    = true;
             last_global_plan_time_ = now();
+            ++astar_searches_;
+            ++global_path_searches_;
+            GlobalResult gr = plan_required_path(cur, target, obs, ggcfg_, yaw_);
+            if (!gr.ok || gr.path.size() < 2) {
+                ++astar_searches_;
+                ++global_path_searches_;
+                gr = plan_required_path(cur, target, obs, ggcfg_);
+            }
+            if (!gr.ok || gr.path.size() < 2 ||
+                !required_path_clear(cur, gr.path, target, obs, ggcfg_)) {
+                hold_required_path("required_path_unavailable");
+                return {};
+            }
+            global_connector_start_ = gr.path[gr.path.size() - 2];
+            Path2 prefix(gr.path.begin(), gr.path.end() - 1);
+            Trajectory candidate = smooth_catmull_rom(prefix, arc_ds_);
+            const double tail_length = std::hypot(target.x - global_connector_start_.x,
+                                                  target.y - global_connector_start_.y);
+            TrajPoint terminal{};
+            terminal.p = target;
+            terminal.theta = std::atan2(target.y - global_connector_start_.y,
+                                        target.x - global_connector_start_.x);
+            terminal.s = candidate.back().s + tail_length;
+            if (candidate.size() == 1) candidate.back().theta = terminal.theta;
+            candidate.push_back(terminal);
+            Path2 executed;
+            for (const auto& point : candidate) executed.push_back(point.p);
+            if (!required_path_clear(cur, executed, target, obs, ggcfg_)) {
+                ++global_smooth_fallbacks_;
+                candidate = make_polyline_trajectory(gr.path);
+                if (candidate.size() == 1) candidate.push_back(candidate.front());
+                executed.clear();
+                for (const auto& point : candidate) executed.push_back(point.p);
+            }
+            if (!required_path_clear(cur, executed, target, obs, ggcfg_)) {
+                ++global_invalid_paths_;
+                hold_required_path("required_trajectory_invalid");
+                return {};
+            }
+            global_raw_ = executed;
+            global_traj_ = candidate;
+            global_tracker_->set_trajectory(global_traj_);
+            global_failed_ = false;
+            global_has_ = true;
+            required_blocked_time_valid_ = false;
+            if (updated_existing) {
+                // A route invalidated this tick must brake before using its
+                // replacement; do not advance the tracker twice in one period.
+                command.v_fwd = command.v_lat = 0.0;
+                command.at_goal = false;
+                global_tracker_->constrain_forward_command(0.0);
+            } else {
+                command = global_tracker_->update(px_, py_, yaw_, v_fwd_est_, v_lat_est_, goal_tol_, yaw_rate_est_);
+            }
         }
-        traj_ = global_traj_;   // 可视化：把当前激活的绕障轨迹画出来
-        return pd_follow_path(global_traj_, target);
+        traj_ = global_traj_;
+        last_look_ = global_tracker_->last_lookahead();
+        look_valid_ = true;
+        global_at_goal_ = command.at_goal;
+        const double remaining = global_tracker_->remaining_distance();
+        const double speed = std::hypot(command.v_fwd, command.v_lat);
+        if (remaining < global_gains_.endpoint_slow_r && speed > 1e-9) {
+            const double cap = std::max(0.0, kp_goal_ * remaining -
+                kd_goal_ * std::hypot(v_fwd_est_, v_lat_est_));
+            const double scale = std::min(1.0, cap / speed);
+            command.v_fwd *= scale;
+            command.v_lat *= scale;
+            global_tracker_->constrain_forward_command(command.v_fwd);
+        }
+        const double c = std::cos(yaw_), s = std::sin(yaw_);
+        const Vec2 desired{c * command.v_fwd - s * command.v_lat,
+                           s * command.v_fwd + c * command.v_lat};
+        const Vec2 measured{c * v_fwd_est_ - s * v_lat_est_, s * v_fwd_est_ + c * v_lat_est_};
+        const double measured_speed = std::hypot(measured.x, measured.y);
+        command_projection_blocked_ = !required_velocity_clear(desired, obs);
+        measured_projection_blocked_ = (!std::isfinite(measured_speed) || measured_speed > goal_stop_v_) &&
+            !required_velocity_clear(measured, obs);
+        const bool blocked = command_projection_blocked_ || measured_projection_blocked_;
+        if (blocked) {
+            if (!global_braking_blocked_) ++global_velocity_brakes_;
+            command.v_fwd = command.v_lat = 0.0;
+            global_tracker_->constrain_forward_command(0.0);
+            if (!required_motion_clear(cur, obs)) command.yaw_rate = 0.0;
+        }
+        global_braking_blocked_ = blocked;
+        global_block_reason_ = blocked ? "required_stopping_projection" : "none";
+        if (blocked && measured_speed <= goal_stop_v_) {
+            const double current_time = steady_seconds();
+            if (!required_blocked_time_valid_) {
+                required_blocked_since_ = current_time;
+                required_blocked_time_valid_ = true;
+            }
+            if (required_blocked_replan_s_ > 0.0 &&
+                current_time - required_blocked_since_ >= required_blocked_replan_s_) {
+                ++required_blocked_replans_;
+                global_has_ = false;
+                required_blocked_time_valid_ = false;
+                global_block_reason_ = "required_stopped_replan";
+            }
+        } else {
+            required_blocked_time_valid_ = false;
+        }
+        last_yaw_rate_ = command.yaw_rate;
+        return {command.v_fwd, command.v_lat};
     }
 
     // 飞机到最近障碍【边缘】的距离(圆心距 − 障碍半径)。无障碍返回很大值。
@@ -1226,6 +1706,27 @@ private:
         return false;
     }
 
+    GlobalResult search_global(const Vec2& start, const Vec2& goal, const Obstacles& obstacles,
+                               const GlobalConfig& config, double yaw = NAN)
+    {
+        ++astar_searches_;
+        return plan_global_path(start, goal, obstacles, config, yaw);
+    }
+
+    GlobalResult search_explore_global(const Vec2& start, const Vec2& goal,
+                                       const Obstacles& obstacles, double yaw = NAN)
+    {
+        GlobalConfig config = ggcfg_;
+        config.validate_complete_path = true;
+        if (explore_plan_reserve_ > 0.0) {
+            config.inflate += explore_plan_reserve_;
+            auto reserved = search_global(start, goal, obstacles, config, yaw);
+            if (reserved.ok) return reserved;
+            config.inflate = ggcfg_.inflate;
+        }
+        return search_global(start, goal, obstacles, config, yaw);
+    }
+
     // ---------- 20Hz 主循环 ----------
     void on_timer()
     {
@@ -1235,6 +1736,10 @@ private:
 
         bool publish_finished = false;
         bool corridor_active = false;
+        bool publish_diagnostics = false;
+        std_msgs::msg::Float64 coverage;
+        nav_msgs::msg::Path active_path;
+        diagnostic_msgs::msg::DiagnosticArray diagnostics;
 
         {
             std::lock_guard<std::mutex> lk(mtx_);
@@ -1310,22 +1815,21 @@ private:
                 poi_target_ = poi_queue_.front();
                 poi_mode_ = PoiMode::GOTO_POI;
                 turning_for_solution_ = false;   // 切去插点：打断探索的原地转身找解
+                global_has_ = global_failed_ = false;
+                global_tracker_->set_trajectory({});
                 RCLCPP_INFO(get_logger(), "前往插点 (%.2f, %.2f)", poi_target_.x, poi_target_.y);
             }
 
             if (poi_mode_ == PoiMode::GOTO_POI) {
                 poi_active = true;
-                // 去飞插点(目标可能藏在障碍后)：全局 A* 绕障 → 沿绕障轨迹 carrot PD 跟随、精确停，不走 tracker。
+                // Required points use a separate tracker and a checked exact endpoint.
                 const Vec2 vb = pd_to_point_avoid(poi_target_, obstacles);  // 内部写 traj_/last_look_
+                retreating_ = false;
                 if (global_failed_) {
-                    // A* 无解(插点被围死)：先试贴障后退脱困；退出去通道打开→下拍自然重算成功接着绕。
-                    if (!try_retreat(obstacles, cmd)) {
-                        // 非贴脸卡死/已退到极限仍无路=真被围死 → 插点必达，报警悬停(无 DWA 兜底)。
-                        cmd.twist.linear.x = 0.0; cmd.twist.linear.y = 0.0; cmd.twist.angular.z = 0.0;
-                        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-                            "插点 (%.2f, %.2f) A* 无解(被围死)，悬停等待——请检查障碍/场地参数",
-                            poi_target_.x, poi_target_.y);
-                    }
+                    cmd.twist.linear.x = 0.0; cmd.twist.linear.y = 0.0; cmd.twist.angular.z = 0.0;
+                    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                        "Required POI (%.2f, %.2f) has no validated path; holding",
+                        poi_target_.x, poi_target_.y);
                 } else {
                     retreating_ = false;   // A* 又通了 → 退出后退态
                     cmd.twist.linear.x  = vb.x;
@@ -1333,7 +1837,12 @@ private:
                     cmd.twist.angular.z = last_yaw_rate_;
                 }
                 const double d = std::hypot(poi_target_.x - px_, poi_target_.y - py_);
-                if (d <= goal_tol_) {
+                const bool exact_path = !global_traj_.empty() &&
+                    std::hypot(global_traj_.back().p.x - poi_target_.x,
+                               global_traj_.back().p.y - poi_target_.y) < 1e-6;
+                if (!global_failed_ && !global_braking_blocked_ && global_at_goal_ && exact_path &&
+                    global_tracker_->remaining_distance() <= goal_tol_ && d <= goal_tol_ &&
+                    std::hypot(v_fwd_est_, v_lat_est_) <= goal_stop_v_) {
                     poi_mode_ = PoiMode::WAIT_RELEASE;
                     release_pending_ = false;   // 清掉到点前可能误收的放行
                     cmd.twist.linear.x = 0.0; cmd.twist.linear.y = 0.0; cmd.twist.angular.z = 0.0;
@@ -1352,6 +1861,8 @@ private:
                     release_pending_ = false;
                     if (!poi_queue_.empty()) poi_queue_.pop_front();
                     poi_mode_ = PoiMode::EXPLORE;
+                    global_has_ = global_failed_ = global_goal_blocked_ = false;
+                    global_tracker_->set_trajectory({});
                     plan_pending_ = true;   // 回探索后立刻重规划接着扫
                     RCLCPP_INFO(get_logger(), "收到放行 → 继续探索");
                 }
@@ -1365,9 +1876,11 @@ private:
                 if (cov >= done_coverage_) {
                     homing_ = true;
                     turning_for_solution_ = false;            // 转归航：打断探索的原地转身找解
-                    tracker_->set_trajectory(Trajectory{});   // 丢弃探索轨迹，归航不走 tracker
+                    tracker_->set_trajectory(Trajectory{});
+                    global_has_ = global_failed_ = false;
+                    global_tracker_->set_trajectory({});
                     RCLCPP_INFO(get_logger(),
-                        "完程度达标(%.0f%%) → 归航，朝终点 (%.2f, %.2f) PD 刹停",
+                        "完程度达标(%.0f%%) → 归航，沿安全轨迹到终点 (%.2f, %.2f) 刹停",
                         cov * 100.0, goal_.x, goal_.y);
                 }
             }
@@ -1377,15 +1890,12 @@ private:
             } else if (has_goal_ && homing_) {
                 // ---- 归航：直奔真实终点(不夹取)，平滑刹停。终点可能藏在障碍后 → 全局 A* 绕障。 ----
                 Vec2 vb = pd_to_point_avoid(goal_, obstacles);   // 内部写 traj_/last_look_
+                retreating_ = false;
                 if (global_failed_) {
-                    // A* 无解(终点被围死)：先试贴障后退脱困；退出去通道打开→下拍自然重算成功接着绕。
-                    if (!try_retreat(obstacles, cmd)) {
-                        // 非贴脸卡死/已退到极限仍无路=真被围死 → 终点必达，报警悬停(无 DWA 兜底)。
-                        cmd.twist.linear.x = 0.0; cmd.twist.linear.y = 0.0; cmd.twist.angular.z = 0.0;
-                        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-                            "归航终点 (%.2f, %.2f) A* 无解(被围死)，悬停等待——请检查障碍/场地参数",
-                            goal_.x, goal_.y);
-                    }
+                    cmd.twist.linear.x = 0.0; cmd.twist.linear.y = 0.0; cmd.twist.angular.z = 0.0;
+                    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                        "Required home goal (%.2f, %.2f) has no validated path; holding",
+                        goal_.x, goal_.y);
                 } else {
                     retreating_ = false;   // A* 又通了 → 退出后退态
                     cmd.twist.linear.x  = vb.x;
@@ -1396,13 +1906,19 @@ private:
                 // 停稳判定：到点容差内且合速度足够小（停稳优先，直接清零）
                 const double d = std::hypot(goal_.x - px_, goal_.y - py_);
                 const double v_now = std::hypot(v_fwd_est_, v_lat_est_);
-                const bool stopped = (d <= goal_tol_) && (v_now <= goal_stop_v_);
+                const bool exact_path = !global_traj_.empty() &&
+                    std::hypot(global_traj_.back().p.x - goal_.x,
+                               global_traj_.back().p.y - goal_.y) < 1e-6;
+                const bool stopped = !global_failed_ && !global_braking_blocked_ &&
+                    global_at_goal_ && global_tracker_->remaining_distance() <= goal_tol_ && exact_path &&
+                    (d <= goal_tol_) && (v_now <= goal_stop_v_);
                 if (stopped) {
                     cmd.twist.linear.x = 0.0; cmd.twist.linear.y = 0.0; cmd.twist.angular.z = 0.0;
                     if (corridor_enabled_ && !corridor_disabled_for_goal_) {
                         corridor_->start({px_, py_}, steady_seconds());
                         corridor_active = true;
                         tracker_->set_trajectory({});
+                        global_tracker_->set_trajectory({});
                         traj_.clear();
                         last_look_ = {px_, py_};
                         RCLCPP_INFO(get_logger(), "到达探索交接点，开始转向/入口横移/穿门/H任务");
@@ -1429,7 +1945,10 @@ private:
                             } else {
                                 const double age = (now() - last_plan_time_).seconds();
                                 if (age >= replan_period_) need = true;
-                                else if (tracker_->last_nearest_dist() > replan_dev_) need = true;
+                                else if (tracker_->last_nearest_dist() > replan_dev_) {
+                                    const Vec2 cur{px_, py_};
+                                    need = !path_clear(cur, tracker_->remaining_path(px_, py_), obstacles, ggcfg_);
+                                }
                             }
                         }
                         if (need) replan_locked({px_, py_});
@@ -1439,8 +1958,16 @@ private:
                     if (tracker_->has_trajectory()) {
                         retreating_ = false;   // 有轨迹可走 → 退出后退态
                         const bool was_reorienting = tracker_->reorienting();
-                        VelCmd vc = tracker_->update(px_, py_, yaw_, v_fwd_est_, v_lat_est_, goal_tol_, yaw_rate_est_);
+                        VelCmd vc = observation_arrived_ && have_observation_target_ ? VelCmd{} :
+                            tracker_->update(px_, py_, yaw_, v_fwd_est_, v_lat_est_, goal_tol_, yaw_rate_est_);
+                        if (vc.needs_replan) {
+                            plan_pending_ = true;
+                            explore_has_committed_ = false;
+                            tracker_->set_trajectory({});
+                        }
+                        finish_observation(vc, obstacles);
                         if (tracker_->reorienting() != was_reorienting) {
+                            if (tracker_->reorienting()) ++recovery_entries_;
                             RCLCPP_INFO(get_logger(), "[探索纠偏] %s",
                                 tracker_->reorienting() ? "大角度偏差：先刹稳、转稳再前进" : "航向与角速度稳定，平滑恢复前进");
                         }
@@ -1449,6 +1976,14 @@ private:
                         cmd.twist.linear.x  = vc.v_fwd;
                         cmd.twist.linear.y  = vc.v_lat;
                         cmd.twist.angular.z = vc.yaw_rate;
+                        if (vc.at_goal && explore_goal_projected_) {
+                            // A safe observation point need not reach the blocked
+                            // requested cell. Try another viewpoint on the next tick.
+                            unreachable_.push_back(explore_target_);
+                            explore_has_committed_ = false;
+                            tracker_->set_trajectory({});
+                            plan_pending_ = true;
+                        }
                     } else if (turning_for_solution_) {
                         // replan_locked 本拍刚进入转身态(锥内无解+侧向有路) → 本拍即转身一步，别落到悬停。
                         step_turn_for_solution(obstacles, cmd);
@@ -1466,12 +2001,103 @@ private:
 
             } // 常规探索/归航；走廊任务独立处理墙与门。
 
+            if (++diagnostic_ticks_ % 10 == 0) {
+                publish_diagnostics = true;
+                coverage.data = grid_->coverage_ratio();
+                active_path.header.stamp = cmd.header.stamp;
+                active_path.header.frame_id = "camera_init";
+                for (const auto& point : traj_) {
+                    geometry_msgs::msg::PoseStamped pose;
+                    pose.header = active_path.header;
+                    pose.pose.position.x = point.p.x;
+                    pose.pose.position.y = point.p.y;
+                    pose.pose.position.z = pz_;
+                    pose.pose.orientation.w = 1.0;
+                    active_path.poses.push_back(pose);
+                }
+                diagnostics.header = active_path.header;
+                diagnostic_msgs::msg::DiagnosticStatus status;
+                status.name = "exploration/planner";
+                status.hardware_id = "exploration_planner";
+                status.message = corridor_active ? corridor_command_.status :
+                    (homing_ ? "homing" : (tracker_->reorienting() ? "reorienting" : "exploration"));
+                auto value = [&status](const std::string& key, const std::string& text) {
+                    diagnostic_msgs::msg::KeyValue item;
+                    item.key = key;
+                    item.value = text;
+                    status.values.push_back(item);
+                };
+                auto number = [&value](const std::string& key, auto scalar) {
+                    value(key, std::to_string(scalar));
+                };
+                value("mode", corridor_active ? "corridor" : (homing_ ? "homing" : "exploration"));
+                number("coverage_ratio", coverage.data);
+                number("replan_checks", replan_checks_);
+                number("candidate_skips", candidate_skips_);
+                number("active_band", cur_band_);
+                number("frontier_observation", have_observation_target_);
+                number("frontier_view_gain", observation_target_.gain);
+                number("active_target_gain", active_target_gain_);
+                number("observation_heading", observation_target_.view_heading);
+                value("replan_reason", last_replan_reason_);
+                number("kept_after_candidate_failure", kept_after_candidate_failure_);
+                number("frontier_view_clearance", observation_target_.clearance);
+                number("frontier_region_cells", observation_target_.region_size);
+                number("frontier_cleanup", observation_target_.cleanup);
+                number("astar_searches", astar_searches_);
+                number("adoptions", adoptions_);
+                number("invalid_paths", invalid_paths_);
+                number("required_goal_blocked", global_goal_blocked_);
+                number("required_path_blocked", global_failed_);
+                number("required_velocity_blocked", global_braking_blocked_);
+                number("command_projection_blocked", command_projection_blocked_);
+                number("measured_projection_blocked", measured_projection_blocked_);
+                number("required_motion_inflate", required_motion_inflate_);
+                number("required_blocked_replans", required_blocked_replans_);
+                value("required_block_reason", global_block_reason_);
+                number("required_path_searches", global_path_searches_);
+                number("required_smooth_fallbacks", global_smooth_fallbacks_);
+                number("required_invalid_paths", global_invalid_paths_);
+                number("required_velocity_brakes", global_velocity_brakes_);
+                number("required_heading_error", global_tracker_->heading_error());
+                number("required_remaining_s", global_tracker_->remaining_distance());
+                number("required_curvature", global_tracker_->reference_curvature());
+                number("required_next_corner_distance", global_tracker_->next_corner_distance());
+                number("required_at_goal", global_at_goal_);
+                number("smooth_fallbacks", smooth_fallbacks_);
+                value("smooth_failure_reason", smooth_failure_reason_);
+                const Obstacles observed_obstacles = obs_map_->snapshot();
+                number("current_obstacle_clearance", nearest_obstacle_dist(observed_obstacles));
+                number("turn_entries", turn_entries_);
+                number("recovery_entries", recovery_entries_);
+                number("target_x", explore_target_.x);
+                number("target_y", explore_target_.y);
+                number("lookahead_x", last_look_.x);
+                number("lookahead_y", last_look_.y);
+                number("progress_s", tracker_->progress_distance());
+                number("remaining_s", tracker_->remaining_distance());
+                number("heading_error", tracker_->heading_error());
+                number("reference_curvature", tracker_->reference_curvature());
+                number("next_corner_distance", tracker_->next_corner_distance());
+                const auto& gate = corridor_->gateLocked() ? corridor_->gate() : corridor_->observation();
+                number("gate_center_x", gate.gate_center.x);
+                number("gate_center_y", gate.gate_center.y);
+                number("gate_width", gate.gap_width);
+                value("gate_reason", gate.reason);
+                number("gates_passed", corridor_->gatesPassed());
+                diagnostics.status.push_back(status);
+            }
         }
 
         std_msgs::msg::Bool active_msg;
         active_msg.data = corridor_active;
         corridor_active_pub_->publish(active_msg);
         cmd_pub_->publish(cmd);
+        if (publish_diagnostics) {
+            coverage_pub_->publish(coverage);
+            active_path_pub_->publish(active_path);
+            diagnostics_pub_->publish(diagnostics);
+        }
 
         // 位置环模式：发布当前轨迹前瞻点(作为 SLAM 位置目标)。速度话题仍继续发布，
         // 便于关闭位置环时无缝退回原有速度控制链。
@@ -1566,6 +2192,7 @@ private:
     std::unique_ptr<CorridorController> corridor_;
     CorridorCommand corridor_command_;
     bool corridor_enabled_ = true;
+    std::string corridor_cloud_topic_;
     bool corridor_disabled_for_goal_ = false;
     bool corridor_route_received_ = false;
     nav_msgs::msg::Path pending_corridor_route_;
@@ -1578,15 +2205,32 @@ private:
     bool          use_position_control_ = params::USE_POSITION_CONTROL;
     bool          carlike_mode_ = params::EXPLORATION_CARLIKE_MODE;
     double        turn_blend_m_ = params::CARLIKE_TURN_BLEND_M;
+    double        turn_round_min_m_ = params::TURN_ROUND_MIN_M;
+    double        turn_round_max_curvature_ = params::TURN_ROUND_MAX_CURVATURE;
     double        turn_blend_min_angle_rad_ = params::CARLIKE_TURN_BLEND_ANGLE_DEG * M_PI / 180.0;
+    double        turn_blend_max_angle_rad_ = params::TURN_BLEND_MAX_ANGLE_DEG * M_PI / 180.0;
     int           turn_blend_samples_ = params::CARLIKE_TURN_BLEND_SAMPLES;
     TrackerGains  gains_;
     FrontierConfig fcfg_;
+    bool frontier_observation_enabled_ = params::FRONTIER_OBSERVATION_ENABLED;
+    bool have_observation_target_ = false;
+    FrontierSelection observation_target_, turn_observation_;
+    double observation_yaw_rate_ = 0.0;
+    double frontier_continuity_lookahead_ = params::FRONTIER_CONTINUITY_LOOKAHEAD_M;
+    int active_target_gain_ = -1;
+    std::string last_replan_reason_ = "none";
+    uint64_t kept_after_candidate_failure_ = 0;
+    bool explore_handoff_deferred_ = false;
+    bool observation_arrived_ = false;
+    double guide_min_segment_ = params::EXPLORE_GUIDE_MIN_SEGMENT_M;
+    double guide_max_deviation_ = params::EXPLORE_GUIDE_MAX_DEVIATION_M;
+    double explore_plan_reserve_ = params::EXPLORE_PLAN_RESERVE_M;
     double        lane_spacing_;       // 旧牛耕车道间距：已不参与任何计算(见构造里说明)，保留仅为参数表兼容
     double        arc_ds_;
     double        done_coverage_, goal_tol_, v_est_alpha_;
     double        goal_stop_v_, kp_goal_, kd_goal_, v_goal_max_;
     double        replan_period_ = 0.7, replan_dev_ = 0.5;
+    double        candidate_period_ = params::REPLAN_CANDIDATE_PERIOD_S;
     // 目标失效判定邻域半径 (m)：承诺目标此半径内已无未扫大格 → 该目标已无信息可拿，
     //   立刻放弃承诺改投别处(消除"已覆盖还在往前飞")。实际值由 params::TARGET_STALE_R 覆盖。
     double        target_stale_r_ = 1.00;
@@ -1614,6 +2258,8 @@ private:
 
     std::unique_ptr<GridMap>           grid_;
     std::unique_ptr<TrajectoryTracker> tracker_;
+    std::unique_ptr<TrajectoryTracker> global_tracker_;
+    TrackerGains global_gains_{};
     std::unique_ptr<Visualizer>        viz_obj_;
     std::unique_ptr<ObstacleMap>       obs_map_;
 
@@ -1621,6 +2267,14 @@ private:
     rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr cmd_pub_;
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr target_pose_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr              finished_pub_;
+    rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr coverage_pub_;
+    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr active_path_pub_;
+    rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diagnostics_pub_;
+    uint64_t diagnostic_ticks_ = 0, replan_checks_ = 0, astar_searches_ = 0;
+    uint64_t candidate_skips_ = 0;
+    uint64_t adoptions_ = 0, smooth_fallbacks_ = 0, turn_entries_ = 0, recovery_entries_ = 0;
+    uint64_t invalid_paths_ = 0;
+    std::string smooth_failure_reason_ = "none";
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr corridor_active_pub_;
     rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr corridor_route_sub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr    obs_cloud_pub_;
@@ -1630,6 +2284,7 @@ private:
     rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr goal_sub_;
     rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr poi_sub_;
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr  cloud_sub_;
+    rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr corridor_cloud_sub_;
     rclcpp::CallbackGroup::SharedPtr poi_cbg_;
     rclcpp::CallbackGroup::SharedPtr cloud_cbg_;
     rclcpp::TimerBase::SharedPtr timer_;
@@ -1648,11 +2303,14 @@ private:
     bool   homing_ = false;            // 覆盖率达标后进入归航刹停阶段（不再走 tracker）
     int    cur_band_ = -1;             // 上层扫描条带进度（-1=未初始化，由 plan_explore 维护）
     rclcpp::Time last_plan_time_;      // 上次重规划时刻（构造里用 now() 初始化）
+    rclcpp::Time last_candidate_time_;
+    bool candidate_time_valid_ = false;
 
     // ---- 探索 A* 重铺运行态（mtx_ 保护）----
     bool         explore_failed_ = false;  // 上次探索 A* 无解(目标被围死) → 放弃该区跳带
     Path2        explore_raw_;             // 上次采纳的探索绕障裸折线(供 path_clear 承诺校验)
     bool         explore_has_committed_ = false;  // 已采纳一条探索绕障路径(承诺中)
+    bool         explore_goal_projected_ = false;
     Vec2         explore_target_;          // 该承诺路径对应的 scan_target(移动超容差才换边)
 
     // ---- 放弃区域·黑名单（mtx_ 保护）----
@@ -1667,6 +2325,19 @@ private:
     Vec2         global_target_;          // 该缓存路径对应的目标(变了就重搜)
     bool         global_has_    = false;  // 有缓存路径
     bool         global_failed_ = false;  // 上次 A* 无解(目标被围死) → POI/终点报警悬停
+    bool         global_goal_blocked_ = false;
+    bool         global_at_goal_ = false;
+    bool         global_braking_blocked_ = false;
+    bool         command_projection_blocked_ = false, measured_projection_blocked_ = false;
+    double       required_motion_inflate_ = params::REQUIRED_MOTION_INFLATE;
+    double       required_blocked_replan_s_ = params::REQUIRED_BLOCKED_REPLAN_S;
+    double       required_blocked_since_ = 0.0;
+    bool         required_blocked_time_valid_ = false;
+    uint64_t     required_blocked_replans_ = 0;
+    Vec2         global_connector_start_;
+    uint64_t     global_path_searches_ = 0, global_smooth_fallbacks_ = 0;
+    uint64_t     global_invalid_paths_ = 0, global_velocity_brakes_ = 0;
+    std::string  global_block_reason_ = "none";
     rclcpp::Time last_global_plan_time_;  // 上次 A* 时刻（节流，构造里 now() 初始化）
 
     // ---- 脱困后退（mtx_ 保护）：A* 无解且贴障时低速退出来，边退边重算 ----
@@ -1681,9 +2352,15 @@ private:
 
     // ---- 原地转身找解（mtx_ 保护）：探索锥内无解但有路(只是不在机头方向)→原地转身改朝向重搜 ----
     bool          turning_for_solution_ = false;  // 正在原地转身找解
+    bool          turn_heading_valid_ = false;
+    Path2         turn_probe_path_;
     Vec2          turn_target_;                   // 转身期间重搜用的目标(=触发时的 scan_target)
+    int           turn_candidate_band_ = -1;
     int           turn_dir_ = 1;                  // 转身扫向：+1=逆时针(CCW)/-1=顺时针(CW)，朝 probe 开口方向
     double        turn_prev_yaw_ = 0.0;           // 上一拍 yaw（算本拍增量）
+    double        turn_heading_ = 0.0;
+    double        turn_command_rate_ = 0.0;
+    double        turn_settled_s_ = 0.0;
     double        turn_accum_    = 0.0;           // 累计净转角(带符号 *turn_dir_，达 2π*max_rev 判真围死，抗抖)
     rclcpp::Time  turn_start_time_;               // 进入转身时刻（超时兜底）
     int           turn_research_tick_ = 0;        // 重搜节流计数

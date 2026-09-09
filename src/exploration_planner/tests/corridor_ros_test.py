@@ -79,6 +79,7 @@ def run(binary):
                     binary, '--ros-args', '-p', 'viz:=false', '-p', 'use_sim_time:=true',
                     '-p', 'use_position_control:=true', '-p', 'done_coverage:=0.0',
                     '-p', 'corridor_enabled:=true', '-p', 'corridor_width:=1.5',
+                    '-p', 'corridor_cloud_topic:=/cloud_registered',
                 ], stdout=output, stderr=subprocess.STDOUT, env=os.environ.copy())
                 x, y, yaw, vx, vy, wz = 7.0, 4.25, 0.0, 0.0, 0.0, 0.0
                 simulation_time = 100.0

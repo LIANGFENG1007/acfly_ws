@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <limits>
 
@@ -48,6 +49,7 @@ struct VelCmd {
     double v_lat    = 0.0;   // 机体系横向纠偏 (m/s)
     double yaw_rate = 0.0;   // (rad/s)
     bool   at_goal  = false; // 已到轨迹末端(终点)容差内
+    bool   needs_replan = false; // 已滑过未通过的尖角，停稳后从实际位置重新规划
 };
 
 class TrajectoryTracker
@@ -66,7 +68,32 @@ public:
                   double measured_yaw_rate = std::numeric_limits<double>::quiet_NaN());
 
     bool reorienting() const { return aligning_; }
+    double progress_distance() const { return progress_s_; }
+    double remaining_distance() const { return traj_.empty() ? 0.0 : traj_.back().s - progress_s_; }
+    double heading_error() const { return last_heading_error_; }
+    double reference_curvature() const { return last_curvature_; }
+    double next_corner_distance() const {
+        const size_t corner = next_corner();
+        return corner < traj_.size() ? traj_[corner].s - progress_s_ : -1.0;
+    }
     Path2 remaining_path(double px, double py) const;
+    Path2 remaining_reference_path() const
+    {
+        if (traj_.empty()) return {};
+        Path2 result{sample_at(progress_s_).p};
+        for (const auto& point : traj_) {
+            if (point.s > progress_s_ + 1e-9 &&
+                (point.p.x != result.back().x || point.p.y != result.back().y))
+                result.push_back(point.p);
+        }
+        return result;
+    }
+
+    // Keep acceleration recovery consistent with a downstream safety speed cap.
+    void constrain_forward_command(double maximum)
+    {
+        previous_forward_command_ = std::clamp(previous_forward_command_, 0.0, std::max(0.0, maximum));
+    }
 
     // 最近一次用到的前瞻参考点（给可视化）
     Vec2 last_lookahead() const { return last_look_; }
@@ -93,6 +120,7 @@ private:
     double filtered_yaw_rate_ = 0.0;
     double previous_yaw_command_ = 0.0;
     double previous_forward_command_ = 0.0;
+    double last_heading_error_ = 0.0, last_curvature_ = 0.0;
     bool aligning_ = false;
     bool alignment_heading_valid_ = false;
     double alignment_heading_ = 0.0;
@@ -103,6 +131,7 @@ private:
 
     // 从 progress_idx_ 起找离当前位置最近的轨迹点（只向前搜，禁止倒退）
     void advance_to_nearest(double px, double py);
+    double projected_progress(double px, double py) const;
     TrajPoint sample_at(double s) const;
     size_t next_corner() const;
 };
