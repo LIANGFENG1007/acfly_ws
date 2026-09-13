@@ -25,6 +25,7 @@
 #include <unordered_set>
 #include <iostream>
 #include <stdexcept>
+#include <filesystem>
 #include "exploration_planner/params.hpp"
 #include "exploration_planner/types.hpp"
 #include "exploration_planner/grid_map.hpp"
@@ -36,6 +37,11 @@
 #include "exploration_planner/global_planner.hpp"
 #include "exploration_planner/corridor_controller.hpp"
 #include "exploration_planner/sensor_freshness.hpp"
+#include "exploration_planner/vision_shm.hpp"
+#include "exploration_planner/vision_candidates.hpp"
+#include "exploration_planner/vision_target_queue.hpp"
+#include "exploration_planner/vision_near_confirmation.hpp"
+#include "vision_shm_test_writer.hpp"
 
 // Dependencies are already included; this access override affects only the node.
 #define private public
@@ -731,6 +737,121 @@ int main(int argc, char** argv)
     int result = 0;
     try {
         ExplorationNode node;
+        {
+            char directory[] = "/tmp/acfly-vision-node-XXXXXX";
+            require(::mkdtemp(directory) != nullptr, "create isolated vision fixture");
+            struct RemoveFixture {
+                std::string path;
+                ~RemoveFixture() { std::filesystem::remove_all(path); }
+            } cleanup{directory};
+            const std::string path = std::string(directory) + "/targets.bin";
+            auto original_reader = std::move(node.vision_reader_);
+            node.vision_reader_ = std::make_unique<VisionShmReader>(path, .5, .02);
+            vision_shm::Writer writer(path);
+            writer.publish(vision_shm::monotonic_now(), {{1, 2.5, -1}, {5, 4, 2}});
+            const auto searches = node.astar_searches_;
+            node.on_timer();  // Receives SHM even before odometry is available.
+            require(node.vision_new_frame_ && node.vision_last_frame_.count == 2 &&
+                    node.vision_last_frame_.targets[1].id == 5 &&
+                    node.vision_last_frame_.targets[0].x == 2.5,
+                    "exploration timer did not consume the supplied SHM writer");
+            node.on_timer();
+            require(!node.vision_new_frame_ && node.vision_reader_->statistics().frames == 1,
+                    "exploration timer counted the same image twice");
+            writer.publish(vision_shm::monotonic_now(), {});
+            node.on_timer();
+            require(node.vision_new_frame_ && node.vision_last_frame_.count == 0 &&
+                    node.vision_reader_->statistics().empty_frames == 1,
+                    "exploration timer did not deliver a real empty image");
+            require(node.poi_queue_.empty() && !node.tracker_->has_trajectory() &&
+                    !node.has_goal_ && node.astar_searches_ == searches,
+                    "stage-one SHM reception unexpectedly changed flight decisions");
+            require(node.vision_candidates_->size() == 0,
+                    "preflight frames were counted as mission observations");
+
+            node.has_goal_ = node.has_pose_ = true;
+            node.goal_ = {7, 4.25};
+            node.px_ = 1; node.py_ = 0;
+            const auto original_goal = node.goal_;
+            node.pose_freshness_.observe(1, node.steady_seconds());
+            for (int i = 1; i <= 10; ++i) {
+                writer.publish(vision_shm::monotonic_now(), {{1 + i % 6, 2.5, -1}, {1 + (i + 1) % 6, 4, 2}});
+                node.poll_vision_shm();
+                require(node.vision_collection_active_ && node.vision_candidates_->size() == 2,
+                        "active exploration did not collect spatial candidates from SHM");
+                require(node.vision_new_confirmations_.size() == static_cast<size_t>(i == 10 ? 2 : 0),
+                        "SHM-to-node integration did not confirm exactly on the tenth new frame");
+                node.poll_vision_shm();
+                require(node.vision_new_confirmations_.empty(), "same SHM frame emitted confirmation twice");
+            }
+            require(node.vision_candidates_->statistics().confirmations == 2 &&
+                    node.poi_queue_.empty() && !node.tracker_->has_trajectory() &&
+                    node.goal_.x == original_goal.x && node.goal_.y == original_goal.y &&
+                    node.astar_searches_ == searches,
+                    "stage-two confirmation inserted a flight target or triggered a path search");
+            require(node.vision_queue_->active() && node.vision_queue_->pending().size() == 1 &&
+                    node.vision_queue_->active()->position.x == 2.5 &&
+                    node.vision_queue_->active()->class_id == 0 && node.vision_near_->count() == 0,
+                    "confirmed batch failed queue admission or reused far IDs in near vote");
+            const auto active_track = node.vision_queue_->active()->track_id;
+            node.pose_freshness_.observe(2, node.steady_seconds());
+            for (int i = 1; i <= 10; ++i) {
+                writer.publish(vision_shm::monotonic_now(),
+                    {{i <= 6 ? 4 : 2, 2.65, -.95}, {6, 4, 2}, {3, 1, -2}});
+                node.poll_vision_shm();
+                require(node.vision_queue_->active()->track_id == active_track &&
+                        node.vision_near_->count() == i,
+                        "queued/detected neighbour stole the active near confirmation");
+                require(node.vision_queue_->active()->refined == (i == 10),
+                        "near confirmation happened before/after ten fresh frames");
+            }
+            require(node.vision_queue_->active()->class_id == 4 &&
+                    std::abs(node.vision_queue_->active()->position.x - 2.65) < 1e-9 &&
+                    node.vision_queue_->pending().size() == 2 && node.vision_queue_->visited().empty() &&
+                    node.vision_near_->speed_cap(.6) == .4,
+                    "SHM-to-queue near result/limit was incorrect or prematurely marked completed");
+            require(node.poi_queue_.empty() && !node.tracker_->has_trajectory() &&
+                    node.goal_.x == original_goal.x && node.goal_.y == original_goal.y &&
+                    node.astar_searches_ == searches,
+                    "data-only queue/refinement changed navigation commands");
+
+            // Simulate the future executor's completion callback. There is no
+            // automatic visit-completion call in the live node at this stage.
+            require(node.vision_queue_->complete_active(active_track, node.steady_seconds()),
+                    "completion callback fixture failed");
+            writer.publish(vision_shm::monotonic_now(), {{1, 2.65, -.95}, {3, 1, -2}});
+            node.poll_vision_shm();
+            require(node.vision_queue_->visited().size() == 1 && node.vision_queue_->active() &&
+                    node.vision_queue_->active()->position.x == 4 &&
+                    node.vision_queue_->statistics().blacklisted_detections == 1 &&
+                    node.vision_candidates_->size() == 2 && node.vision_near_->count() == 0,
+                    "completed target re-entered candidates or next target lost FIFO/clean near state");
+            auto goal = std::make_shared<geometry_msgs::msg::PointStamped>();
+            goal->point.x = 7; goal->point.y = 4.25;
+            node.on_goal(goal);
+            require(node.vision_candidates_->size() == 0, "new mission retained old visual confirmations");
+            require(!node.vision_queue_->active() && node.vision_queue_->pending().empty() &&
+                    node.vision_queue_->visited().empty() && node.vision_near_->track_id() == 0,
+                    "new mission retained its queue, blacklist or near vote");
+            // A stale pose must prevent a new frame from entering the weighted accumulator.
+            node.pose_freshness_ = SensorFreshness{};
+            writer.publish(vision_shm::monotonic_now(), {{2, 2.5, -1}});
+            node.poll_vision_shm();
+            require(!node.vision_collection_active_ && node.vision_candidates_->size() == 0,
+                    "unavailable odometry entered the visual coordinate average");
+            node.pose_freshness_.observe(1, node.steady_seconds());
+            node.homing_ = true;
+            writer.publish(vision_shm::monotonic_now(), {{2, 2.5, -1}});
+            node.poll_vision_shm();
+            require(!node.vision_collection_active_ && node.vision_candidates_->size() == 0,
+                    "homing accepted new visual candidates");
+            node.homing_ = node.has_goal_ = node.has_pose_ = false;
+            node.plan_pending_ = false;
+            node.vision_collection_active_ = false;
+            node.vision_reader_ = std::move(original_reader);
+            node.vision_new_frame_.reset(); node.vision_last_frame_ = {};
+            std::cout << "exploration SHM far/near confirmation, FIFO/blacklist and no-flight boundary passed\n";
+        }
         closed_loop(node, "straight required connector", {6, 4.25}, {7, 4.25}, {});
         closed_loop(node, "required obstacle detour", {2, 0}, {6, 0}, {{4, 0, .2}});
         seed26_motion_regression(node);

@@ -120,6 +120,7 @@ private:
     double filtered_yaw_rate_ = 0.0;
     double previous_yaw_command_ = 0.0;
     double previous_forward_command_ = 0.0;
+    double previous_lateral_command_ = 0.0;
     double last_heading_error_ = 0.0, last_curvature_ = 0.0;
     bool aligning_ = false;
     bool alignment_heading_valid_ = false;
@@ -128,6 +129,9 @@ private:
     int turn_direction_ = 0;
 
     Vec2   last_look_;
+    double handoff_heading_ = 0.0;
+    double handoff_remaining_ = 0.0;
+    bool handoff_valid_ = false;
 
     // 从 progress_idx_ 起找离当前位置最近的轨迹点（只向前搜，禁止倒退）
     void advance_to_nearest(double px, double py);

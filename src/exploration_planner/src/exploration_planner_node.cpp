@@ -54,6 +54,10 @@
 #include "exploration_planner/global_planner.hpp"
 #include "exploration_planner/corridor_controller.hpp"
 #include "exploration_planner/sensor_freshness.hpp"
+#include "exploration_planner/vision_shm.hpp"
+#include "exploration_planner/vision_candidates.hpp"
+#include "exploration_planner/vision_target_queue.hpp"
+#include "exploration_planner/vision_near_confirmation.hpp"
 
 using namespace std::chrono_literals;
 using namespace exploration;
@@ -66,6 +70,53 @@ public:
     {
         // ---- 参数 ----
         auto dd = [this](const std::string& n, double v) { return this->declare_parameter<double>(n, v); };
+        const bool vision_shm_enabled = declare_parameter<bool>("vision_shm_enabled", params::VISION_SHM_ENABLED);
+        const auto vision_shm_path = declare_parameter<std::string>("vision_shm_path", params::VISION_SHM_PATH);
+        const double vision_max_age = dd("vision_shm_max_age_s", params::VISION_SHM_MAX_AGE_S);
+        const double vision_future_tolerance = dd("vision_shm_future_tol_s", params::VISION_SHM_FUTURE_TOL_S);
+        if (vision_shm_enabled) {
+            vision_reader_ = std::make_unique<VisionShmReader>(vision_shm_path, vision_max_age, vision_future_tolerance);
+            RCLCPP_INFO(get_logger(), "[视觉SHM] 只读接收 %s，每帧最多6个目标；当前阶段管理队列/近距确认，不触发目标飞行",
+                vision_shm_path.c_str());
+        }
+        VisionCandidateConfig vision_config;
+        vision_config.confirm_frames = declare_parameter<int>("vision_far_confirm_frames", params::VISION_FAR_CONFIRM_FRAMES);
+        vision_config.association_radius = dd("vision_assoc_radius_m", params::VISION_ASSOC_RADIUS_M);
+        vision_config.weight_min_distance = dd("vision_weight_min_distance_m", params::VISION_WEIGHT_MIN_DISTANCE_M);
+        vision_config.frame_gap_timeout = dd("vision_frame_gap_timeout_s", params::VISION_FRAME_GAP_TIMEOUT_S);
+        vision_config.tentative_timeout = dd("vision_tentative_timeout_s", params::VISION_TENTATIVE_TIMEOUT_S);
+        const int vision_max_candidates = declare_parameter<int>("vision_max_candidates", params::VISION_MAX_CANDIDATES);
+        if (vision_max_candidates < 1) throw std::invalid_argument("vision_max_candidates must be positive");
+        vision_config.max_tracks = static_cast<size_t>(vision_max_candidates);
+        vision_pose_timeout_ = dd("vision_pose_timeout_s", params::VISION_POSE_TIMEOUT_S);
+        if (!std::isfinite(vision_pose_timeout_) || vision_pose_timeout_ <= 0)
+            throw std::invalid_argument("vision_pose_timeout_s must be positive");
+        vision_candidates_ = std::make_unique<VisionCandidates>(vision_config);
+        VisionQueueConfig vision_queue_config;
+        vision_queue_config.association_radius = vision_config.association_radius;
+        vision_queue_config.blacklist_radius = dd("vision_blacklist_radius_m", params::VISION_BLACKLIST_RADIUS_M);
+        vision_queue_config.retry_delay = dd("vision_retry_delay_s", params::VISION_RETRY_DELAY_S);
+        vision_queue_config.retry_observation_age = vision_config.frame_gap_timeout;
+        const int vision_queue_capacity = declare_parameter<int>("vision_queue_capacity", params::VISION_QUEUE_CAPACITY);
+        if (vision_queue_capacity < 1) throw std::invalid_argument("vision_queue_capacity must be positive");
+        vision_queue_config.max_pending = static_cast<size_t>(vision_queue_capacity);
+        vision_queue_ = std::make_unique<VisionTargetQueue>(vision_queue_config);
+        VisionNearConfig vision_near_config;
+        vision_near_config.confirm_frames = declare_parameter<int>("vision_near_confirm_frames", params::VISION_NEAR_CONFIRM_FRAMES);
+        vision_near_config.near_distance = dd("vision_near_distance_m", params::VISION_NEAR_DISTANCE_M);
+        vision_near_config.speed_cap = dd("vision_near_speed_mps", params::VISION_NEAR_SPEED_MPS);
+        vision_near_config.association_radius = vision_config.association_radius;
+        vision_near_config.weight_min_distance = vision_config.weight_min_distance;
+        vision_near_config.frame_gap_timeout = vision_config.frame_gap_timeout;
+        vision_near_config.confirmation_timeout = dd("vision_near_timeout_s", params::VISION_NEAR_TIMEOUT_S);
+        vision_near_ = std::make_unique<VisionNearConfirmation>(vision_near_config);
+        vision_hover_s_ = dd("vision_hover_s", params::VISION_HOVER_S);
+        vision_target_tol_ = dd("vision_target_tol_m", params::VISION_TARGET_TOL_M);
+        vision_target_stop_speed_ = dd("vision_target_stop_speed_mps", params::VISION_TARGET_STOP_SPEED_MPS);
+        if (!std::isfinite(vision_hover_s_) || vision_hover_s_ < 0.0 ||
+            !std::isfinite(vision_target_tol_) || vision_target_tol_ <= 0.0 ||
+            !std::isfinite(vision_target_stop_speed_) || vision_target_stop_speed_ <= 0.0)
+            throw std::invalid_argument("Invalid visual target hover limits");
         carlike_mode_ = declare_parameter<bool>(
             "exploration_carlike_mode", params::EXPLORATION_CARLIKE_MODE);
         gcfg_.min_x = dd("field_min_x", params::FIELD_MIN_X);
@@ -552,6 +603,16 @@ private:
     void on_goal(const geometry_msgs::msg::PointStamped::SharedPtr msg)
     {
         std::lock_guard<std::mutex> lk(mtx_);
+        vision_candidates_->reset();
+        vision_queue_->reset();
+        vision_near_->reset();
+        vision_applied_visits_ = 0;
+        vision_near_confirmations_ = 0;
+        vision_last_event_ = "new_mission";
+        vision_hover_track_ = 0;
+        vision_hover_since_ = -1.0;
+        vision_new_confirmations_.clear();
+        vision_collection_active_ = false;
         goal_ = {msg->point.x, msg->point.y};
         goal_stamp_ = msg->header.stamp;
         has_goal_ = true;
@@ -1453,7 +1514,12 @@ private:
     {
         const double speed = std::hypot(world_velocity.x, world_velocity.y);
         if (!std::isfinite(speed)) return false;
-        const double horizon = std::max(0.0, global_gains_.prediction_time) +
+        // This is a short command safety projection, not a replacement for
+        // the validated A* corridor.  Using the full prediction horizon here
+        // made a valid required path look blocked near corners and latched
+        // the controller at zero speed.  Keep a bounded look-ahead and let
+        // required_path_clear() provide the long-range obstacle guarantee.
+        const double horizon = std::min(0.35, std::max(0.0, global_gains_.prediction_time)) +
             speed / (2.0 * std::max(1e-3, global_gains_.max_accel));
         return required_motion_clear({px_ + world_velocity.x * horizon,
                                       py_ + world_velocity.y * horizon}, obs);
@@ -1570,7 +1636,13 @@ private:
                            s * command.v_fwd + c * command.v_lat};
         const Vec2 measured{c * v_fwd_est_ - s * v_lat_est_, s * v_fwd_est_ + c * v_lat_est_};
         const double measured_speed = std::hypot(measured.x, measured.y);
-        command_projection_blocked_ = !required_velocity_clear(desired, obs);
+        // Visual targets already follow the independently validated required
+        // A* trajectory.  The generic long stopping projection can intersect
+        // a nearby obstacle even when the checked path is clear, causing an
+        // endless replan/zero-speed loop.  Keep measured-velocity protection
+        // below, but do not reject the path-following command itself here.
+        const bool visual_target_active = vision_queue_ && vision_queue_->active();
+        command_projection_blocked_ = !visual_target_active && !required_velocity_clear(desired, obs);
         measured_projection_blocked_ = (!std::isfinite(measured_speed) || measured_speed > goal_stop_v_) &&
             !required_velocity_clear(measured, obs);
         const bool blocked = command_projection_blocked_ || measured_projection_blocked_;
@@ -1728,6 +1800,105 @@ private:
     }
 
     // ---------- 20Hz 主循环 ----------
+    void activate_visual_target(double current_time)
+    {
+        if (vision_queue_->active()) return;
+        if (!vision_queue_->activate_next(current_time)) { vision_near_->reset(); return; }
+        const auto& active = *vision_queue_->active();
+        // A visual target takes ownership from exploration.  Drop every
+        // cached required-path state so the first tick cannot reuse an old
+        // exploration trajectory or its failure/braking latch.
+        global_has_ = false;
+        global_failed_ = false;
+        global_goal_blocked_ = false;
+        global_braking_blocked_ = false;
+        required_blocked_time_valid_ = false;
+        global_tracker_->set_trajectory({});
+        global_raw_.clear();
+        global_traj_.clear();
+        vision_near_->begin(active, current_time, std::max(active.confirmed_stamp, vision_last_frame_.stamp));
+        vision_near_->position({px_, py_}, current_time);
+        vision_last_event_ = "active_target_selected";
+        vision_hover_track_ = 0;
+        vision_hover_since_ = -1.0;
+        RCLCPP_INFO(get_logger(), "[视觉队列] 激活区域#%llu 粗坐标(%.3f, %.3f)，待处理%zu（已接入目标飞行）",
+            static_cast<unsigned long long>(active.track_id), active.position.x, active.position.y,
+            vision_queue_->pending().size());
+    }
+
+    void poll_vision_shm()
+    {
+        vision_new_frame_.reset();
+        vision_new_confirmations_.clear();
+        const double current_time = steady_seconds();
+        for (; vision_applied_visits_ < vision_queue_->visited().size(); ++vision_applied_visits_) {
+            const auto& visited = vision_queue_->visited()[vision_applied_visits_];
+            vision_candidates_->discard_visited(visited.track_id, visited.position, vision_queue_->blacklist_radius());
+        }
+        vision_candidates_->expire(current_time);
+        // Keep collecting frames during takeoff.  A target seen before the
+        // first fresh odometry frame must survive until navigation is ready;
+        // the aircraft position is only required when selecting/approaching
+        // the target, not when accumulating its far observations.
+        vision_collection_active_ = vision_reader_ && has_pose_ && has_goal_ && !finished_ &&
+            !homing_ && !corridor_->active() && pose_freshness_.fresh(current_time, vision_pose_timeout_);
+        if (!vision_collection_active_) { vision_candidates_->interrupt(); vision_near_->interrupt(); }
+        if (!vision_reader_) return;
+        vision_new_frame_ = vision_reader_->poll(current_time);
+        if (vision_new_frame_) {
+            vision_last_frame_ = *vision_new_frame_;
+            if (vision_reader_->statistics().frames == 1 || vision_new_frame_->restarted)
+                RCLCPP_INFO(get_logger(), "[视觉SHM] %s seq=%llu targets=%zu epoch=%llu（seq是图像帧编号，id是类别）",
+                    vision_new_frame_->restarted ? "写端重启后恢复" : "收到首个有效新帧",
+                    static_cast<unsigned long long>(vision_new_frame_->seq), vision_new_frame_->count,
+                    static_cast<unsigned long long>(vision_new_frame_->epoch));
+            if (vision_collection_active_) {
+                const auto filtered = vision_queue_->filter_blacklisted(*vision_new_frame_);
+                vision_queue_->observe(filtered, current_time);
+                vision_new_confirmations_ = vision_candidates_->update(filtered, {px_, py_}, current_time);
+                for (const auto& candidate : vision_new_confirmations_)
+                    RCLCPP_INFO(get_logger(), "[视觉确认] 区域#%llu 连续%d帧，粗坐标(%.3f, %.3f)，类别暂不判定（本阶段不改变飞行目标）",
+                        static_cast<unsigned long long>(candidate.track_id), candidate.consecutive_frames,
+                        candidate.position.x, candidate.position.y);
+                // Retry previously capacity-limited confirmations too. The queue
+                // retains admitted track identities, so snapshots do not duplicate entries.
+                vision_queue_->enqueue(vision_candidates_->snapshot(), {px_, py_});
+                activate_visual_target(current_time);
+                if (has_pose_ && vision_queue_->active()) {
+                    const auto uid = vision_queue_->active()->track_id;
+                    const auto refined = vision_near_->update(filtered, {px_, py_}, current_time,
+                                                              vision_queue_->other_positions(uid));
+                    if (refined) {
+                        if (vision_queue_->refine_active(*refined)) {
+                            ++vision_near_confirmations_;
+                            vision_last_event_ = "near_confirmed";
+                    RCLCPP_INFO(get_logger(), "[视觉近距] 区域#%llu %d帧投票确认ID=%d，精确坐标(%.3f, %.3f)，继续前往目标",
+                                static_cast<unsigned long long>(uid), refined->samples, refined->class_id,
+                                refined->position.x, refined->position.y);
+                        } else {
+                            vision_queue_->defer_active(uid, current_time);
+                            vision_near_->reset();
+                            vision_last_event_ = "invalid_refinement_deferred";
+                        }
+                    }
+                }
+            }
+        }
+        if (vision_collection_active_) {
+            if (has_pose_) activate_visual_target(current_time);
+            if (has_pose_) vision_near_->position({px_, py_}, current_time);
+            if (vision_queue_->active() && vision_near_->timed_out(current_time)) {
+                const auto uid = vision_queue_->active()->track_id;
+                vision_queue_->defer_active(uid, current_time);
+                vision_near_->reset();
+                vision_last_event_ = "near_timeout_deferred";
+                RCLCPP_WARN(get_logger(), "[视觉近距] 区域#%llu 超时未确认，暂缓并处理其他目标；不记为完成",
+                    static_cast<unsigned long long>(uid));
+                activate_visual_target(current_time);
+            }
+        }
+    }
+
     void on_timer()
     {
         geometry_msgs::msg::TwistStamped cmd;
@@ -1743,6 +1914,10 @@ private:
 
         {
             std::lock_guard<std::mutex> lk(mtx_);
+
+            // Stages 3/4: data-only queue and near confirmation. These targets
+            // still do not change the navigation goal or flight commands.
+            poll_vision_shm();
 
             if (!has_pose_) {
                 // 无位姿：发零速度占位
@@ -1809,6 +1984,7 @@ private:
             // 多插点：排队当前优先；放行后弹下一个。
             // ============================================================
             bool poi_active = false;
+            bool vision_target_active = false;
 
             // 空闲(EXPLORE)且队列有插点 → 取队首开始去飞（归航后不再接插点）
             if (poi_mode_ == PoiMode::EXPLORE && !homing_ && !poi_queue_.empty()) {
@@ -1868,10 +2044,100 @@ private:
                 }
             }
 
+            // Visual target execution uses the same exact-goal A* and tracker
+            // as required POIs. Completion/hover is deliberately handled by a
+            // later stage; this branch only proves safe motion and near speed.
+            if (!poi_active && !homing_ && has_pose_ && vision_queue_->active()) {
+                vision_target_active = true;
+                const auto target = *vision_queue_->active();
+                const Vec2 vb = pd_to_point_avoid(target.position, obstacles);
+                if (global_failed_ || global_goal_blocked_) {
+                    cmd.twist.linear.x = cmd.twist.linear.y = cmd.twist.angular.z = 0.0;
+                    vision_last_event_ = "visual_path_unavailable";
+                    // An occupied/out-of-bounds visual point must not stall
+                    // exploration indefinitely.  Defer it for a later fresh
+                    // observation and release control back to exploration.
+                    const auto uid = target.track_id;
+                    vision_queue_->defer_active(uid, steady_seconds());
+                    vision_near_->reset();
+                    vision_hover_track_ = 0;
+                    vision_hover_since_ = -1.0;
+                    global_has_ = global_failed_ = global_goal_blocked_ = false;
+                    global_braking_blocked_ = false;
+                    global_tracker_->set_trajectory({});
+                    plan_pending_ = true;
+                    vision_target_active = false;
+                    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                        "[视觉目标] 区域#%llu 当前不可达，暂缓并继续探索",
+                        static_cast<unsigned long long>(uid));
+                } else {
+                    const double normal_speed = std::hypot(vb.x, vb.y);
+                    const double cap = vision_near_->speed_cap(gains_.v_max);
+                    const double scale = normal_speed > cap && normal_speed > 1e-9
+                        ? cap / normal_speed : 1.0;
+                    cmd.twist.linear.x = vb.x * scale;
+                    cmd.twist.linear.y = vb.y * scale;
+                    // Near-target speed limiting must not turn a valid path
+                    // into a stop/start crawl.  Preserve a small tangential
+                    // command while the target is still outside the stop
+                    // tolerance, and damp lateral correction to suppress
+                    // the observed left/right oscillation.
+                    const double visual_distance = std::hypot(target.position.x - px_,
+                                                               target.position.y - py_);
+                    if (visual_distance > vision_target_tol_ && normal_speed > 1e-4) {
+                        const double applied_speed = std::hypot(cmd.twist.linear.x, cmd.twist.linear.y);
+                        const double min_speed = vision_near_->near_entered() ? 0.12 : 0.16;
+                        if (applied_speed < min_speed) {
+                            const double boost = min_speed / applied_speed;
+                            cmd.twist.linear.x *= boost;
+                            cmd.twist.linear.y *= boost;
+                        }
+                        if (vision_near_->near_entered()) cmd.twist.linear.y *= 0.65;
+                    }
+                    cmd.twist.angular.z = last_yaw_rate_;
+                    vision_last_event_ = vision_near_->near_entered()
+                        ? "visual_target_near_limited" : "visual_target_path_following";
+                    const bool exact_target = target.refined && !global_failed_ && global_at_goal_ &&
+                        global_tracker_->remaining_distance() <= vision_target_tol_ &&
+                        std::hypot(target.position.x - px_, target.position.y - py_) <= vision_target_tol_ &&
+                        std::hypot(v_fwd_est_, v_lat_est_) <= vision_target_stop_speed_ &&
+                        !global_braking_blocked_;
+                    if (exact_target) {
+                        if (vision_hover_track_ != target.track_id) {
+                            vision_hover_track_ = target.track_id;
+                            vision_hover_since_ = steady_seconds();
+                            vision_last_event_ = "visual_target_hovering";
+                            RCLCPP_INFO(get_logger(), "[视觉目标] 区域#%llu 到位停稳，开始悬停 %.1fs",
+                                static_cast<unsigned long long>(target.track_id), vision_hover_s_);
+                        } else if (steady_seconds() - vision_hover_since_ >= vision_hover_s_) {
+                            if (vision_queue_->complete_active(target.track_id, steady_seconds())) {
+                                const auto completed = vision_queue_->visited().back();
+                                vision_candidates_->discard_visited(completed.track_id, completed.position,
+                                    vision_queue_->blacklist_radius());
+                                vision_near_->reset();
+                                vision_applied_visits_ = vision_queue_->visited().size();
+                                vision_hover_track_ = 0;
+                                vision_hover_since_ = -1.0;
+                                vision_last_event_ = "visual_target_completed";
+                                global_has_ = global_failed_ = false;
+                                global_tracker_->set_trajectory({});
+                                plan_pending_ = true;
+                                activate_visual_target(steady_seconds());
+                                RCLCPP_INFO(get_logger(), "[视觉目标] 完成并加入 %.2fm 黑名单，切换下一个目标",
+                                    vision_queue_->blacklist_radius());
+                            }
+                        }
+                    } else if (vision_hover_track_ == target.track_id) {
+                        vision_hover_track_ = 0;
+                        vision_hover_since_ = -1.0;
+                    }
+                }
+            }
+
             // 完程度(覆盖率)达标 → 进入归航刹停阶段（一旦进入不再回退）。
             // 注意：仅在没有插点活动时才判定/接管，避免插点途中误触发归航。
             //   覆盖率只读一次并复用：判定与日志同源，日志里印的就是真正触发归航的那个值。
-            if (!poi_active && has_goal_ && !homing_) {
+            if (!poi_active && !vision_target_active && has_goal_ && !homing_) {
                 const double cov = grid_->coverage_ratio();
                 if (cov >= done_coverage_) {
                     homing_ = true;
@@ -1885,7 +2151,7 @@ private:
                 }
             }
 
-            if (poi_active) {
+            if (poi_active || vision_target_active) {
                 // 插点活动中：命令已在上面 POI 状态机里写好，这里不再覆盖。
             } else if (has_goal_ && homing_) {
                 // ---- 归航：直奔真实终点(不夹取)，平滑刹停。终点可能藏在障碍后 → 全局 A* 绕障。 ----
@@ -2031,6 +2297,72 @@ private:
                     value(key, std::to_string(scalar));
                 };
                 value("mode", corridor_active ? "corridor" : (homing_ ? "homing" : "exploration"));
+                value("vision_shm_status", vision_reader_
+                    ? VisionShmReader::status_name(vision_reader_->status()) : "disabled");
+                value("vision_task_stage", "queue_and_near_confirmation_only");
+                value("vision_last_event", vision_last_event_);
+                number("vision_pending_count", vision_queue_->pending().size());
+                number("vision_deferred_count", vision_queue_->deferred().size());
+                number("vision_visited_count", vision_queue_->visited().size());
+                number("vision_queue_enqueued", vision_queue_->statistics().enqueued);
+                number("vision_queue_capacity_drops", vision_queue_->statistics().capacity_drops);
+                number("vision_blacklisted_detections", vision_queue_->statistics().blacklisted_detections);
+                number("vision_near_confirmations", vision_near_confirmations_);
+                number("vision_near_entered", vision_near_->near_entered());
+                number("vision_near_frames", vision_near_->count());
+                number("vision_near_vote_tied", vision_near_->tied());
+                number("vision_requested_speed_cap", vision_near_->speed_cap(gains_.v_max));
+                number("vision_hover_track", vision_hover_track_);
+                number("vision_hover_elapsed_s", vision_hover_since_ >= 0 ? steady_seconds() - vision_hover_since_ : 0.0);
+                number("vision_active_track", vision_queue_->active() ? vision_queue_->active()->track_id : 0);
+                if (vision_queue_->active()) {
+                    const auto& active = *vision_queue_->active();
+                    number("vision_active_class", active.class_id);
+                    number("vision_active_refined", active.refined);
+                    number("vision_active_x", active.position.x);
+                    number("vision_active_y", active.position.y);
+                }
+                for (int id = 1; id <= 6; ++id)
+                    number("vision_votes_" + std::to_string(id), vision_near_->votes()[id]);
+                size_t queue_index = 0;
+                for (const auto& target : vision_queue_->pending()) {
+                    const auto prefix = "vision_pending_" + std::to_string(queue_index++) + "_";
+                    number(prefix + "track", target.track_id);
+                    number(prefix + "x", target.position.x);
+                    number(prefix + "y", target.position.y);
+                }
+                number("vision_collection_active", vision_collection_active_);
+                number("vision_candidates", vision_candidates_->size());
+                const auto& vision_stats = vision_candidates_->statistics();
+                number("vision_far_confirmations", vision_stats.confirmations);
+                number("vision_duplicate_detections", vision_stats.suppressed_duplicates);
+                number("vision_capacity_drops", vision_stats.capacity_drops);
+                number("vision_invalid_detections", vision_stats.invalid_detections);
+                for (const auto& candidate : vision_candidates_->snapshot()) {
+                    const auto prefix = "vision_region_" + std::to_string(candidate.track_id) + "_";
+                    number(prefix + "count", candidate.consecutive_frames);
+                    number(prefix + "confirmed", candidate.confirmed);
+                    number(prefix + "x", candidate.position.x);
+                    number(prefix + "y", candidate.position.y);
+                }
+                if (vision_reader_) {
+                    const auto& stats = vision_reader_->statistics();
+                    number("vision_frames_received", stats.frames);
+                    number("vision_empty_frames", stats.empty_frames);
+                    number("vision_writer_restarts", stats.restarts);
+                    number("vision_invalid_polls", stats.invalid_polls);
+                    number("vision_frame_seq", vision_last_frame_.seq);
+                    number("vision_frame_epoch", vision_last_frame_.epoch);
+                    number("vision_frame_age_s", stats.frames ? steady_seconds() - vision_last_frame_.stamp : -1.0);
+                    number("vision_target_count", vision_last_frame_.count);
+                    for (size_t i = 0; i < vision_last_frame_.count; ++i) {
+                        const auto prefix = "vision_target_" + std::to_string(i) + "_";
+                        const auto& target = vision_last_frame_.targets[i];
+                        number(prefix + "id", target.id);
+                        number(prefix + "x", target.x);
+                        number(prefix + "y", target.y);
+                    }
+                }
                 number("coverage_ratio", coverage.data);
                 number("replan_checks", replan_checks_);
                 number("candidate_skips", candidate_skips_);
@@ -2188,6 +2520,23 @@ private:
 
     // ---- 配置 / 模块 ----
     GridConfig    gcfg_;
+    std::unique_ptr<VisionShmReader> vision_reader_;
+    std::optional<VisionFrame> vision_new_frame_;
+    VisionFrame vision_last_frame_;
+    std::unique_ptr<VisionCandidates> vision_candidates_;
+    std::unique_ptr<VisionTargetQueue> vision_queue_;
+    std::unique_ptr<VisionNearConfirmation> vision_near_;
+    size_t vision_applied_visits_ = 0;
+    std::uint64_t vision_near_confirmations_ = 0;
+    std::string vision_last_event_ = "none";
+    std::vector<VisionCandidate> vision_new_confirmations_;
+    bool vision_collection_active_ = false;
+    double vision_pose_timeout_ = params::VISION_POSE_TIMEOUT_S;
+    double vision_hover_s_ = params::VISION_HOVER_S;
+    double vision_target_tol_ = params::VISION_TARGET_TOL_M;
+    double vision_target_stop_speed_ = params::VISION_TARGET_STOP_SPEED_MPS;
+    std::uint64_t vision_hover_track_ = 0;
+    double vision_hover_since_ = -1.0;
     CorridorConfig ccfg_;
     std::unique_ptr<CorridorController> corridor_;
     CorridorCommand corridor_command_;

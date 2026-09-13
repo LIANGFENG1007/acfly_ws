@@ -35,6 +35,30 @@ inline constexpr bool USE_POSITION_CONTROL = false;
 //   这与 USE_POSITION_CONTROL 独立：无论位置环还是速度环，均可使用车式轨迹跟踪。
 inline constexpr bool EXPLORATION_CARLIKE_MODE = true;
 
+// 视觉SHM目标管理。当前实现确认、队列、近距投票；飞行访问在下一阶段接入。
+inline constexpr bool VISION_SHM_ENABLED = true;
+inline constexpr const char* VISION_SHM_PATH = "/dev/shm/uav_cv_out";
+inline constexpr double VISION_SHM_MAX_AGE_S = 0.50; // 图像采集单调时间距当前最大年龄(s)
+inline constexpr double VISION_SHM_FUTURE_TOL_S = 0.02; // 同机时钟转换容许的未来偏差(s)
+inline constexpr int VISION_FAR_CONFIRM_FRAMES = 10; // 同一区域连续新帧，远处不使用类别ID关联
+inline constexpr double VISION_ASSOC_RADIUS_M = 0.60; // 位置关联半径(m)，与完成黑名单独立
+inline constexpr double VISION_WEIGHT_MIN_DISTANCE_M = 0.50; // 距离平方反比权重的最小距离(m)，防近零距离过大权重
+inline constexpr double VISION_FRAME_GAP_TIMEOUT_S = 0.50; // 超过此时间无有效观测，中断未完成的连续确认
+inline constexpr double VISION_TENTATIVE_TIMEOUT_S = 2.00; // 未确认候选失去观测后保留时间(s)
+inline constexpr double VISION_POSE_TIMEOUT_S = 0.30; // 位姿过期时不累计视觉坐标
+inline constexpr int VISION_MAX_CANDIDATES = 64; // 内部候选总容量，不是单帧目标数；不静默挤掉已确认目标
+inline constexpr int VISION_QUEUE_CAPACITY = 64; // 当前、等待、暂缓目标合计容量
+inline constexpr double VISION_BLACKLIST_RADIUS_M = 0.60; // 完成后以最终精确坐标为中心屏蔽(m)
+inline constexpr int VISION_NEAR_CONFIRM_FRAMES = 10; // 近处独立的新帧窗口；ID票数平票继续采样
+inline constexpr double VISION_NEAR_DISTANCE_M = 2.00; // 小于此水平距离开始近距确认(m)
+inline constexpr double VISION_NEAR_SPEED_MPS = 0.40; // 近距请求速度上限，待飞行执行接入后消费(m/s)
+inline constexpr double VISION_NEAR_TIMEOUT_S = 8.00; // 进入近距后尚未确认的最长等待(s)
+inline constexpr double VISION_RETRY_DELAY_S = 5.00; // 暂缓后冷却时间，且冷却后必须重新看到才重排(s)
+
+inline constexpr double VISION_HOVER_S = 3.00; // 目标到位停稳后的悬停时间(s)
+inline constexpr double VISION_TARGET_TOL_M = 0.10; // 精确目标到位位置容差(m)
+inline constexpr double VISION_TARGET_STOP_SPEED_MPS = 0.05; // 目标到位停稳速度(m/s)
+
 // 探索终点后的走廊任务。入口/H 坐标由 fly_mission 的参数区发送，均为 camera_init 系。
 // true: 到探索终点等待路线，然后转向、进入、穿门、到 H 才 finished。
 // false: 保留到探索终点即完成的流程。过门始终使用速度接口，以执行 0.3m/s 限速。

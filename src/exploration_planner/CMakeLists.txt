@@ -32,7 +32,13 @@ add_executable(exploration_planner_node
   src/global_planner.cpp
   src/corridor_perception.cpp
   src/corridor_controller.cpp
+  src/vision_shm.cpp
+  src/vision_candidates.cpp
+  src/vision_target_queue.cpp
+  src/vision_near_confirmation.cpp
 )
+
+target_compile_features(exploration_planner_node PRIVATE cxx_std_17)
 
 ament_target_dependencies(exploration_planner_node
   rclcpp
@@ -70,6 +76,18 @@ install(DIRECTORY launch/
 )
 
 if(BUILD_TESTING)
+  add_executable(vision_target_queue_test tests/vision_target_queue_test.cpp src/vision_target_queue.cpp)
+  target_compile_features(vision_target_queue_test PRIVATE cxx_std_17)
+  add_test(NAME vision_target_queue_test COMMAND vision_target_queue_test)
+  add_executable(vision_near_confirmation_test tests/vision_near_confirmation_test.cpp src/vision_near_confirmation.cpp)
+  target_compile_features(vision_near_confirmation_test PRIVATE cxx_std_17)
+  add_test(NAME vision_near_confirmation_test COMMAND vision_near_confirmation_test)
+  add_executable(vision_candidates_test tests/vision_candidates_test.cpp src/vision_candidates.cpp)
+  target_compile_features(vision_candidates_test PRIVATE cxx_std_17)
+  add_test(NAME vision_candidates_test COMMAND vision_candidates_test)
+  add_executable(vision_shm_test tests/vision_shm_test.cpp src/vision_shm.cpp)
+  target_compile_features(vision_shm_test PRIVATE cxx_std_17)
+  add_test(NAME vision_shm_test COMMAND vision_shm_test)
   add_executable(frontier_observation_test tests/frontier_observation_test.cpp
     src/coverage_planner.cpp src/grid_map.cpp)
   target_compile_features(frontier_observation_test PRIVATE cxx_std_17)
@@ -92,6 +110,10 @@ if(BUILD_TESTING)
     src/global_planner.cpp
     src/corridor_perception.cpp
     src/corridor_controller.cpp
+    src/vision_shm.cpp
+    src/vision_candidates.cpp
+    src/vision_target_queue.cpp
+    src/vision_near_confirmation.cpp
   )
   target_compile_features(required_node_test PRIVATE cxx_std_17)
   ament_target_dependencies(required_node_test

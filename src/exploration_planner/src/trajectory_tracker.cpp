@@ -28,6 +28,20 @@ double heading(const Vec2& a, const Vec2& b)
 
 void TrajectoryTracker::set_trajectory(const Trajectory& traj)
 {
+    if (!traj_.empty() && !traj.empty()) {
+        const double old_heading = traj_.back().theta;
+        const double new_heading = traj.front().theta;
+        const double delta = wrap_pi(new_heading - old_heading);
+        if (std::abs(delta) < 0.7853981633974483) {
+            handoff_heading_ = old_heading;
+            handoff_remaining_ = 0.30;
+            handoff_valid_ = true;
+        } else {
+            handoff_valid_ = false;
+        }
+    } else if (traj.empty()) {
+        handoff_valid_ = false;
+    }
     traj_ = traj;
     progress_idx_ = 0;
     progress_s_ = traj_.empty() ? 0.0 : traj_.front().s;
@@ -42,7 +56,7 @@ void TrajectoryTracker::set_trajectory(const Trajectory& traj)
     turn_direction_ = 0;
     if (traj_.empty()) {
         motion_valid_ = false;
-        filtered_yaw_rate_ = previous_yaw_command_ = previous_forward_command_ = 0.0;
+        filtered_yaw_rate_ = previous_yaw_command_ = previous_forward_command_ = previous_lateral_command_ = 0.0;
         aligning_ = false;
         turn_direction_ = 0;
     }
@@ -173,7 +187,7 @@ VelCmd TrajectoryTracker::update(double px, double py, double yaw,
 
     if (d_goal <= goal_tol && (!g_.forward_only ||
         traj_.back().s - progress_s_ <= goal_tol)) {
-        previous_forward_command_ = previous_yaw_command_ = 0.0;
+        previous_forward_command_ = previous_yaw_command_ = previous_lateral_command_ = 0.0;
         aligning_ = false;
         alignment_heading_valid_ = false;
         last_look_ = traj_.back().p;
@@ -235,6 +249,14 @@ VelCmd TrajectoryTracker::update(double px, double py, double yaw,
         if (dist(predicted, ref.p) > 1e-6) desired_theta = heading(predicted, ref.p);
     }
     double e_yaw = wrap_pi(desired_theta - yaw);
+    if (handoff_valid_ && g_.forward_only && handoff_remaining_ > 0.0) {
+        const double blend = std::clamp(handoff_remaining_ / 0.30, 0.0, 1.0);
+        const double delta = wrap_pi(desired_theta - handoff_heading_);
+        desired_theta = handoff_heading_ + (1.0 - blend) * delta;
+        e_yaw = wrap_pi(desired_theta - yaw);
+        handoff_remaining_ = std::max(0.0, handoff_remaining_ - dt);
+        if (handoff_remaining_ <= 0.0) handoff_valid_ = false;
+    }
     last_heading_error_ = e_yaw;
     const double e_ct = -std::sin(nearest.theta) * (px - nearest.p.x) +
                          std::cos(nearest.theta) * (py - nearest.p.y);
@@ -248,7 +270,17 @@ VelCmd TrajectoryTracker::update(double px, double py, double yaw,
         cmd.yaw_rate = clamp_abs(g_.kp_yaw * e_yaw + g_.kd_yaw * de_yaw, g_.max_yaw_rate);
         const double gate = std::abs(e_yaw) > g_.heading_gate_rad ? 0.0 :
                             std::max(0.0, std::cos(e_yaw));
-        cmd.v_lat = clamp_abs(-(g_.kp_lat * e_ct + g_.kd_lat * de_ct), g_.max_v_lat) * gate;
+        const double lateral_target = clamp_abs(-(g_.kp_lat * e_ct + g_.kd_lat * de_ct), g_.max_v_lat) * gate;
+        // Limit lateral command slew in ordinary exploration.  A raw
+        // cross-track derivative can change sign between adjacent scans and
+        // produce the observed left/right rocking even when the path itself
+        // is smooth.  The limit is local to the lateral channel and does not
+        // affect heading alignment or corridor control.
+        const double lateral_step = std::max(0.01, g_.max_lateral_accel * dt);
+        cmd.v_lat = std::clamp(lateral_target,
+                               previous_lateral_command_ - lateral_step,
+                               previous_lateral_command_ + lateral_step);
+        previous_lateral_command_ = cmd.v_lat;
         double v = g_.v_max / (1.0 + g_.k_curv * std::abs(ref.kappa)) * gate;
         if (d_goal < g_.endpoint_slow_r) v *= d_goal / g_.endpoint_slow_r;
         if (d_goal >= g_.endpoint_slow_r && gate > 0.5) v = std::max(v, g_.v_min);
@@ -307,6 +339,7 @@ VelCmd TrajectoryTracker::update(double px, double py, double yaw,
             turn_direction_ = 0;
         }
         previous_forward_command_ = 0.0;
+        previous_lateral_command_ = 0.0;
         return cmd;
     }
 
