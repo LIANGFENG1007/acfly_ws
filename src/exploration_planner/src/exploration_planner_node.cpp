@@ -1504,22 +1504,28 @@ private:
                    p.y >= ggcfg_.min_y + field_margin &&
                    p.y <= ggcfg_.max_y - field_margin;
         };
-        if (!allowed_field(cur) || !allowed_field(stop) ||
-            !obstacle_segment_clear(cur, stop, obs, motion_config)) return false;
+        if (!obstacle_segment_clear(cur, stop, obs, motion_config)) return false;
         const double low[2]{ggcfg_.min_x + ggcfg_.wall_margin, ggcfg_.min_y + ggcfg_.wall_margin};
         const double high[2]{ggcfg_.max_x - ggcfg_.wall_margin, ggcfg_.max_y - ggcfg_.wall_margin};
-        const double a[2]{cur.x, cur.y}, b[2]{stop.x, stop.y};
-        bool monotonic_entry = true;
-        for (size_t axis = 0; axis < 2; ++axis) {
-            if (a[axis] < low[axis]) {
-                monotonic_entry = monotonic_entry && b[axis] >= a[axis] && b[axis] <= high[axis];
-            } else if (a[axis] > high[axis]) {
-                monotonic_entry = monotonic_entry && b[axis] <= a[axis] && b[axis] >= low[axis];
-            } else {
-                monotonic_entry = monotonic_entry && b[axis] >= low[axis] && b[axis] <= high[axis];
+        const double a[2]{cur.x, cur.y};
+        const auto monotonic_entry = [&](const Vec2& end) {
+            const double b[2]{end.x, end.y};
+            for (size_t axis = 0; axis < 2; ++axis) {
+                if (a[axis] < low[axis]) {
+                    if (b[axis] < a[axis] || b[axis] > high[axis]) return false;
+                } else if (a[axis] > high[axis]) {
+                    if (b[axis] > a[axis] || b[axis] < low[axis]) return false;
+                } else if (b[axis] < low[axis] || b[axis] > high[axis]) return false;
             }
-        }
-        if (monotonic_entry) return true;
+            return true;
+        };
+        // Match the planner's initial field-entry policy: an aircraft taking
+        // off on a task boundary may move inward before attaining the normal
+        // body/wall inset. Otherwise measured speed repeatedly trips this guard
+        // and clamps visual/required-point takeoff motion to the stop threshold.
+        // Physical obstacle clearance above still applies to the whole segment.
+        if (monotonic_entry(stop)) return true;
+        if (!allowed_field(cur) || !allowed_field(stop)) return false;
 
         // Only the approved straight terminal connector can leave the full
         // field inset. Its execution capsule uses the existing arrival tolerance.
@@ -1534,7 +1540,29 @@ private:
             return std::hypot(p.x - global_connector_start_.x - u * dx,
                               p.y - global_connector_start_.y - u * dy) <= goal_tol_;
         };
-        return in_connector(cur) && in_connector(stop);
+        if (in_connector(cur) && in_connector(stop)) return true;
+
+        // A single stopping segment can span the ordinary inset and the
+        // approved terminal connector. Check its exact exit from the inset;
+        // requiring the aircraft to be in the terminal capsule already caused
+        // full-speed/zero-speed oscillation on short fields.
+        const double delta[2]{stop.x - cur.x, stop.y - cur.y};
+        double enter = 0.0, leave = 1.0;
+        for (size_t axis = 0; axis < 2; ++axis) {
+            if (std::abs(delta[axis]) < 1e-12) {
+                if (a[axis] < low[axis] || a[axis] > high[axis]) return false;
+                continue;
+            }
+            double first = (low[axis] - a[axis]) / delta[axis];
+            double last = (high[axis] - a[axis]) / delta[axis];
+            if (first > last) std::swap(first, last);
+            enter = std::max(enter, first);
+            leave = std::min(leave, last);
+        }
+        if (enter > leave || leave < 0.0 || leave > 1.0) return false;
+        const Vec2 exit{std::clamp(cur.x + leave * delta[0], low[0], high[0]),
+                        std::clamp(cur.y + leave * delta[1], low[1], high[1])};
+        return monotonic_entry(exit) && in_connector(exit) && in_connector(stop);
     }
 
     bool required_velocity_clear(const Vec2& world_velocity, const Obstacles& obs) const
@@ -1652,7 +1680,10 @@ private:
         global_at_goal_ = command.at_goal;
         const double remaining = global_tracker_->remaining_distance();
         const double speed = std::hypot(command.v_fwd, command.v_lat);
-        if (remaining < global_gains_.endpoint_slow_r && speed > 1e-9) {
+        if (speed > 1e-9) {
+            // Apply the distance/damping envelope continuously. Switching it
+            // on only at endpoint_slow_r introduced a discrete speed drop at
+            // that radius even on a straight, completely clear home route.
             const double cap = std::max(0.0, kp_goal_ * remaining -
                 kd_goal_ * std::hypot(v_fwd_est_, v_lat_est_));
             const double scale = std::min(1.0, cap / speed);
@@ -1672,6 +1703,24 @@ private:
         // below, but do not reject the path-following command itself here.
         const bool visual_target_active = vision_queue_ && vision_queue_->active();
         command_projection_blocked_ = !visual_target_active && !required_velocity_clear(desired, obs);
+        if (command_projection_blocked_ && required_velocity_clear({0.0, 0.0}, obs)) {
+            // A stopping projection beyond the permitted corridor may still
+            // admit a slower command. Approach that limit continuously instead
+            // of repeatedly dropping the entire forward command to zero.
+            // Every candidate uses the same obstacle and field checks.
+            double safe = 0.0, unsafe = 1.0;
+            for (int i = 0; i < 16; ++i) {
+                const double scale = .5 * (safe + unsafe);
+                if (required_velocity_clear({scale * desired.x, scale * desired.y}, obs)) safe = scale;
+                else unsafe = scale;
+            }
+            if (safe * std::hypot(desired.x, desired.y) > 1e-5) {
+                command.v_fwd *= safe;
+                command.v_lat *= safe;
+                global_tracker_->constrain_forward_command(command.v_fwd);
+                command_projection_blocked_ = false;
+            }
+        }
         measured_projection_blocked_ = (!std::isfinite(measured_speed) || measured_speed > goal_stop_v_) &&
             !required_velocity_clear(measured, obs);
         const bool blocked = command_projection_blocked_ || measured_projection_blocked_;

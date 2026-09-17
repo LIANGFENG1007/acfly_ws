@@ -795,6 +795,11 @@ void boundary_home_endpoint_regression()
     node.home_goal_wall_margin_ = 0;
     node.homing_ = true;
     closed_loop(node, "boundary home goal from takeoff origin", {0, 0}, {1.55, .60}, {});
+    node.ggcfg_.min_y = -.35;
+    const auto searches = node.global_path_searches_;
+    closed_loop(node, "small field home goal from takeoff origin", {0, 0}, {1.55, .60}, {});
+    require(node.global_path_searches_ - searches == 1,
+            "small field entry repeatedly replanned and reset forward acceleration");
     require(node.px_ <= 1.57 && node.px_ >= 0 && node.py_ <= 1.15,
             "boundary goal tracking left the configured field");
     node.px_ = 1.50; node.py_ = .60;
@@ -810,7 +815,102 @@ void boundary_home_endpoint_regression()
     node.pd_to_point_avoid({1.55, .60}, {});
     require(node.global_goal_blocked_ && node.global_failed_,
             "visual/POI target inherited the home endpoint exception");
+    closed_loop(node, "required visual approach from boundary", {0, 0}, {.75, .4}, {});
+    reset(node, {.05, .01});
+    require(node.required_motion_clear({.08, .03}, {}),
+            "inward required-point motion was blocked before reaching body clearance");
+    require(!node.required_motion_clear({.04, .03}, {}),
+            "boundary takeoff recovery allowed outward motion");
+    require(!node.required_motion_clear({.08, .03}, {{.08, .03, .1}}),
+            "boundary takeoff recovery waived a physical obstacle");
+
+    // Exercise the actual visual-target flag: it bypasses the command guard,
+    // but used to trip the measured-speed guard above goal_stop_v_ at the edge.
+    node.ggcfg_.min_y = -5.35;
+    const Vec2 visual_goal{.9, 0};
+    node.vision_queue_->enqueue({VisionCandidate{1, visual_goal, 10, true, 1, 1}}, {0, 0});
+    require(node.vision_queue_->activate_next(1), "activate nearby front visual target");
+    closed_loop(node, "active front visual target from boundary", {0, 0}, visual_goal, {});
+    reset(node, {.05, 0});
+    node.v_fwd_est_ = .08;  // Above the stationary threshold, still inside body inset.
+    node.pd_to_point_avoid(visual_goal, {});
+    require(!node.global_failed_ && !node.measured_projection_blocked_ && !node.global_braking_blocked_,
+            "visual target acceleration was repeatedly clamped by boundary body clearance");
     std::cout << "boundary home endpoint closed-loop and target isolation passed\n";
+}
+
+void small_field_stability_regression()
+{
+    for (double response_time : {.15, .40, .60}) {
+        ExplorationNode node;
+        node.vision_reader_.reset();
+        node.ggcfg_.min_x = 0; node.ggcfg_.max_x = 1.57;
+        node.ggcfg_.min_y = -.35; node.ggcfg_.max_y = 1.15;
+        node.home_goal_wall_margin_ = 0;
+        node.homing_ = true;
+        reset(node, {0, 0});
+        double x = 0, y = 0, yaw = 0, vx = 0, vy = 0, rate = 0;
+        double previous_command = 0, max_drop = 0, max_error = 0;
+        int sample = 0, stops = 0;
+        bool reached = false;
+        const Vec2 goal{1.55, .60};
+        constexpr double dt = .02;
+        const double response = 1.0 - std::exp(-dt / response_time);
+        for (int i = 0; i < 750; ++i) {
+            // 20 Hz noisy pose samples through the production velocity
+            // estimator, with 50 Hz control and inertial world-frame motion.
+            if (i == 0 || i * 2 / 5 != (i - 1) * 2 / 5) {
+                ++sample;
+                auto odom = std::make_shared<nav_msgs::msg::Odometry>();
+                odom->header.stamp = rclcpp::Time(1000000000LL + i * 20000000LL);
+                odom->pose.pose.position.x = x + .001 * std::sin(1.41 * sample);
+                odom->pose.pose.position.y = y + .001 * std::sin(1.73 * sample);
+                odom->pose.pose.position.z = .8;
+                const double observed_yaw = yaw + .003 * std::sin(1.13 * sample);
+                odom->pose.pose.orientation.z = std::sin(observed_yaw * .5);
+                odom->pose.pose.orientation.w = std::cos(observed_yaw * .5);
+                node.on_odom(odom);
+            }
+            const Vec2 cmd = node.pd_to_point_avoid(goal, {});
+            require(!node.global_failed_, "small-field stability lost the required route");
+            // Exclude launch noise and the intentional final arrival stop.
+            if (i * dt > 1.25 && std::hypot(x - goal.x, y - goal.y) > .20) {
+                max_drop = std::max(max_drop, previous_command - cmd.x);
+                if (previous_command > .02 && cmd.x < 1e-8) ++stops;
+            }
+            previous_command = cmd.x;
+            const double c = std::cos(yaw), s = std::sin(yaw);
+            vx += response * (c * cmd.x - s * cmd.y - vx);
+            vy += response * (s * cmd.x + c * cmd.y - vy);
+            rate += response * (node.last_yaw_rate_ - rate);
+            x += dt * vx; y += dt * vy; yaw += dt * rate;
+            max_error = std::max(max_error, std::abs(goal.y * x - goal.x * y) /
+                std::hypot(goal.x, goal.y));
+            require(x >= 0 && x <= 1.57 && y >= -.35 && y <= 1.15,
+                    "small-field inertial tracking escaped the field");
+            if (node.global_at_goal_ && std::hypot(vx, vy) < node.goal_stop_v_) {
+                reached = true;
+                break;
+            }
+        }
+        std::cout << "small-field stability lag=" << response_time
+                  << " searches=" << node.global_path_searches_ << " stops=" << stops
+                  << " max_drop=" << max_drop << " max_error=" << max_error << '\n';
+        require(reached && node.global_path_searches_ == 1 && stops == 0 &&
+                max_drop < .10 && max_error < .10,
+                "small-field home tracking replanned, pulsed its speed or drifted off line");
+
+        node.global_connector_start_ = {.72, .28};
+        node.px_ = .50; node.py_ = .15;
+        require(node.required_motion_clear({1.02, .36}, {}),
+                "safe stopping segment across inset/terminal junction was rejected");
+        require(!node.required_motion_clear({1.02, .10}, {}),
+                "junction permission escaped through an unrelated field edge");
+        require(!node.required_motion_clear({1.60, .60}, {}),
+                "junction permission escaped the absolute field boundary");
+        require(!node.required_motion_clear({1.02, .36}, {{.8, .28, .01}}),
+                "junction permission bypassed an obstacle on the stopping segment");
+    }
 }
 
 }  // namespace
@@ -824,6 +924,7 @@ int main(int argc, char** argv)
     try {
         exploration_switch_regression();
         boundary_home_endpoint_regression();
+        small_field_stability_regression();
         ExplorationNode node;
         {
             char directory[] = "/tmp/acfly-vision-node-XXXXXX";

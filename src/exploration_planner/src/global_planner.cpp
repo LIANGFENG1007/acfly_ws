@@ -201,7 +201,8 @@ bool required_field_shape(const Path2& path, const Vec2& goal, const GlobalConfi
 // crossing or return leg cannot skip still-pending path sections.
 template<typename Visitor>
 bool visit_remaining_segments(const Vec2& cur, const Path2& path, Visitor visit,
-                              size_t* projected_segment = nullptr)
+                              size_t* projected_segment = nullptr,
+                              size_t forward_rejoin_before = 0)
 {
     if (path.size() < 2) return false;
 
@@ -229,9 +230,26 @@ bool visit_remaining_segments(const Vec2& cur, const Path2& path, Visitor visit,
     // Keep zero-length connections: even at the endpoint, the current position
     // must still be checked against a newly observed obstacle.
     if (projected_segment) *projected_segment = nearest_segment;
-    if (!visit(cur, projection) || !visit(projection, path[nearest_segment + 1]))
+    size_t rejoin_end = nearest_segment + 1;
+    if (nearest_segment < forward_rejoin_before) {
+        // While entering the wall inset, the perpendicular projection can lie
+        // behind the aircraft on a constrained axis. Even the next sample may
+        // lie behind it: use the end of this straight leg, independently of
+        // sampling density. Retain every bend and the terminal connector anchor.
+        while (rejoin_end < forward_rejoin_before && rejoin_end + 1 < path.size()) {
+            const Vec2& a = path[nearest_segment];
+            const Vec2& b = path[rejoin_end + 1];
+            if (segment_distance2(path[rejoin_end], a, b) > 1e-18) break;
+            const double ax = path[rejoin_end].x - a.x;
+            const double ay = path[rejoin_end].y - a.y;
+            if (ax * (b.x - path[rejoin_end].x) + ay * (b.y - path[rejoin_end].y) < 0.0) break;
+            ++rejoin_end;
+        }
+        if (!visit(cur, path[rejoin_end])) return false;
+    } else if (!visit(cur, projection) || !visit(projection, path[nearest_segment + 1])) {
         return false;
-    for (size_t i = nearest_segment + 1; i + 1 < path.size(); ++i) {
+    }
+    for (size_t i = rejoin_end; i + 1 < path.size(); ++i) {
         if (!visit(path[i], path[i + 1])) return false;
     }
     return true;
@@ -624,14 +642,18 @@ bool required_path_clear(const Vec2& cur, const Path2& path, const Vec2& goal,
                 terminal_start + 1 < path.size() &&
                 (!inside_field_margin(a, cfg, cfg.wall_margin) ||
                  !inside_field_margin(b, cfg, cfg.wall_margin));
-            if (terminal_rejoin) {
-                if (!inside_field_margin(a, cfg, required_field_margin(cfg)) ||
+            // Progress can reach the anchor while the aircraft is still just
+            // before it. A normal inward rejoin needs no terminal exception.
+            const bool normal_rejoin = field_segment_free(a, b, cfg) &&
+                (!terminal_rejoin || inside_field_margin(b, cfg, cfg.wall_margin));
+            if (!normal_rejoin) {
+                if (!terminal_rejoin || !inside_field_margin(a, cfg, required_field_margin(cfg)) ||
                     std::hypot(a.x - goal.x, a.y - goal.y) > cfg.required_connector_length + 1e-9)
                     return false;
-            } else if (!field_segment_free(a, b, cfg)) return false;
+            }
         }
         return segment_free(a, b, obs, cfg.robot_radius + cfg.inflate, cfg.robot_radius);
-    }, &projected_segment);
+    }, &projected_segment, terminal_start);
 }
 
 bool obstacle_segment_clear(const Vec2& start, const Vec2& end,

@@ -30,7 +30,7 @@ inline constexpr double HOME_GOAL_WALL_MARGIN = 0.0;
 //       → SLAM x ∈ [-5-(-4), 5-(-4)] = [-1, 9]，y ∈ [-5, 5]
 // ---------------------------------------------------------------------------
 inline constexpr double FIELD_MIN_X = 0.0;   //-0.5
-inline constexpr double FIELD_MIN_Y = -5.35;   //-2.1
+inline constexpr double FIELD_MIN_Y = -0.35;   //-2.1
 inline constexpr double FIELD_MAX_X =  1.57;   // 4.8
 inline constexpr double FIELD_MAX_Y =  1.15;   // 2.3
 

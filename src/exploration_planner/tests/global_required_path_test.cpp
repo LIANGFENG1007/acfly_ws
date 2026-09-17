@@ -183,6 +183,39 @@ void boundary_endpoint_permission()
     require(!plan_required_path(start, goal, {}, cfg).ok,
             "configured endpoint margin was ignored");
 }
+
+void forward_field_entry_revalidation()
+{
+    auto cfg = config();
+    cfg.min_y = -.35; cfg.max_x = 1.57; cfg.max_y = 1.15;
+    cfg.required_goal_field_margin = 0;
+    const Vec2 goal{1.55, .6}, current{.001, 0};
+    const Path2 route{{0, 0}, {.72, .28}, goal};
+    require(required_path_clear(current, route, goal, {}, cfg),
+            "microscopic backward projection invalidated a safe forward field entry");
+    require(!required_path_clear(current, route, goal, {{.35, .15, .01}}, cfg),
+            "forward entry rejoin ignored an obstacle on the connection");
+    require(!required_path_clear({.041, 0}, {{0, 0}, {.04, .016}, {.72, .28}, goal}, goal, {}, cfg),
+            "forward entry rejoin allowed retreat toward a violated boundary");
+    require(!required_path_clear(current, {{0, 0}, {.5, .2}, goal}, goal, {}, cfg),
+            "forward entry permission bypassed the required inner connector anchor");
+
+    // The next sample can still be behind the aircraft's x coordinate. Adding
+    // collinear samples must not turn a legal inward rejoin into a reverse move.
+    for (int samples : {1, 16, 100}) {
+        Path2 sampled;
+        for (int i = 0; i <= samples; ++i)
+            sampled.push_back({.72 * i / samples, .28 * i / samples});
+        sampled.push_back(goal);
+        const Vec2 off_reference{.04852, .00268};
+        require(required_path_clear(off_reference, sampled, goal, {}, cfg),
+                "collinear entry resampling caused a spurious reverse-boundary replan");
+        require(!required_path_clear(off_reference, sampled, goal, {{.35, .15, .01}}, cfg),
+                "resampled forward rejoin skipped a new obstacle");
+    }
+    require(required_path_clear({.553968, .204559}, {{.620423, .278632}, goal}, goal, {}, cfg),
+            "inward rejoin before the terminal anchor consumed the connector length budget");
+}
 }  // namespace
 
 int main()
@@ -193,5 +226,6 @@ int main()
     short_motion_escape();
     required_heading_cone();
     boundary_endpoint_permission();
+    forward_field_entry_revalidation();
     std::cout << "global_required_path_test: all checks passed\n";
 }
