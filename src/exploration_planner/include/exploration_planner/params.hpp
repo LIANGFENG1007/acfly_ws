@@ -15,7 +15,7 @@ namespace params {
 //   true  = 先探索，覆盖率达标后去探索终点，再执行通道任务。
 //   false = 跳过探索和视觉/插点访问，起飞后直接去探索终点，再执行通道任务。
 //   直达终点仍使用原有避障与场地安全检查；场地边界请填写实际范围。
-inline constexpr bool EXPLORATION_ENABLED = false;
+inline constexpr bool EXPLORATION_ENABLED = true;
 
 // 探索终点到配置边界的最小距离(m)。0 = 终点中心可到边界，不能越界。
 // 只放宽前往探索终点的末段；普通探索/视觉目标仍使用原安全边距。
@@ -30,9 +30,9 @@ inline constexpr double HOME_GOAL_WALL_MARGIN = 0.0;
 //       → SLAM x ∈ [-5-(-4), 5-(-4)] = [-1, 9]，y ∈ [-5, 5]
 // ---------------------------------------------------------------------------
 inline constexpr double FIELD_MIN_X = 0.0;   //-0.5
-inline constexpr double FIELD_MIN_Y = -0.35;   //-2.1
-inline constexpr double FIELD_MAX_X =  1.57;   // 4.8
-inline constexpr double FIELD_MAX_Y =  1.15;   // 2.3
+inline constexpr double FIELD_MIN_Y = -5.0;   //-2.1
+inline constexpr double FIELD_MAX_X =  7.5;   // 4.8
+inline constexpr double FIELD_MAX_Y =  5.0;   // 2.3
 
 // ★整套运动控制方式★
 //   true  = 使用位置环控制运动目标；
@@ -67,6 +67,9 @@ inline constexpr double VISION_NEAR_TIMEOUT_S = 8.00; // 进入近距后尚未�
 inline constexpr double VISION_RETRY_DELAY_S = 5.00; // 暂缓后冷却时间，且冷却后必须重新看到才重排(s)
 
 inline constexpr double VISION_HOVER_S = 3.00; // 目标到位停稳后的悬停时间(s)
+// 视觉临时目标最后这段距离停止主动转头，改为水平XY打点；悬停完成后恢复。
+// 0 = 关闭；直线被障碍挡住时继续走原避障路径，直线可通行后再切换。
+inline constexpr double VISION_STRAIGHT_APPROACH_M = 0.20;
 inline constexpr double VISION_TARGET_TOL_M = 0.10; // 精确目标到位位置容差(m)
 inline constexpr double VISION_TARGET_STOP_SPEED_MPS = 0.05; // 目标到位停稳速度(m/s)
 

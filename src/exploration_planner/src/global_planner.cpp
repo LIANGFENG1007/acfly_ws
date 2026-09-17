@@ -588,11 +588,18 @@ static GlobalResult plan_path(const Vec2& start, const Vec2& goal,
 
     // ---- 串拉简化成稀疏拐点 ----
     if (required_goal) {
-        // Preserve the connector anchor so string pulling cannot enlarge the
-        // locally authorized exception to the virtual boundary margin.
-        const Path2 prefix(raw.begin(), raw.end() - 1);
-        res.path = simplify(prefix, obs, rr, cfg.robot_radius);
-        res.path.push_back(goal);
+        if (inside_field_margin(goal, cfg, cfg.wall_margin)) {
+            // Interior goals need no boundary exception. Simplify through the
+            // exact endpoint as well, otherwise a grid-selected terminal anchor
+            // introduces a needless bend even when the whole straight line is free.
+            res.path = simplify(raw, obs, rr, cfg.robot_radius);
+        } else {
+            // Preserve the connector anchor only for the locally authorized
+            // exception to the virtual boundary margin.
+            const Path2 prefix(raw.begin(), raw.end() - 1);
+            res.path = simplify(prefix, obs, rr, cfg.robot_radius);
+            res.path.push_back(goal);
+        }
         if (!required_path_clear(start, res.path, goal, obs, cfg)) {
             res.path.clear();
             return res;

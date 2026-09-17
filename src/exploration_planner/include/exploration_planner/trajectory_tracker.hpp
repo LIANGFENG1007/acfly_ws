@@ -59,6 +59,7 @@ public:
 
     void set_trajectory(const Trajectory& traj);
     bool has_trajectory() const { return !traj_.empty(); }
+    const Trajectory& trajectory() const { return traj_; }
 
     // 给定当前位姿与估计的机体前进/横向速度(用于 D 项)，算一拍速度命令。
     // goal_tol：到终点容差 (m)。

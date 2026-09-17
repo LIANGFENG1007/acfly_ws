@@ -913,6 +913,158 @@ void small_field_stability_regression()
     }
 }
 
+void visual_straight_approach_regression()
+{
+    ExplorationNode node;
+    node.vision_reader_.reset();
+    node.homing_ = false;
+    node.vision_straight_approach_m_ = 1.0;
+    VisionVisitTarget target;
+    target.track_id = 42;
+    target.position = {3, 0};
+    reset(node, {1.99, 0});
+    node.yaw_ = 1.2;
+    node.visual_target_velocity(target, {});
+    require(node.vision_straight_track_ == 0 && std::abs(node.last_yaw_rate_) > 1e-6,
+            "far visual approach stopped using the original yaw controller");
+    node.px_ = 2;
+    const Vec2 lateral = node.visual_target_velocity(target, {});
+    require(node.vision_straight_track_ == 42 && node.last_yaw_rate_ == 0 && lateral.y < 0,
+            "one-metre approach failed to replace yaw steering with lateral translation");
+    node.px_ = 1.98;
+    node.visual_target_velocity(target, {});
+    require(node.vision_straight_track_ == 42 && node.last_yaw_rate_ == 0,
+            "threshold noise released the latched straight approach");
+    node.vision_straight_approach_m_ = 0;
+    node.visual_target_velocity(target, {});
+    require(node.vision_straight_track_ == 0, "zero radius did not disable straight approach");
+    node.vision_straight_approach_m_ = 1;
+
+    reset(node, {2.02, 0});
+    const Obstacles blocked_chord{{2.51, .4, .01}};
+    node.visual_target_velocity(target, blocked_chord);
+    require(node.vision_straight_track_ == 0 && !node.global_failed_ &&
+            required_path_clear({node.px_, node.py_}, node.global_raw_, target.position,
+                                blocked_chord, node.required_config()),
+            "near visual approach cut through a blocked straight chord");
+    node.visual_target_velocity(target, {});
+    require(node.vision_straight_track_ == 42, "clear chord did not enable straight approach");
+    const Vec2 blocked = node.visual_target_velocity(target, {{3, 0, .1}});
+    require(node.vision_straight_track_ == 0 && node.global_failed_ &&
+            blocked.x == 0 && blocked.y == 0,
+            "newly occupied target did not stop a latched straight approach");
+
+    // Use the real timer branch for arrival, the full hover interval and FIFO
+    // handoff. Flight dynamics stay offline; no executor or aircraft is run.
+    node.reset_visual_approach();
+    reset(node, {2, 0});
+    node.yaw_ = 1.2;
+    node.has_pose_ = node.has_goal_ = true;
+    node.goal_ = {7, 4.25};
+    const Vec2 goal{2.8, .4};
+    node.vision_queue_->enqueue({VisionCandidate{1, goal, 10, true, 1, 1},
+        VisionCandidate{2, {4.5, 2}, 10, true, 1, 1}}, {2, 0});
+    node.activate_visual_target(node.steady_seconds());
+    const auto uid = node.vision_queue_->active()->track_id;
+    require(node.vision_queue_->refine_active({uid, goal, 3, 10, 2}), "refine test visual target");
+    double vx = 0, vy = 0;
+    bool reached = false;
+    for (int tick = 0; tick < 1000; ++tick) {
+        const double c = std::cos(node.yaw_), s = std::sin(node.yaw_);
+        node.v_fwd_est_ = c * vx + s * vy;
+        node.v_lat_est_ = -s * vx + c * vy;
+        const Vec2 cmd = node.visual_target_velocity(*node.vision_queue_->active(), {});
+        require(node.last_yaw_rate_ == 0 && !node.global_failed_ &&
+                std::hypot(cmd.x, cmd.y) <= node.vision_near_->speed_cap(node.gains_.v_max) + 1e-9,
+                "straight visual approach rotated, lost its route or exceeded its speed cap");
+        vx += (1 - std::exp(-.02 / .4)) * (c * cmd.x - s * cmd.y - vx);
+        vy += (1 - std::exp(-.02 / .4)) * (s * cmd.x + c * cmd.y - vy);
+        node.px_ += .02 * vx; node.py_ += .02 * vy;
+        if (node.global_at_goal_ && std::hypot(vx, vy) < node.vision_target_stop_speed_) {
+            reached = true;
+            break;
+        }
+    }
+    require(reached, "fixed-yaw XY approach did not settle at its target");
+    node.px_ = goal.x; node.py_ = goal.y;
+    node.v_fwd_est_ = node.v_lat_est_ = 0;
+    node.vision_straight_velocity_ = {};
+    node.on_timer();
+    require(node.vision_hover_track_ == uid && node.vision_hover_since_ >= 0 &&
+            node.last_yaw_rate_ == 0, "arrival failed to begin the fixed-yaw hover");
+    node.vision_hover_since_ = node.steady_seconds() - 2.9;
+    node.on_timer();
+    require(node.vision_queue_->visited().empty() && node.vision_straight_track_ == uid &&
+            node.last_yaw_rate_ == 0, "visual task completed before three seconds");
+    node.px_ += .15;
+    node.vision_hover_since_ = node.steady_seconds() - 3.1;
+    node.on_timer();
+    require(node.vision_queue_->visited().empty() && node.vision_hover_track_ == 0 &&
+            node.last_yaw_rate_ == 0, "drift during hover completed the task or resumed yaw steering");
+    node.px_ = goal.x;
+    node.on_timer();
+    node.vision_hover_since_ = node.steady_seconds() - 3.1;
+    node.on_timer();
+    require(node.vision_queue_->visited().size() == 1 && node.vision_straight_track_ == 0 &&
+            node.vision_queue_->active() && node.vision_queue_->active()->track_id != uid,
+            "completed hover retained fixed-yaw mode or failed FIFO handoff");
+    node.on_timer();
+    require(node.vision_straight_track_ == 0 && std::abs(node.last_yaw_rate_) > 1e-6,
+            "next distant target failed to restore original yaw steering");
+    std::cout << "visual one-metre XY approach, obstacle fallback, three-second hover and yaw restore passed\n";
+}
+void visual_hover_restores_exploration_display()
+{
+    ExplorationNode node;
+    node.vision_reader_.reset();
+    reset(node, {2, 0});
+    node.has_pose_ = node.has_goal_ = true;
+    node.homing_ = false;
+    node.goal_ = {7, 4.25};
+    FrontierSelection observation;
+    observation.valid = true;
+    observation.point = {6.5, 3.5};
+    observation.look_at = {7, 4};
+    GlobalResult route;
+    route.ok = true;
+    route.path = {{2, 0}, observation.point};
+    require(node.adopt_explore_path(route, observation.point, &observation),
+            "display regression needs a productive committed exploration route");
+    const Trajectory executed = node.traj_;
+    const auto adoptions = node.adoptions_;
+    const Vec2 visual_goal{2.8, .4};
+    node.vision_queue_->enqueue({VisionCandidate{1, visual_goal, 10, true, 1, 1}}, {2, 0});
+    node.activate_visual_target(node.steady_seconds());
+    const auto uid = node.vision_queue_->active()->track_id;
+    require(node.vision_queue_->refine_active({uid, visual_goal, 3, 10, 2}),
+            "refine display regression target");
+    node.px_ = visual_goal.x; node.py_ = visual_goal.y;
+    node.on_timer();
+    require(node.vision_hover_track_ == uid && node.traj_.size() <= 2 &&
+            node.tracker_->has_trajectory(),
+            "hover must replace the display while retaining the exploration reference");
+    node.vision_hover_since_ = node.steady_seconds() - 3.1;
+    node.on_timer();
+    require(!node.vision_queue_->active() && node.vision_queue_->visited().size() == 1,
+            "visual hover did not finish before display restoration");
+
+    // A speculative replacement fails, so the first resumed route is the
+    // already-valid reference. No adoption will rewrite the display cache.
+    node.yaw_ = M_PI / 8;
+    node.ggcfg_.head_cone_half = .001;
+    node.ggcfg_.head_cone_radius = 100;
+    node.cur_band_ = 1;
+    const auto kept = node.kept_after_candidate_failure_;
+    node.on_timer();
+    require(node.kept_after_candidate_failure_ == kept + 1 && node.adoptions_ == adoptions &&
+            node.tracker_->has_trajectory(), "resumption did not retain its existing flight route");
+    require(node.traj_.size() == executed.size(),
+            "first exploration route after visual hover is flown but absent from the display");
+    for (size_t i = 0; i < executed.size(); ++i)
+        require(std::hypot(node.traj_[i].p.x - executed[i].p.x, node.traj_[i].p.y - executed[i].p.y) < 1e-9,
+                "resumed display geometry differs from the route being flown");
+    std::cout << "first exploration route after visual hover restored without adopting a second route\n";
+}
 }  // namespace
 
 int main(int argc, char** argv)
@@ -925,6 +1077,8 @@ int main(int argc, char** argv)
         exploration_switch_regression();
         boundary_home_endpoint_regression();
         small_field_stability_regression();
+        visual_straight_approach_regression();
+        visual_hover_restores_exploration_display();
         ExplorationNode node;
         {
             char directory[] = "/tmp/acfly-vision-node-XXXXXX";

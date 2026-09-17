@@ -112,9 +112,11 @@ public:
         vision_near_config.confirmation_timeout = dd("vision_near_timeout_s", params::VISION_NEAR_TIMEOUT_S);
         vision_near_ = std::make_unique<VisionNearConfirmation>(vision_near_config);
         vision_hover_s_ = dd("vision_hover_s", params::VISION_HOVER_S);
+        vision_straight_approach_m_ = dd("vision_straight_approach_m", params::VISION_STRAIGHT_APPROACH_M);
         vision_target_tol_ = dd("vision_target_tol_m", params::VISION_TARGET_TOL_M);
         vision_target_stop_speed_ = dd("vision_target_stop_speed_mps", params::VISION_TARGET_STOP_SPEED_MPS);
-        if (!std::isfinite(vision_hover_s_) || vision_hover_s_ < 0.0 ||
+        if (!std::isfinite(vision_straight_approach_m_) || vision_straight_approach_m_ < 0.0 ||
+            !std::isfinite(vision_hover_s_) || vision_hover_s_ < 0.0 ||
             !std::isfinite(vision_target_tol_) || vision_target_tol_ <= 0.0 ||
             !std::isfinite(vision_target_stop_speed_) || vision_target_stop_speed_ <= 0.0)
             throw std::invalid_argument("Invalid visual target hover limits");
@@ -616,6 +618,7 @@ private:
         vision_last_event_ = "new_mission";
         vision_hover_track_ = 0;
         vision_hover_since_ = -1.0;
+        reset_visual_approach();
         vision_new_confirmations_.clear();
         vision_collection_active_ = false;
         goal_ = {msg->point.x, msg->point.y};
@@ -1691,6 +1694,12 @@ private:
             command.v_lat *= scale;
             global_tracker_->constrain_forward_command(command.v_fwd);
         }
+        return guard_required_command(command, obs, vision_queue_ && vision_queue_->active());
+    }
+
+    Vec2 guard_required_command(VelCmd command, const Obstacles& obs, bool checked_visual_path)
+    {
+        const Vec2 cur{px_, py_};
         const double c = std::cos(yaw_), s = std::sin(yaw_);
         const Vec2 desired{c * command.v_fwd - s * command.v_lat,
                            s * command.v_fwd + c * command.v_lat};
@@ -1701,8 +1710,7 @@ private:
         // a nearby obstacle even when the checked path is clear, causing an
         // endless replan/zero-speed loop.  Keep measured-velocity protection
         // below, but do not reject the path-following command itself here.
-        const bool visual_target_active = vision_queue_ && vision_queue_->active();
-        command_projection_blocked_ = !visual_target_active && !required_velocity_clear(desired, obs);
+        command_projection_blocked_ = !checked_visual_path && !required_velocity_clear(desired, obs);
         if (command_projection_blocked_ && required_velocity_clear({0.0, 0.0}, obs)) {
             // A stopping projection beyond the permitted corridor may still
             // admit a slower command. Approach that limit continuously instead
@@ -1750,6 +1758,73 @@ private:
         }
         last_yaw_rate_ = command.yaw_rate;
         return {command.v_fwd, command.v_lat};
+    }
+
+    void reset_visual_approach()
+    {
+        vision_straight_track_ = 0;
+        vision_straight_velocity_ = {};
+    }
+
+    Vec2 visual_target_velocity(const VisionVisitTarget& target, const Obstacles& obs)
+    {
+        const Vec2 cur{px_, py_};
+        const double distance = std::hypot(target.position.x - px_, target.position.y - py_);
+        const bool latched = vision_straight_track_ == target.track_id;
+        const bool eligible = !homing_ && vision_straight_approach_m_ > 0.0 &&
+            (latched || distance <= vision_straight_approach_m_);
+        const Path2 direct{cur, target.position};
+        if (!eligible || !required_path_clear(cur, direct, target.position, obs, required_config())) {
+            if (vision_straight_track_ != 0) {
+                reset_visual_approach();
+                global_has_ = global_failed_ = false;
+                global_tracker_->set_trajectory({});
+            }
+            return pd_to_point_avoid(target.position, obs);
+        }
+        const double c = std::cos(yaw_), s = std::sin(yaw_);
+        const Vec2 measured{c * v_fwd_est_ - s * v_lat_est_, s * v_fwd_est_ + c * v_lat_est_};
+        if (!latched) {
+            vision_straight_track_ = target.track_id;
+            vision_straight_velocity_ = measured;
+            global_tracker_->set_trajectory({});
+            required_blocked_time_valid_ = false;
+            RCLCPP_INFO(get_logger(), "[视觉目标] 区域#%llu 距离 %.2fm，停止主动转头，切换XY直线接近",
+                static_cast<unsigned long long>(target.track_id), distance);
+        }
+        // World-frame position PD removes the heading gate and permits lateral
+        // or backward correction. Never chase the goal bearing with yaw here.
+        Vec2 desired{kp_goal_ * (target.position.x - px_) - kd_goal_ * measured.x,
+                     kp_goal_ * (target.position.y - py_) - kd_goal_ * measured.y};
+        const double cap = std::min(v_goal_max_, vision_near_->speed_cap(gains_.v_max));
+        const auto limit = [cap](Vec2& v) {
+            const double speed = std::hypot(v.x, v.y);
+            if (speed > cap && speed > 1e-9) { v.x *= cap / speed; v.y *= cap / speed; }
+        };
+        limit(desired);
+        const Vec2 change{desired.x - vision_straight_velocity_.x, desired.y - vision_straight_velocity_.y};
+        const double step = std::hypot(change.x, change.y);
+        const double scale = step > 1e-9 ? std::min(1.0, gains_.max_accel * gains_.dt / step) : 1.0;
+        desired = {vision_straight_velocity_.x + scale * change.x,
+                   vision_straight_velocity_.y + scale * change.y};
+        limit(desired);
+        global_target_ = target.position;
+        global_connector_start_ = cur;
+        global_raw_ = direct;
+        global_traj_ = make_polyline_trajectory(direct);
+        traj_ = global_traj_;
+        last_look_ = target.position;
+        look_valid_ = true;
+        global_has_ = true;
+        global_failed_ = global_goal_blocked_ = false;
+        global_at_goal_ = distance <= vision_target_tol_;
+        VelCmd command;
+        command.v_fwd = c * desired.x + s * desired.y;
+        command.v_lat = -s * desired.x + c * desired.y;
+        command.yaw_rate = 0.0;
+        const Vec2 result = guard_required_command(command, obs, false);
+        vision_straight_velocity_ = {c * result.x - s * result.y, s * result.x + c * result.y};
+        return result;
     }
 
     // 飞机到最近障碍【边缘】的距离(圆心距 − 障碍半径)。无障碍返回很大值。
@@ -1881,6 +1956,7 @@ private:
     void activate_visual_target(double current_time)
     {
         if (vision_queue_->active()) return;
+        reset_visual_approach();
         if (!vision_queue_->activate_next(current_time)) { vision_near_->reset(); return; }
         const auto& active = *vision_queue_->active();
         // A visual target takes ownership from exploration.  Drop every
@@ -2070,6 +2146,7 @@ private:
             if (poi_mode_ == PoiMode::EXPLORE && !homing_ && !poi_queue_.empty()) {
                 poi_target_ = poi_queue_.front();
                 poi_mode_ = PoiMode::GOTO_POI;
+                reset_visual_approach();
                 turning_for_solution_ = false;   // 切去插点：打断探索的原地转身找解
                 global_has_ = global_failed_ = false;
                 global_tracker_->set_trajectory({});
@@ -2130,7 +2207,8 @@ private:
             if (!poi_active && !homing_ && has_pose_ && vision_queue_->active()) {
                 vision_target_active = true;
                 const auto target = *vision_queue_->active();
-                const Vec2 vb = pd_to_point_avoid(target.position, obstacles);
+                const Vec2 vb = visual_target_velocity(target, obstacles);
+                const bool straight_approach = vision_straight_track_ == target.track_id;
                 if (global_failed_ || global_goal_blocked_) {
                     cmd.twist.linear.x = cmd.twist.linear.y = cmd.twist.angular.z = 0.0;
                     vision_last_event_ = "visual_path_unavailable";
@@ -2139,6 +2217,7 @@ private:
                     // observation and release control back to exploration.
                     const auto uid = target.track_id;
                     vision_queue_->defer_active(uid, steady_seconds());
+                    reset_visual_approach();
                     vision_near_->reset();
                     vision_hover_track_ = 0;
                     vision_hover_since_ = -1.0;
@@ -2164,7 +2243,7 @@ private:
                     // the observed left/right oscillation.
                     const double visual_distance = std::hypot(target.position.x - px_,
                                                                target.position.y - py_);
-                    if (visual_distance > vision_target_tol_ && normal_speed > 1e-4) {
+                    if (!straight_approach && visual_distance > vision_target_tol_ && normal_speed > 1e-4) {
                         const double applied_speed = std::hypot(cmd.twist.linear.x, cmd.twist.linear.y);
                         const double min_speed = vision_near_->near_entered() ? 0.12 : 0.16;
                         if (applied_speed < min_speed) {
@@ -2175,10 +2254,10 @@ private:
                         if (vision_near_->near_entered()) cmd.twist.linear.y *= 0.65;
                     }
                     cmd.twist.angular.z = last_yaw_rate_;
-                    vision_last_event_ = vision_near_->near_entered()
-                        ? "visual_target_near_limited" : "visual_target_path_following";
+                    vision_last_event_ = straight_approach ? "visual_target_straight_approach" :
+                        (vision_near_->near_entered() ? "visual_target_near_limited" : "visual_target_path_following");
                     const bool exact_target = target.refined && !global_failed_ && global_at_goal_ &&
-                        global_tracker_->remaining_distance() <= vision_target_tol_ &&
+                        (straight_approach || global_tracker_->remaining_distance() <= vision_target_tol_) &&
                         std::hypot(target.position.x - px_, target.position.y - py_) <= vision_target_tol_ &&
                         std::hypot(v_fwd_est_, v_lat_est_) <= vision_target_stop_speed_ &&
                         !global_braking_blocked_;
@@ -2198,6 +2277,7 @@ private:
                                 vision_applied_visits_ = vision_queue_->visited().size();
                                 vision_hover_track_ = 0;
                                 vision_hover_since_ = -1.0;
+                                reset_visual_approach();
                                 vision_last_event_ = "visual_target_completed";
                                 global_has_ = global_failed_ = false;
                                 global_tracker_->set_trajectory({});
@@ -2272,6 +2352,10 @@ private:
                 }
             } else {
                 // ---- 探索：周期/偏离重规划(A* 绕障重铺覆盖路径) + tracker 跟随 ----
+                // Visual/POI visits overwrite the shared display trajectory.
+                // Restore the actual exploration reference before replanning:
+                // keeping an existing route does not call adopt_explore_path().
+                traj_ = tracker_->trajectory();
                 //   绕障全由 replan_locked 内的 A* 完成(含离墙)，跟随手感与原状一致；无障碍时
                 //   A* 退化成直线，行为不变。A* 无解 → replan_locked 内已跳带悬停(放弃该区)。
                 bool handled = false;
@@ -2394,6 +2478,7 @@ private:
                 number("vision_near_vote_tied", vision_near_->tied());
                 number("vision_requested_speed_cap", vision_near_->speed_cap(gains_.v_max));
                 number("vision_hover_track", vision_hover_track_);
+                number("vision_straight_track", vision_straight_track_);
                 number("vision_hover_elapsed_s", vision_hover_since_ >= 0 ? steady_seconds() - vision_hover_since_ : 0.0);
                 number("vision_active_track", vision_queue_->active() ? vision_queue_->active()->track_id : 0);
                 if (vision_queue_->active()) {
@@ -2519,12 +2604,13 @@ private:
             target.header.stamp = cmd.header.stamp;
             target.header.frame_id = "camera_init";
             double pxc, pyc, yawc, tx, ty;
-            bool look_valid;
+            bool look_valid, straight_approach;
             {
                 std::lock_guard<std::mutex> lk(mtx_);
                 pxc = px_; pyc = py_; yawc = yaw_;
                 tx = last_look_.x; ty = last_look_.y;
                 look_valid = look_valid_;
+                straight_approach = vision_straight_track_ != 0;
             }
             target.pose.position.x = look_valid ? tx : pxc;
             target.pose.position.y = look_valid ? ty : pyc;
@@ -2532,7 +2618,7 @@ private:
             double target_yaw = yawc;
             const double dx = target.pose.position.x - pxc;
             const double dy = target.pose.position.y - pyc;
-            if (std::hypot(dx, dy) > 1e-6) target_yaw = std::atan2(dy, dx);
+            if (!straight_approach && std::hypot(dx, dy) > 1e-6) target_yaw = std::atan2(dy, dx);
             tf2::Quaternion q;
             q.setRPY(0.0, 0.0, target_yaw);
             target.pose.orientation.x = q.x();
@@ -2614,6 +2700,9 @@ private:
     bool vision_collection_active_ = false;
     double vision_pose_timeout_ = params::VISION_POSE_TIMEOUT_S;
     double vision_hover_s_ = params::VISION_HOVER_S;
+    double vision_straight_approach_m_ = params::VISION_STRAIGHT_APPROACH_M;
+    std::uint64_t vision_straight_track_ = 0;
+    Vec2 vision_straight_velocity_{};
     double vision_target_tol_ = params::VISION_TARGET_TOL_M;
     double vision_target_stop_speed_ = params::VISION_TARGET_STOP_SPEED_MPS;
     std::uint64_t vision_hover_track_ = 0;

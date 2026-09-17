@@ -216,6 +216,30 @@ void forward_field_entry_revalidation()
     require(required_path_clear({.553968, .204559}, {{.620423, .278632}, goal}, goal, {}, cfg),
             "inward rejoin before the terminal anchor consumed the connector length budget");
 }
+
+void interior_required_routes_have_no_artificial_connector_bend()
+{
+    auto cfg = config();
+    cfg.head_cone_half = 22.0 * std::acos(-1.0) / 180.0;
+    cfg.head_cone_radius = .8;
+    // Consecutive visual targets from the reported empty-field flight.
+    const Vec2 starts[]{{2.445, 1.141}, {3.923, -.048}, {5.894, 1.222}, {2, 0}};
+    const Vec2 goals[]{{3.923, -.048}, {5.894, 1.222}, {6.515, -1.190}, {4, 1}};
+    for (size_t i = 0; i < 4; ++i) {
+        const double bearing = std::atan2(goals[i].y - starts[i].y, goals[i].x - starts[i].x);
+        for (double heading_offset : {0.0, .6, 1.5, 3.0}) {
+            const auto route = plan_required_path(starts[i], goals[i], {}, cfg, bearing + heading_offset);
+            validate(route, starts[i], goals[i], {}, cfg);
+            require(route.path.size() == 2,
+                    "free interior target retained an unnecessary terminal connector bend");
+        }
+    }
+    const Obstacles obstacle{{3, .5, .2}};
+    const auto detour = plan_required_path({2, 0}, {4, 1}, obstacle, cfg);
+    validate(detour, {2, 0}, {4, 1}, obstacle, cfg);
+    require(detour.path.size() > 2,
+            "interior connector simplification removed a necessary obstacle detour");
+}
 }  // namespace
 
 int main()
@@ -227,5 +251,6 @@ int main()
     required_heading_cone();
     boundary_endpoint_permission();
     forward_field_entry_revalidation();
+    interior_required_routes_have_no_artificial_connector_bend();
     std::cout << "global_required_path_test: all checks passed\n";
 }
