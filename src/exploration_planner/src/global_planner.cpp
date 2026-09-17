@@ -121,6 +121,8 @@ bool required_config_valid(const GlobalConfig& cfg)
         std::isfinite(cfg.robot_radius) && cfg.robot_radius > 0.0 &&
         std::isfinite(cfg.inflate) && cfg.inflate >= 0.0 &&
         std::isfinite(cfg.wall_margin) && cfg.wall_margin >= cfg.robot_radius &&
+        std::isfinite(required_field_margin(cfg)) && required_field_margin(cfg) >= 0.0 &&
+        required_field_margin(cfg) <= cfg.wall_margin &&
         cfg.max_x - cfg.min_x > 2.0 * cfg.wall_margin &&
         cfg.max_y - cfg.min_y > 2.0 * cfg.wall_margin &&
         std::isfinite(cfg.required_connector_length) && cfg.required_connector_length > 0.0;
@@ -157,7 +159,7 @@ bool terminal_extension_anchor(const Vec2& point, const Vec2& goal,
 bool required_field_shape(const Path2& path, const Vec2& goal, const GlobalConfig& cfg,
                           size_t& terminal_start)
 {
-    if (path.size() < 2 || !inside_field_margin(goal, cfg, cfg.robot_radius) ||
+    if (path.size() < 2 || !inside_field_margin(goal, cfg, required_field_margin(cfg)) ||
         std::hypot(path.back().x - goal.x, path.back().y - goal.y) > 1e-6) return false;
     terminal_start = path.size() - 1;
     if (path_inside_safe_field(path, cfg)) return true;
@@ -186,7 +188,7 @@ bool required_field_shape(const Path2& path, const Vec2& goal, const GlobalConfi
         length2 < 1e-18) return false;
     double progress = -1e-9;
     for (size_t i = terminal_start; i < path.size(); ++i) {
-        if (!inside_field_margin(path[i], cfg, cfg.robot_radius) ||
+        if (!inside_field_margin(path[i], cfg, required_field_margin(cfg)) ||
             segment_distance2(path[i], anchor, goal) > 1e-12) return false;
         const double along = ((path[i].x - anchor.x) * dx + (path[i].y - anchor.y) * dy) / length2;
         if (along < progress - 1e-9) return false;
@@ -266,7 +268,7 @@ static GlobalResult plan_path(const Vec2& start, const Vec2& goal,
     if (required_goal) {
         cfg.validate_complete_path = true;
         if (!required_config_valid(cfg)) return res;
-        if (!inside_field_margin(goal, cfg, cfg.robot_radius) ||
+        if (!inside_field_margin(goal, cfg, required_field_margin(cfg)) ||
             point_blocked(goal.x, goal.y, obs, cfg.robot_radius + cfg.inflate)) {
             res.goal_blocked = true;
             return res;
@@ -623,7 +625,7 @@ bool required_path_clear(const Vec2& cur, const Path2& path, const Vec2& goal,
                 (!inside_field_margin(a, cfg, cfg.wall_margin) ||
                  !inside_field_margin(b, cfg, cfg.wall_margin));
             if (terminal_rejoin) {
-                if (!inside_field_margin(a, cfg, cfg.robot_radius) ||
+                if (!inside_field_margin(a, cfg, required_field_margin(cfg)) ||
                     std::hypot(a.x - goal.x, a.y - goal.y) > cfg.required_connector_length + 1e-9)
                     return false;
             } else if (!field_segment_free(a, b, cfg)) return false;

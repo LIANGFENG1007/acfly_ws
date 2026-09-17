@@ -70,6 +70,7 @@ public:
     {
         // ---- 参数 ----
         auto dd = [this](const std::string& n, double v) { return this->declare_parameter<double>(n, v); };
+        exploration_enabled_ = declare_parameter<bool>("exploration_enabled", params::EXPLORATION_ENABLED);
         const bool vision_shm_enabled = declare_parameter<bool>("vision_shm_enabled", params::VISION_SHM_ENABLED);
         const auto vision_shm_path = declare_parameter<std::string>("vision_shm_path", params::VISION_SHM_PATH);
         const double vision_max_age = dd("vision_shm_max_age_s", params::VISION_SHM_MAX_AGE_S);
@@ -336,6 +337,10 @@ public:
         ggcfg_.inflate      = dd("global_margin",      params::GLOBAL_MARGIN);
         fcfg_.minimum_clearance = ggcfg_.robot_radius + ggcfg_.inflate;
         ggcfg_.wall_margin  = dd("global_wall_margin", params::GLOBAL_WALL_MARGIN);
+        home_goal_wall_margin_ = dd("home_goal_wall_margin", params::HOME_GOAL_WALL_MARGIN);
+        if (!std::isfinite(home_goal_wall_margin_) || home_goal_wall_margin_ < 0.0 ||
+            home_goal_wall_margin_ > ggcfg_.wall_margin)
+            throw std::invalid_argument("home_goal_wall_margin must be between 0 and global_wall_margin");
         ggcfg_.required_connector_length = std::max(0.0,
             dd("required_connector_length", params::REQUIRED_CONNECTOR_LENGTH_M));
         required_motion_inflate_ = std::clamp(
@@ -617,7 +622,19 @@ private:
         goal_stamp_ = msg->header.stamp;
         has_goal_ = true;
         finished_ = false;
-        homing_ = false;
+        // fly_mission sends this goal after takeoff. Reuse the exact-goal
+        // navigation and corridor handoff without waiting for coverage.
+        homing_ = !exploration_enabled_;
+        if (!exploration_enabled_) {
+            tracker_->set_trajectory({});
+            traj_.clear();
+            explore_raw_.clear();
+            explore_has_committed_ = false;
+            poi_mode_ = PoiMode::EXPLORE;
+            poi_queue_.clear();
+            poi_seen_.clear();
+            release_pending_ = false;
+        }
         global_has_ = false;
         global_failed_ = global_goal_blocked_ = global_at_goal_ = global_braking_blocked_ = false;
         command_projection_blocked_ = measured_projection_blocked_ = false;
@@ -632,7 +649,7 @@ private:
         reset.data = false;
         finished_pub_->publish(reset);
         corridor_active_pub_->publish(reset);
-        plan_pending_ = true;   // 下一拍在有位姿时规划
+        plan_pending_ = exploration_enabled_;   // 直达模式由必达点规划器处理
         candidate_time_valid_ = false;
         unreachable_.clear();            // 换终点=换任务：清空够不到黑名单，所有区重新给机会
         last_unreach_clear_cov_ = 0.0;
@@ -641,7 +658,8 @@ private:
         observation_arrived_ = false;
         observation_yaw_rate_ = 0.0;
         has_unreachable_marker_ = false; // 清红叉
-        RCLCPP_INFO(get_logger(), "收到探索终点: (%.2f, %.2f)，待规划", goal_.x, goal_.y);
+        RCLCPP_INFO(get_logger(), "收到探索终点: (%.2f, %.2f)，%s", goal_.x, goal_.y,
+            exploration_enabled_ ? "先探索，覆盖率达标后前往终点" : "探索已关闭，直接前往终点");
     }
 
     // POI（途中必经点/插点）回调。约定：
@@ -655,6 +673,7 @@ private:
         const bool release = (msg->point.z >= 0.5);   // z=1 放行
 
         std::lock_guard<std::mutex> lk(mtx_);
+        if (!exploration_enabled_) return;
 
         if (release) {
             // 放行信号：只在正等待、且坐标匹配当前等待点(±POI_SAME_TOL)时接管继续探索
@@ -1466,18 +1485,26 @@ private:
         retreating_ = false;
     }
 
+    GlobalConfig required_config() const
+    {
+        GlobalConfig cfg = ggcfg_;
+        if (homing_) cfg.required_goal_field_margin = home_goal_wall_margin_;
+        return cfg;
+    }
+
     bool required_motion_clear(const Vec2& stop, const Obstacles& obs) const
     {
         const Vec2 cur{px_, py_};
-        GlobalConfig motion_config = ggcfg_;
+        GlobalConfig motion_config = required_config();
         motion_config.inflate = required_motion_inflate_;
-        const auto physical_field = [this](const Vec2& p) {
-            return p.x >= ggcfg_.min_x + ggcfg_.robot_radius &&
-                   p.x <= ggcfg_.max_x - ggcfg_.robot_radius &&
-                   p.y >= ggcfg_.min_y + ggcfg_.robot_radius &&
-                   p.y <= ggcfg_.max_y - ggcfg_.robot_radius;
+        const double field_margin = required_field_margin(motion_config);
+        const auto allowed_field = [this, field_margin](const Vec2& p) {
+            return p.x >= ggcfg_.min_x + field_margin &&
+                   p.x <= ggcfg_.max_x - field_margin &&
+                   p.y >= ggcfg_.min_y + field_margin &&
+                   p.y <= ggcfg_.max_y - field_margin;
         };
-        if (!physical_field(cur) || !physical_field(stop) ||
+        if (!allowed_field(cur) || !allowed_field(stop) ||
             !obstacle_segment_clear(cur, stop, obs, motion_config)) return false;
         const double low[2]{ggcfg_.min_x + ggcfg_.wall_margin, ggcfg_.min_y + ggcfg_.wall_margin};
         const double high[2]{ggcfg_.max_x - ggcfg_.wall_margin, ggcfg_.max_y - ggcfg_.wall_margin};
@@ -1530,11 +1557,13 @@ private:
     Vec2 pd_to_point_avoid(const Vec2& target, const Obstacles& obs)
     {
         const Vec2 cur{px_, py_};
+        const GlobalConfig required_cfg = required_config();
+        const double field_margin = required_field_margin(required_cfg);
         global_goal_blocked_ = !path_clear(target, Path2{target, target}, obs, ggcfg_) ||
-            target.x < ggcfg_.min_x + ggcfg_.robot_radius ||
-            target.x > ggcfg_.max_x - ggcfg_.robot_radius ||
-            target.y < ggcfg_.min_y + ggcfg_.robot_radius ||
-            target.y > ggcfg_.max_y - ggcfg_.robot_radius;
+            target.x < ggcfg_.min_x + field_margin ||
+            target.x > ggcfg_.max_x - field_margin ||
+            target.y < ggcfg_.min_y + field_margin ||
+            target.y > ggcfg_.max_y - field_margin;
         if (global_goal_blocked_) {
             global_target_ = target;
             hold_required_path("required_goal_blocked");
@@ -1552,7 +1581,7 @@ private:
             if (command.needs_replan) global_has_ = false;
             Path2 remaining = global_tracker_->remaining_reference_path();
             if (remaining.size() == 1) remaining.push_back(target);
-            if (!required_path_clear(cur, remaining, target, obs, ggcfg_)) global_has_ = false;
+            if (!required_path_clear(cur, remaining, target, obs, required_cfg)) global_has_ = false;
         }
         if (!global_has_ || target_moved) {
             const double age = (now() - last_global_plan_time_).seconds();
@@ -1564,14 +1593,14 @@ private:
             last_global_plan_time_ = now();
             ++astar_searches_;
             ++global_path_searches_;
-            GlobalResult gr = plan_required_path(cur, target, obs, ggcfg_, yaw_);
+            GlobalResult gr = plan_required_path(cur, target, obs, required_cfg, yaw_);
             if (!gr.ok || gr.path.size() < 2) {
                 ++astar_searches_;
                 ++global_path_searches_;
-                gr = plan_required_path(cur, target, obs, ggcfg_);
+                gr = plan_required_path(cur, target, obs, required_cfg);
             }
             if (!gr.ok || gr.path.size() < 2 ||
-                !required_path_clear(cur, gr.path, target, obs, ggcfg_)) {
+                !required_path_clear(cur, gr.path, target, obs, required_cfg)) {
                 hold_required_path("required_path_unavailable");
                 return {};
             }
@@ -1589,14 +1618,14 @@ private:
             candidate.push_back(terminal);
             Path2 executed;
             for (const auto& point : candidate) executed.push_back(point.p);
-            if (!required_path_clear(cur, executed, target, obs, ggcfg_)) {
+            if (!required_path_clear(cur, executed, target, obs, required_cfg)) {
                 ++global_smooth_fallbacks_;
                 candidate = make_polyline_trajectory(gr.path);
                 if (candidate.size() == 1) candidate.push_back(candidate.front());
                 executed.clear();
                 for (const auto& point : candidate) executed.push_back(point.p);
             }
-            if (!required_path_clear(cur, executed, target, obs, ggcfg_)) {
+            if (!required_path_clear(cur, executed, target, obs, required_cfg)) {
                 ++global_invalid_paths_;
                 hold_required_path("required_trajectory_invalid");
                 return {};
@@ -1970,10 +1999,12 @@ private:
             // 取一份当前障碍圆（DWA 避障 + 视野遮挡 + 可视化共用）
             const Obstacles obstacles = obs_map_->snapshot();
 
-            // 把当前视野标进栅格（障碍背后被遮挡的格不标，模拟摄像头）
-            grid_->mark_scan(px_, py_, yaw_, obstacles);
-            // 障碍圆覆盖的小格直接算已扫(实体内部永远看不到，否则覆盖率永远到不了 100%)。永久保留。
-            grid_->fill_obstacle_cells(obstacles);
+            if (exploration_enabled_) {
+                // 把当前视野标进栅格（障碍背后被遮挡的格不标，模拟摄像头）
+                grid_->mark_scan(px_, py_, yaw_, obstacles);
+                // 障碍实体内部无需扫描，直接计为已知。
+                grid_->fill_obstacle_cells(obstacles);
+            }
 
             // ============================================================
             // POI（途中必经点/插点）状态机 —— 优先级高于探索与归航判定。
@@ -2297,6 +2328,7 @@ private:
                     value(key, std::to_string(scalar));
                 };
                 value("mode", corridor_active ? "corridor" : (homing_ ? "homing" : "exploration"));
+                value("exploration_enabled", exploration_enabled_ ? "true" : "false");
                 value("vision_shm_status", vision_reader_
                     ? VisionShmReader::status_name(vision_reader_->status()) : "disabled");
                 value("vision_task_stage", "queue_and_near_confirmation_only");
@@ -2561,6 +2593,7 @@ private:
     int           turn_blend_samples_ = params::CARLIKE_TURN_BLEND_SAMPLES;
     TrackerGains  gains_;
     FrontierConfig fcfg_;
+    bool exploration_enabled_ = params::EXPLORATION_ENABLED;
     bool frontier_observation_enabled_ = params::FRONTIER_OBSERVATION_ENABLED;
     bool have_observation_target_ = false;
     FrontierSelection observation_target_, turn_observation_;
@@ -2595,6 +2628,7 @@ private:
 
     // ---- 全局点到点绕障（A*，全局层）配置：全场唯一避障手段 ----
     GlobalConfig   ggcfg_;
+    double home_goal_wall_margin_ = params::HOME_GOAL_WALL_MARGIN;
     double         commit_target_tol_ = 0.50;  // 路径承诺：目标移动超此距离才算"换地方"重算 A*(m)
     double         global_lookahead_ = 0.50;  // 沿绕障轨迹取 carrot 的前瞻距离 (m)
     double         explore_target_min_dist_ = 1.50; // 探索挑 A* 终点的最小距离 (m)

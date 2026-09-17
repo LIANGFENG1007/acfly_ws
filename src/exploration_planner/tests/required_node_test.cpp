@@ -87,7 +87,7 @@ void closed_loop(ExplorationNode& node, const std::string& name, Vec2 start, Vec
         node.yaw_rate_est_ = rate;
         const Vec2 cmd = node.pd_to_point_avoid(goal, obstacles);
         require(!node.global_failed_, name + ": valid mission lost its route: " + node.global_block_reason_);
-        require(required_path_clear({node.px_, node.py_}, node.global_raw_, goal, obstacles, node.ggcfg_),
+        require(required_path_clear({node.px_, node.py_}, node.global_raw_, goal, obstacles, node.required_config()),
                 name + ": accepted execution path invalid");
         require(std::hypot(cmd.x, cmd.y) <= node.v_goal_max_ + 1e-9, name + ": speed exceeds cap");
         if (node.global_at_goal_ && std::hypot(vx, vy) <= node.goal_stop_v_ && !node.global_braking_blocked_) {
@@ -727,6 +727,92 @@ void retain_turn_probe_and_reserve_path_clearance(ExplorationNode& node)
     std::cout << "stable turn probe and optional planning clearance regressions passed\n";
 }
 
+void exploration_switch_regression()
+{
+    ExplorationNode node;
+    node.vision_reader_.reset();
+    node.exploration_enabled_ = false;
+    auto goal = std::make_shared<geometry_msgs::msg::PointStamped>();
+    goal->header.frame_id = "camera_init";
+    goal->point.x = 3.0;
+    node.on_goal(goal);
+    node.on_timer();
+    require(node.global_path_searches_ == 0 && !node.finished_,
+            "skip exploration moved or finished before odometry was available");
+
+    reset(node, {2, 0});
+    node.has_pose_ = true;
+    const auto exploration_plans = node.replan_checks_;
+    node.on_poi(goal);
+    node.on_timer();
+    require(node.homing_ && !node.plan_pending_ && !node.global_failed_ &&
+            node.global_has_ && !node.global_traj_.empty() &&
+            std::hypot(node.global_traj_.back().p.x - 3.0, node.global_traj_.back().p.y) < 1e-9,
+            "disabled exploration did not produce an exact path directly to the mission endpoint");
+    require(node.replan_checks_ == exploration_plans && node.grid_->coverage_ratio() == 0 &&
+            node.poi_queue_.empty() && !node.vision_collection_active_,
+            "direct endpoint mode collected coverage or allowed an exploration detour");
+    require(!node.finished_ && !node.corridor_->active(),
+            "direct endpoint mode skipped arrival and entered the corridor early");
+
+    node.corridor_enabled_ = true;
+    require(node.corridor_->configure({3, 1}, {3, -2}), "configure corridor fixture");
+    node.px_ = 3.0;
+    for (int i = 0; i < 20 && !node.corridor_->active(); ++i) node.on_timer();
+    require(node.corridor_->active() && !node.finished_,
+            "direct endpoint arrival failed to hand control to the corridor");
+
+    // A new normal mission restores exploration, without inheriting direct mode.
+    node.exploration_enabled_ = true;
+    reset(node, {2, 0});
+    node.on_goal(goal);
+    require(!node.homing_ && node.plan_pending_ && !node.corridor_->active(),
+            "enabled exploration retained the previous direct endpoint mission");
+    node.on_timer();
+    require(node.replan_checks_ > exploration_plans && !node.homing_ &&
+            node.tracker_->has_trajectory() && node.grid_->coverage_ratio() > 0,
+            "enabled exploration did not resume coverage planning");
+
+    // The switch must not weaken boundary safety or inherit an active POI.
+    node.exploration_enabled_ = false;
+    node.poi_mode_ = ExplorationNode::PoiMode::WAIT_RELEASE;
+    goal->point.x = node.ggcfg_.max_x + .02;
+    node.on_goal(goal);
+    node.on_timer();
+    require(node.homing_ && node.global_failed_ && node.global_goal_blocked_ &&
+            node.poi_mode_ == ExplorationNode::PoiMode::EXPLORE &&
+            !node.corridor_->active() && !node.finished_,
+            "skip exploration bypassed endpoint safety or retained an old POI hold");
+    std::cout << "exploration switch: direct endpoint, normal exploration, corridor handoff and safety passed\n";
+}
+
+void boundary_home_endpoint_regression()
+{
+    ExplorationNode node;
+    node.vision_reader_.reset();
+    node.ggcfg_.min_x = 0; node.ggcfg_.max_x = 1.57;
+    node.ggcfg_.min_y = -5.35; node.ggcfg_.max_y = 1.15;
+    node.home_goal_wall_margin_ = 0;
+    node.homing_ = true;
+    closed_loop(node, "boundary home goal from takeoff origin", {0, 0}, {1.55, .60}, {});
+    require(node.px_ <= 1.57 && node.px_ >= 0 && node.py_ <= 1.15,
+            "boundary goal tracking left the configured field");
+    node.px_ = 1.50; node.py_ = .60;
+    require(node.required_motion_clear({1.55, .60}, {}),
+            "terminal motion still enforced body-radius field inset");
+    require(!node.required_motion_clear({1.58, .60}, {}),
+            "terminal stopping projection escaped the field");
+    require(!node.required_motion_clear({1.55, .60}, {{1.55, .60, .1}}),
+            "terminal motion waived physical obstacle clearance");
+
+    reset(node, {.75, 0});
+    node.homing_ = false;
+    node.pd_to_point_avoid({1.55, .60}, {});
+    require(node.global_goal_blocked_ && node.global_failed_,
+            "visual/POI target inherited the home endpoint exception");
+    std::cout << "boundary home endpoint closed-loop and target isolation passed\n";
+}
+
 }  // namespace
 
 int main(int argc, char** argv)
@@ -736,6 +822,8 @@ int main(int argc, char** argv)
     rclcpp::init(argc, argv, options);
     int result = 0;
     try {
+        exploration_switch_regression();
+        boundary_home_endpoint_regression();
         ExplorationNode node;
         {
             char directory[] = "/tmp/acfly-vision-node-XXXXXX";

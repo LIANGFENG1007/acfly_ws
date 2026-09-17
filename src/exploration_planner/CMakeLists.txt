@@ -120,8 +120,12 @@ if(BUILD_TESTING)
     rclcpp geometry_msgs nav_msgs std_msgs diagnostic_msgs sensor_msgs visualization_msgs tf2
   )
   target_link_libraries(required_node_test ${OpenCV_LIBS})
+  # These regression fixtures use the original 7.5 x 10 m arena, independently
+  # of the operator's current field size and exploration switch defaults.
   add_test(NAME required_node_test COMMAND required_node_test
-    --ros-args -p viz:=false -p corridor_enabled:=false)
+    --ros-args -p viz:=false -p corridor_enabled:=false -p exploration_enabled:=true
+    -p field_min_x:=0.0 -p field_min_y:=-5.0 -p field_max_x:=7.5 -p field_max_y:=5.0
+    -p fov_range:=3.0 -p v_max:=0.6)
   set_tests_properties(required_node_test PROPERTIES
     ENVIRONMENT "ROS_DOMAIN_ID=203;ROS_LOCALHOST_ONLY=1;ROS_LOG_DIR=/tmp/acfly-required-node-ctest-logs"
     RUN_SERIAL TRUE

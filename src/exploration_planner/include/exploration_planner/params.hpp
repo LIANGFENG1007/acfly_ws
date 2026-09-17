@@ -11,6 +11,17 @@
 namespace exploration {
 namespace params {
 
+// ★ 起飞后是否先探索 ★（启动时可用 ROS 参数 exploration_enabled 覆盖）
+//   true  = 先探索，覆盖率达标后去探索终点，再执行通道任务。
+//   false = 跳过探索和视觉/插点访问，起飞后直接去探索终点，再执行通道任务。
+//   直达终点仍使用原有避障与场地安全检查；场地边界请填写实际范围。
+inline constexpr bool EXPLORATION_ENABLED = false;
+
+// 探索终点到配置边界的最小距离(m)。0 = 终点中心可到边界，不能越界。
+// 只放宽前往探索终点的末段；普通探索/视觉目标仍使用原安全边距。
+// 配置边界作为任务范围；点云中的实体障碍仍按机体半径和安全余量避让。
+inline constexpr double HOME_GOAL_WALL_MARGIN = 0.0;
+
 // ---------------------------------------------------------------------------
 // ★ 场地四面墙范围（SLAM/camera_init 系，原点=起飞点）★  ← 改这里
 //   这是"飞机起飞点为原点"算出来的场地边界。起飞点不在场地中心时要换算：
@@ -19,7 +30,7 @@ namespace params {
 //       → SLAM x ∈ [-5-(-4), 5-(-4)] = [-1, 9]，y ∈ [-5, 5]
 // ---------------------------------------------------------------------------
 inline constexpr double FIELD_MIN_X = 0.0;   //-0.5
-inline constexpr double FIELD_MIN_Y = -0.35;   //-2.1
+inline constexpr double FIELD_MIN_Y = -5.35;   //-2.1
 inline constexpr double FIELD_MAX_X =  1.57;   // 4.8
 inline constexpr double FIELD_MAX_Y =  1.15;   // 2.3
 

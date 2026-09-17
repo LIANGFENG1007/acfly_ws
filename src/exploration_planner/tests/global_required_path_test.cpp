@@ -153,6 +153,36 @@ void required_heading_cone()
             "virtual terminal edge bypassed the requested local heading cone");
     validate(plan_required_path(start, behind, {}, cfg), start, behind, {}, cfg);
 }
+
+void boundary_endpoint_permission()
+{
+    auto cfg = config();
+    cfg.min_y = -5.35; cfg.max_x = 1.57; cfg.max_y = 1.15;
+    const Vec2 start{0, 0}, goal{1.55, .60};
+    require(!plan_required_path(start, goal, {}, cfg).ok,
+            "default required targets must retain body clearance");
+    cfg.required_goal_field_margin = 0.0;
+    const auto route = plan_required_path(start, goal, {}, cfg);
+    validate(route, start, goal, {}, cfg);
+    require(path_inside_safe_field(Path2(route.path.begin(), route.path.end() - 1), cfg),
+            "boundary endpoint permission relaxed the ordinary path");
+    validate(plan_required_path(start, {1.57, .6}, {}, cfg), start, {1.57, .6}, {}, cfg);
+    validate(plan_required_path(start, {1.57, 1.15}, {}, cfg), start, {1.57, 1.15}, {}, cfg);
+    require(required_path_clear({1.50, .60}, route.path, goal, {}, cfg),
+            "near-boundary execution lost the approved connector");
+    validate(plan_required_path({1.50, .60}, goal, {}, cfg), {1.50, .60}, goal, {}, cfg);
+    require(!plan_required_path(start, {1.58, .6}, {}, cfg).ok,
+            "boundary endpoint permission accepted a goal outside the field");
+    require(!required_path_clear({1.58, .60}, route.path, goal, {}, cfg),
+            "terminal rejoin outside the field was accepted");
+    const Obstacles blocked{{1.55, .60, .1}};
+    require(!plan_required_path(start, goal, blocked, cfg).ok &&
+            !required_path_clear(start, route.path, goal, blocked, cfg),
+            "boundary endpoint permission waived obstacle avoidance");
+    cfg.required_goal_field_margin = .1;
+    require(!plan_required_path(start, goal, {}, cfg).ok,
+            "configured endpoint margin was ignored");
+}
 }  // namespace
 
 int main()
@@ -162,5 +192,6 @@ int main()
     exact_edges_and_detours();
     short_motion_escape();
     required_heading_cone();
+    boundary_endpoint_permission();
     std::cout << "global_required_path_test: all checks passed\n";
 }

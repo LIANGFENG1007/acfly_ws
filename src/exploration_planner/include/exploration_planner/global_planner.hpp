@@ -38,7 +38,17 @@ struct GlobalConfig {
     // every edge and the complete result must satisfy aircraft/field clearance.
     bool validate_complete_path = false;
     double required_connector_length = 1.0;
+    // Only the exact goal and its terminal connector may use this field inset.
+    // -1 preserves physical body clearance; 0 allows the center on the boundary.
+    // Obstacle clearance and the ordinary path's wall_margin are unchanged.
+    double required_goal_field_margin = -1.0;
 };
+
+inline double required_field_margin(const GlobalConfig& cfg)
+{
+    return cfg.required_goal_field_margin == -1.0
+        ? cfg.robot_radius : cfg.required_goal_field_margin;
+}
 
 struct GlobalResult {
     bool  ok = false;            // 找到一条到目标(或其最近可达格)的绕障路径
@@ -63,8 +73,8 @@ GlobalResult plan_global_path(const Vec2& start, const Vec2& goal,
 
 // Exact mission targets never fall back to a proxy. A strictly checked prefix
 // may end with one straight connector across the virtual field inset, bounded
-// by required_connector_length. The goal and connector keep physical field/body
-// clearance, and obstacle robot_radius + inflate applies to every edge.
+// by required_connector_length. The goal and connector keep required_field_margin
+// (physical body clearance by default); obstacle robot_radius + inflate always applies.
 // The final connector anchor is retained as the penultimate result point.
 GlobalResult plan_required_path(const Vec2& start, const Vec2& goal,
                                 const Obstacles& obs, const GlobalConfig& cfg,
