@@ -29,11 +29,10 @@ inline constexpr double HOME_GOAL_WALL_MARGIN = 0.0;
 //   例：起飞点世界 (-4,0)，10x10 场地世界 x,y ∈ [-5,5]
 //       → SLAM x ∈ [-5-(-4), 5-(-4)] = [-1, 9]，y ∈ [-5, 5]
 // ---------------------------------------------------------------------------
-inline constexpr double FIELD_MIN_X = 0.0;   //-0.5
-inline constexpr double FIELD_MIN_Y = -5.0;   //-2.1
-inline constexpr double FIELD_MAX_X =  7.5;   // 4.8
-inline constexpr double FIELD_MAX_Y =  5.0;   // 2.3
-
+inline constexpr double FIELD_MIN_X = -0.3;   //-0.5
+inline constexpr double FIELD_MIN_Y = -0.8;   //-2.1
+inline constexpr double FIELD_MAX_X =  2.0;   // 4.8
+inline constexpr double FIELD_MAX_Y =  4.43;   // 2.3
 // ★整套运动控制方式★
 //   true  = 使用位置环控制运动目标；
 //   false = 使用原有速度环/速度指令控制方式。
