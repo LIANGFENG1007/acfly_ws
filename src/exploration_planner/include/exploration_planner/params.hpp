@@ -80,7 +80,8 @@ inline constexpr bool CORRIDOR_ENABLED = true;
 inline constexpr double CORRIDOR_INITIAL_YAW_DEG = -90.0; // 首次转到此角度，随后入口/对中/穿门/前往H均保持此航向
 inline constexpr double CORRIDOR_WIDTH = 1.5; // 两侧墙搜索范围(m)，不把道路中线当成门中心
 inline constexpr double CORRIDOR_ROBOT_WIDTH = 0.64; // x500仿真含桨完整外廓(m)，实机按测量值调整
-inline constexpr const char* CORRIDOR_CLOUD_TOPIC = "/corridor/cloud_registered_dense"; // mapping_sim自动发布的稠密走廊点云
+// 实机 Point-LIO 默认输出；仿真 launch 在启动稠密转换节点后单独覆盖此参数。
+inline constexpr const char* CORRIDOR_CLOUD_TOPIC = "/cloud_registered";
 inline constexpr double CORRIDOR_MIN_GAP_EXTRA = 0.0; // 机宽以外额外要求(m)，默认不额外膨胀
 inline constexpr double CORRIDOR_ENTRY_SPEED = 0.30;
 inline constexpr double CORRIDOR_CRUISE_SPEED = 0.30;

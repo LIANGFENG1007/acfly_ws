@@ -1065,6 +1065,64 @@ void visual_hover_restores_exploration_display()
                 "resumed display geometry differs from the route being flown");
     std::cout << "first exploration route after visual hover restored without adopting a second route\n";
 }
+void corridor_registered_cloud_regression()
+{
+    ExplorationNode node;
+    require(node.corridor_cloud_topic_ == "/cloud_registered",
+            "hardware default does not consume Point-LIO registered scans");
+    reset(node, {2, 0});
+    node.has_pose_ = node.corridor_enabled_ = true;
+    require(node.corridor_->configure({2, 0}, {2, -3}), "configure cloud fixture");
+    node.corridor_->start({2, 0}, node.steady_seconds());
+
+    auto cloud = std::make_shared<sensor_msgs::msg::PointCloud2>();
+    cloud->header.frame_id = "camera_init";
+    cloud->header.stamp.sec = 1;
+    sensor_msgs::PointCloud2Modifier modifier(*cloud);
+    modifier.setPointCloud2FieldsByString(1, "xyz");
+    modifier.resize(4);
+    sensor_msgs::PointCloud2Iterator<float> x(*cloud, "x"), y(*cloud, "y"), z(*cloud, "z");
+    // Two visible wall returns, one outside the height slice, one beyond range.
+    const float samples[4][3] = {{1.25f, -.5f, .8f}, {2.75f, -.5f, .8f},
+                                {1.25f, -.5f, 2.f}, {20.f, 0.f, .8f}};
+    for (const auto& p : samples) {
+        *x = p[0]; *y = p[1]; *z = p[2]; ++x; ++y; ++z;
+    }
+    node.on_cloud(cloud);
+    require(node.corridor_->points().size() == 2 &&
+            node.corridor_cloud_raw_points_ == 4 && node.corridor_cloud_height_points_ == 3 &&
+            node.corridor_cloud_kept_points_ == 2 && node.corridor_cloud_filter_reason_ == "accepted",
+            "active corridor failed to receive the shared registered topic or account for filters");
+
+    ++cloud->header.stamp.sec;
+    node.pz_ = 4;
+    node.on_cloud(cloud);
+    require(node.corridor_->points().empty() &&
+            node.corridor_cloud_filter_reason_ == "height_slice_empty",
+            "height rejection does not explain absent display points");
+    node.pz_ = .8;
+    node.yaw_rate_est_ = node.corridor_cloud_max_yaw_rate_ + .1;
+    node.on_cloud(cloud);
+    require(node.corridor_cloud_filter_reason_ == "yaw_rate_exceeded", "missing yaw rejection reason");
+    node.yaw_rate_est_ = 0;
+    cloud->header.frame_id = "body";
+    node.on_cloud(cloud);
+    require(node.corridor_cloud_filter_reason_ == "wrong_frame", "missing cloud frame rejection reason");
+
+    // An explicitly selected dense input must remain separate from exploration scans.
+    cloud->header.frame_id = "camera_init";
+    ++cloud->header.stamp.sec;
+    node.corridor_cloud_topic_ = "/corridor/cloud_registered_dense";
+    node.on_cloud(cloud);
+    require(node.corridor_->points().empty(), "registered scans leaked into the selected dense input");
+    node.on_corridor_cloud(cloud);
+    require(node.corridor_->points().size() == 2 && node.corridor_cloud_filter_reason_ == "accepted",
+            "explicit dense callback failed after changing hardware default");
+    node.on_corridor_cloud(cloud);
+    require(node.corridor_cloud_filter_reason_ == "nonadvancing_stamp",
+            "repeated cloud timestamps were not diagnosed");
+    std::cout << "hardware corridor cloud routing and empty/rejected scan diagnostics passed\n";
+}
 }  // namespace
 
 int main(int argc, char** argv)
@@ -1074,6 +1132,7 @@ int main(int argc, char** argv)
     rclcpp::init(argc, argv, options);
     int result = 0;
     try {
+        corridor_registered_cloud_regression();
         exploration_switch_regression();
         boundary_home_endpoint_regression();
         small_field_stability_regression();

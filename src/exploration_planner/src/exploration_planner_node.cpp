@@ -431,6 +431,10 @@ public:
                 corridor_cloud_topic_, rclcpp::SensorDataQoS(),
                 std::bind(&ExplorationNode::on_corridor_cloud, this, std::placeholders::_1), cloud_opt);
         }
+        RCLCPP_INFO(get_logger(),
+            "[走廊点云] 输入=%s，高度切片=飞机z-%.2f至z+%.2fm，范围=%.1fm，通道宽=%.2fm",
+            corridor_cloud_topic_.c_str(), corridor_z_below_, corridor_z_above_,
+            corridor_sensor_range_, ccfg_.perception.corridor_width);
 
         timer_ = create_wall_timer(
             std::chrono::milliseconds(params::TIMER_PERIOD_MS),
@@ -712,24 +716,52 @@ private:
             wz = yaw_rate_est_;
         }
 
+        // Keep receipt separate from acceptance, so a held entry can report
+        // missing input, frame/yaw rejection or a completely filtered scan.
+        std::string rejection;
+        if (!corridor_enabled_) rejection = "disabled";
+        else if (!ok) rejection = "no_pose";
+        else if (!msg->header.frame_id.empty() && msg->header.frame_id != "camera_init")
+            rejection = "wrong_frame";
+        else if (!(std::fabs(wz) <= corridor_cloud_max_yaw_rate_)) rejection = "yaw_rate_exceeded";
+        const size_t raw_points = static_cast<size_t>(msg->width) * msg->height;
+        if (!rejection.empty()) {
+            std::lock_guard<std::mutex> lk(mtx_);
+            corridor_cloud_received_at_ = received_at;
+            corridor_cloud_raw_points_ = raw_points;
+            corridor_cloud_height_points_ = corridor_cloud_kept_points_ = 0;
+            corridor_cloud_filter_reason_ = rejection;
+            return;
+        }
+
         // 走廊使用独立的机身高度切片，保留墙/横档的实际点，不做障碍圆拟合和探索膨胀。
-        if (ok && corridor_enabled_ &&
-            (msg->header.frame_id.empty() || msg->header.frame_id == "camera_init") &&
-            std::fabs(wz) <= corridor_cloud_max_yaw_rate_) {
+        if (rejection.empty()) {
             Path2 corridor_points;
+            size_t height_points = 0;
             sensor_msgs::PointCloud2ConstIterator<float> x(*msg, "x"), y(*msg, "y"), z(*msg, "z");
             for (; x != x.end(); ++x, ++y, ++z) {
                 if (!std::isfinite(*x) || !std::isfinite(*y) || !std::isfinite(*z)) continue;
                 if (*z < pz - corridor_z_below_ || *z > pz + corridor_z_above_) continue;
+                ++height_points;
                 const double d = std::hypot(*x - px, *y - py);
                 if (d < corridor_self_radius_ || d > corridor_sensor_range_) continue;
                 corridor_points.push_back({*x, *y});
             }
             std::lock_guard<std::mutex> lk(mtx_);
-            if (cloud_freshness_.observe(rclcpp::Time(msg->header.stamp).nanoseconds(), received_at))
+            corridor_cloud_received_at_ = received_at;
+            corridor_cloud_raw_points_ = raw_points;
+            corridor_cloud_height_points_ = height_points;
+            corridor_cloud_kept_points_ = corridor_points.size();
+            corridor_cloud_filter_reason_ = corridor_cloud_raw_points_ == 0 ? "empty_input" :
+                (height_points == 0 ? "height_slice_empty" :
+                (corridor_points.empty() ? "range_slice_empty" : "accepted"));
+            if (cloud_freshness_.observe(rclcpp::Time(msg->header.stamp).nanoseconds(), received_at)) {
                 corridor_->observe(corridor_points, received_at, {px, py});
-            else if (!cloud_freshness_.fresh(received_at, ccfg_.cloud_timeout))
-                corridor_->observe({}, received_at);
+            } else {
+                corridor_cloud_filter_reason_ = "nonadvancing_stamp";
+                if (!cloud_freshness_.fresh(received_at, ccfg_.cloud_timeout))
+                    corridor_->observe({}, received_at);
+            }
         }
     }
 
@@ -2111,14 +2143,20 @@ private:
                     RCLCPP_INFO(get_logger(), "[走廊] %s (已过门 %d)",
                                 last_corridor_status_.c_str(), corridor_->gatesPassed());
                 }
-                if (corridor_->phase() == CorridorPhase::Search &&
+                if (corridor_->phase() != CorridorPhase::Done &&
                     corridor_command_.forward == 0.0 && corridor_command_.lateral == 0.0) {
                     const auto& observed = corridor_->observation();
                     RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 2000,
-                        "[走廊识别] reason=%s cloud=%zu walls=%d bounds=[%.2f,%.2f] observed_s=%.2f gate=%d gate_s=%.2f gap=%.2f rays=%d body=%.2f",
+                        "[走廊识别] reason=%s cloud=%zu walls=%d bounds=[%.2f,%.2f] observed_s=%.2f gate=%d gate_s=%.2f gap=%.2f rays=%d body=%.2f topic=%s rx_age=%.2fs filter=%s points=%zu/%zu/%zu z=[%.2f,%.2f] entry=(%.2f,%.2f) H=(%.2f,%.2f)",
                         observed.reason.c_str(), corridor_->points().size(), observed.walls_observed,
                         observed.right_wall, observed.left_wall, observed.observed_until,
-                        observed.gate_observed, observed.gate_s, observed.gap_width, observed.clear_rays, ccfg_.perception.robot_width);
+                        observed.gate_observed, observed.gate_s, observed.gap_width, observed.clear_rays, ccfg_.perception.robot_width,
+                        corridor_cloud_topic_.c_str(), corridor_cloud_received_at_ >= 0.0
+                            ? local_now - corridor_cloud_received_at_ : -1.0,
+                        corridor_cloud_filter_reason_.c_str(), corridor_cloud_raw_points_,
+                        corridor_cloud_height_points_, corridor_cloud_kept_points_,
+                        pz_ - corridor_z_below_, pz_ + corridor_z_above_,
+                        corridor_->entry().x, corridor_->entry().y, corridor_->goal().x, corridor_->goal().y);
                 }
             } else {
             // 取一份当前障碍圆（DWA 避障 + 视野遮挡 + 可视化共用）
@@ -2582,6 +2620,13 @@ private:
                 number("gate_center_y", gate.gate_center.y);
                 number("gate_width", gate.gap_width);
                 value("gate_reason", gate.reason);
+                value("corridor_cloud_topic", corridor_cloud_topic_);
+                value("corridor_cloud_filter", corridor_cloud_filter_reason_);
+                number("corridor_cloud_raw_points", corridor_cloud_raw_points_);
+                number("corridor_cloud_height_points", corridor_cloud_height_points_);
+                number("corridor_cloud_kept_points", corridor_cloud_kept_points_);
+                number("corridor_cloud_receive_age_s", corridor_cloud_received_at_ >= 0.0
+                    ? steady_seconds() - corridor_cloud_received_at_ : -1.0);
                 number("gates_passed", corridor_->gatesPassed());
                 diagnostics.status.push_back(status);
             }
@@ -2721,6 +2766,9 @@ private:
     double corridor_cloud_max_yaw_rate_ = 0.6;
     SensorFreshness pose_freshness_, cloud_freshness_;
     std::string last_corridor_status_;
+    double corridor_cloud_received_at_ = -1.0;
+    size_t corridor_cloud_raw_points_ = 0, corridor_cloud_height_points_ = 0, corridor_cloud_kept_points_ = 0;
+    std::string corridor_cloud_filter_reason_ = "no_messages";
     bool          use_position_control_ = params::USE_POSITION_CONTROL;
     bool          carlike_mode_ = params::EXPLORATION_CARLIKE_MODE;
     double        turn_blend_m_ = params::CARLIKE_TURN_BLEND_M;
