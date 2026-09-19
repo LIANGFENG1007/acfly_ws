@@ -78,6 +78,9 @@ struct Fixture {
     }
 
     void enter() {
+        // Tests may move the initial pose after construction. The turn anchor
+        // must be the actual starting pose, as in the node's start() call.
+        controller.start(position, now);
         for (int i = 0; i < 30 && controller.phase() != CorridorPhase::Entry; ++i) step();
         require(controller.phase() == CorridorPhase::Entry, "initial heading settles into Entry");
     }
@@ -252,9 +255,10 @@ void checkSafetyStops() {
     require(bad_pose.forward == 0.0 && bad_pose.lateral == 0.0 && !bad_pose.finished,
             "invalid odometry must stop translation");
     stale.cloud.clear();
+    stale.now += stale.config.cloud_window + kDt;
     const auto empty = stale.step();
     require(empty.forward == 0.0 && empty.lateral == 0.0 && !empty.finished,
-            "an empty current cloud cannot reuse accumulated free-space evidence");
+            "empty packets cannot reuse measured evidence after its accumulation window expires");
 
     Fixture blocked(false, true);
     for (int i = 0; i < 300; ++i) {
@@ -268,6 +272,7 @@ void checkSafetyStops() {
 
 void checkFixedHeadingArena() {
     CorridorConfig config;
+    config.cloud_window = 1.0;  // Production accumulation with an independent 0.5s freshness limit.
     CorridorController controller(config);
     // H is to the side of the final door's center, requiring a lateral correction.
     const Vec2 entry{8.25, 4.25}, goal{8.25, -4.25}, red{7.0, 4.25};

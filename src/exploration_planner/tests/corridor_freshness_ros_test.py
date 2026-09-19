@@ -141,7 +141,7 @@ def run(binary, expect_old_failure=False):
             with logfile.open('w') as output:
                 process = subprocess.Popen([
                     binary, '--ros-args', '-p', 'viz:=false', '-p', 'use_sim_time:=true',
-                    '-p', 'use_position_control:=true', '-p', 'done_coverage:=0.0',
+                    '-p', 'done_coverage:=0.0',
                     '-p', 'corridor_enabled:=true', '-p', 'corridor_width:=1.5',
                     '-p', 'corridor_cloud_topic:=/cloud_registered',
                 ], stdout=output, stderr=subprocess.STDOUT, env=os.environ.copy())

@@ -4,6 +4,7 @@
 #include <string>
 
 #include "exploration_planner/corridor_perception.hpp"
+#include "exploration_planner/position_hold.hpp"
 
 namespace exploration {
 
@@ -83,6 +84,9 @@ private:
     CorridorPhase phase_ = CorridorPhase::Idle;
     bool configured_ = false;
     Vec2 entry_, h_, red_;
+    PositionHold rotation_hold_, heading_hold_, waiting_hold_;
+    bool waiting_for_evidence_ = false;
+    bool heading_recovery_ = false;
     struct Cloud { double stamp; Path2 points; };
     std::deque<Cloud> clouds_;
     Path2 points_;
@@ -90,6 +94,7 @@ private:
     Vec2 sensor_origin_;
     bool has_sensor_origin_ = false;
     double cloud_time_ = -1e9;
+    double evidence_time_ = -1e9;
     double last_update_ = -1.0;
     double settled_since_ = -1.0;
     Vec2 previous_velocity_, filtered_velocity_;
@@ -103,8 +108,12 @@ private:
     double last_gate_back_ = -1e9;
     bool gate_locked_ = false;
     bool stable(bool condition, double now);
+    CorridorCommand updateMotion(const Vec2& position, double yaw, double vf, double vl,
+                                 double now, bool pose_fresh);
     void transition(CorridorPhase phase);
     CorridorCommand hold(const Vec2& position, const std::string& reason);
+    CorridorCommand rotateAt(PositionHold& hold, const Vec2& position, double yaw,
+                             double vf, double vl, double dt);
     CorridorCommand enter(const Vec2& position, double yaw, double vf, double vl, double dt);
     CorridorCommand translate(const Vec2& position, double yaw, const Vec2& target,
                               double speed, double vf, double vl, double dt,

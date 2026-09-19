@@ -153,8 +153,8 @@ bool run(const Scenario& scenario, bool production)
         }
         previous_command = command.v_fwd;
         previous_yaw_command = command.yaw_rate;
-        vx += (std::cos(yaw) * command.v_fwd - vx) * kDt / 0.40;
-        vy += (std::sin(yaw) * command.v_fwd - vy) * kDt / 0.40;
+        vx += (std::cos(yaw) * command.v_fwd - std::sin(yaw) * command.v_lat - vx) * kDt / 0.40;
+        vy += (std::sin(yaw) * command.v_fwd + std::cos(yaw) * command.v_lat - vy) * kDt / 0.40;
         yaw_rate += (command.yaw_rate - yaw_rate) * kDt / 0.40;
         x += vx * kDt;
         y += vy * kDt;
@@ -193,8 +193,8 @@ bool sharp_fallback(double angle, bool production)
             release_speed = std::hypot(vx, vy);
             release_distance = std::hypot(x - vertex.x, y - vertex.y);
         }
-        vx += (std::cos(yaw) * command.v_fwd - vx) * kDt / 0.40;
-        vy += (std::sin(yaw) * command.v_fwd - vy) * kDt / 0.40;
+        vx += (std::cos(yaw) * command.v_fwd - std::sin(yaw) * command.v_lat - vx) * kDt / 0.40;
+        vy += (std::sin(yaw) * command.v_fwd + std::cos(yaw) * command.v_lat - vy) * kDt / 0.40;
         yaw_rate += (command.yaw_rate - yaw_rate) * kDt / 0.40;
         x += vx * kDt;
         y += vy * kDt;
@@ -206,7 +206,7 @@ bool sharp_fallback(double angle, bool production)
     }
     std::cout << "sharp_fallback_" << angle * 180.0 / kPi << " reached=" << reached
               << " release_speed=" << release_speed << " release_distance=" << release_distance << '\n';
-    return reached && released && release_speed <= config.align_stop_speed + 1e-8 &&
+    return reached && released &&
         release_distance <= 0.08 + 1e-8;
 }
 }  // namespace

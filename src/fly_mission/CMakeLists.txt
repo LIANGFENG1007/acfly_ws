@@ -59,6 +59,15 @@ install(DIRECTORY include/
 )
 
 if(BUILD_TESTING)
+  add_executable(velocity_output_test tests/velocity_output_test.cpp
+    src/drone_controller.cpp src/avoidance.cpp)
+  ament_target_dependencies(velocity_output_test
+    rclcpp geometry_msgs mavros_msgs nav_msgs std_msgs tf2)
+  target_link_options(velocity_output_test PRIVATE -Wl,--wrap=open -Wl,--wrap=rcl_publish)
+  add_test(NAME velocity_output_test COMMAND velocity_output_test)
+  set_tests_properties(velocity_output_test PROPERTIES
+    ENVIRONMENT "ROS_DOMAIN_ID=204;ROS_LOCALHOST_ONLY=1;ROS_LOG_DIR=/tmp/acfly-velocity-output-test-logs"
+    TIMEOUT 15)
   find_package(ament_lint_auto REQUIRED)
   set(ament_cmake_copyright_FOUND TRUE)
   set(ament_cmake_cpplint_FOUND TRUE)

@@ -47,13 +47,11 @@ def run(binary):
         cloud_pub = node.create_publisher(PointCloud2, '/cloud_registered', 10)
         clock_pub = node.create_publisher(Clock, '/clock', 10)
         state = {'cmd': None, 'active': False, 'finished': False, 'reset': False,
-                 'position_count': 0, 'position_count_at_active': None}
+                 'position_count': 0}
         node.create_subscription(TwistStamped, '/exploration/cmd_vel',
                                  lambda m: state.update(cmd=m.twist), 10)
 
         def active_callback(msg):
-            if msg.data and not state['active']:
-                state['position_count_at_active'] = state['position_count']
             state['active'] = msg.data
 
         def finished_callback(msg):
@@ -77,7 +75,7 @@ def run(binary):
             with logfile.open('w') as output:
                 process = subprocess.Popen([
                     binary, '--ros-args', '-p', 'viz:=false', '-p', 'use_sim_time:=true',
-                    '-p', 'use_position_control:=true', '-p', 'done_coverage:=0.0',
+                    '-p', 'done_coverage:=0.0',
                     '-p', 'corridor_enabled:=true', '-p', 'corridor_width:=1.5',
                     '-p', 'corridor_cloud_topic:=/cloud_registered',
                 ], stdout=output, stderr=subprocess.STDOUT, env=os.environ.copy())
@@ -189,7 +187,7 @@ def run(binary):
                     raise AssertionError('H was not reached')
                 assert first_translation_yaw is not None, 'Entry did not translate'
                 assert max_cross_speed > 0.27, 'Did not reach configured crossing speed'
-                assert state['position_count'] <= state['position_count_at_active'] + 2
+                assert state['position_count'] == 0, 'Velocity-only exploration published a position target'
                 log = logfile.read_text()
                 assert '已过门 2' in log, 'Did not register both doors'
                 print(f'PASS: red point held, -90 degree translation, two 0.8m doors, '

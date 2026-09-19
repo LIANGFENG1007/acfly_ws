@@ -53,6 +53,7 @@ void TrajectoryTracker::set_trajectory(const Trajectory& traj)
     alignment_heading_valid_ = false;
     alignment_settled_ = 0.0;
     aligning_ = false;
+    holonomic_hold_active_ = false;
     turn_direction_ = 0;
     if (traj_.empty()) {
         motion_valid_ = false;
@@ -195,7 +196,6 @@ VelCmd TrajectoryTracker::update(double px, double py, double yaw,
         return cmd;
     }
 
-    const double speed = std::hypot(v_fwd_est, v_lat_est);
     size_t corner = next_corner();
     if (corner < traj_.size()) {
         const Vec2 before = traj_[corner - 1].p, vertex = traj_[corner].p;
@@ -204,18 +204,28 @@ VelCmd TrajectoryTracker::update(double px, double py, double yaw,
             ? ((cur.x - vertex.x) * (vertex.x - before.x) +
                (cur.y - vertex.y) * (vertex.y - before.y)) / incoming : 0.0;
         if (passed > 0.0 && dist(cur, vertex) > std::max(.08, goal_tol)) {
-            // A short stale vertex behind us is not a new destination. Brake,
-            // then ask the obstacle-aware planner for a connection from here;
+            // A short stale vertex behind us is not a new destination. Ask
+            // the obstacle-aware planner for a connection from here immediately;
             // never skip the corner blindly or circle back to chase its point.
             previous_forward_command_ = previous_yaw_command_ = 0.0;
             aligning_ = alignment_heading_valid_ = false;
             last_look_ = cur;
-            cmd.needs_replan = speed <= g_.align_stop_speed;
+            cmd.needs_replan = true;
             return cmd;
         }
     }
     if (corner < traj_.size() && dist(cur, traj_[corner].p) <= std::max(0.08, goal_tol) &&
-        speed <= g_.align_stop_speed) {
+        progress_s_ >= traj_[corner].s - std::min(.02, goal_tol * .25)) {
+        // Arrival starts a single XY-hold/yaw action. Persistent drift must
+        // not prevent selection of the outgoing segment.
+        if (!aligning_) {
+            aligning_ = true;
+            alignment_hold_.begin(cur);
+            alignment_heading_ = heading(traj_[corner].p, traj_[corner + 1].p);
+            alignment_heading_valid_ = true;
+            alignment_settled_ = 0.0;
+            turn_direction_ = wrap_pi(alignment_heading_ - yaw) >= 0.0 ? 1 : -1;
+        }
         passed_corner_s_ = traj_[corner].s;
         progress_s_ = traj_[corner].s;
         progress_idx_ = corner;
@@ -270,6 +280,16 @@ VelCmd TrajectoryTracker::update(double px, double py, double yaw,
         cmd.yaw_rate = clamp_abs(g_.kp_yaw * e_yaw + g_.kd_yaw * de_yaw, g_.max_yaw_rate);
         const double gate = std::abs(e_yaw) > g_.heading_gate_rad ? 0.0 :
                             std::max(0.0, std::cos(e_yaw));
+        if (gate == 0.0) {
+            if (!holonomic_hold_active_) alignment_hold_.begin(cur);
+            holonomic_hold_active_ = true;
+            const auto correction = alignment_hold_.update(cur, yaw, v_fwd_est, v_lat_est,
+                g_.turn_hold_kp, g_.turn_hold_kd, std::min(g_.turn_hold_speed, g_.v_max), g_.max_accel, dt);
+            cmd.v_fwd = correction.x; cmd.v_lat = correction.y;
+            cmd.holding_position = true;
+            return cmd;
+        }
+        holonomic_hold_active_ = false;
         const double lateral_target = clamp_abs(-(g_.kp_lat * e_ct + g_.kd_lat * de_ct), g_.max_v_lat) * gate;
         // Limit lateral command slew in ordinary exploration.  A raw
         // cross-track derivative can change sign between adjacent scans and
@@ -291,11 +311,12 @@ VelCmd TrajectoryTracker::update(double px, double py, double yaw,
     const double stop_angle = std::clamp(g_.stop_align_rad, 0.35, M_PI * 0.5);
     if (!aligning_ && std::abs(e_yaw) >= stop_angle) {
         aligning_ = true;
+        alignment_hold_.begin(cur);
         alignment_heading_valid_ = false;
         alignment_settled_ = 0.0;
         turn_direction_ = e_yaw >= 0.0 ? 1 : -1;
     }
-    if (aligning_ && !alignment_heading_valid_ && speed <= g_.align_stop_speed) {
+    if (aligning_ && !alignment_heading_valid_) {
         alignment_heading_ = desired_theta;
         alignment_heading_valid_ = true;
     }
@@ -340,6 +361,11 @@ VelCmd TrajectoryTracker::update(double px, double py, double yaw,
         }
         previous_forward_command_ = 0.0;
         previous_lateral_command_ = 0.0;
+        const auto correction = alignment_hold_.update(cur, yaw, v_fwd_est, v_lat_est,
+            g_.turn_hold_kp, g_.turn_hold_kd, std::min(g_.turn_hold_speed, g_.v_max), g_.max_accel, dt);
+        cmd.v_fwd = correction.x;
+        cmd.v_lat = correction.y;
+        cmd.holding_position = true;
         return cmd;
     }
 

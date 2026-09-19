@@ -76,6 +76,10 @@ install(DIRECTORY launch/
 )
 
 if(BUILD_TESTING)
+  add_executable(stationary_turn_test tests/stationary_turn_test.cpp
+    src/corridor_controller.cpp src/corridor_perception.cpp src/trajectory_tracker.cpp)
+  target_compile_features(stationary_turn_test PRIVATE cxx_std_17)
+  add_test(NAME stationary_turn_test COMMAND stationary_turn_test)
   add_executable(vision_target_queue_test tests/vision_target_queue_test.cpp src/vision_target_queue.cpp)
   target_compile_features(vision_target_queue_test PRIVATE cxx_std_17)
   add_test(NAME vision_target_queue_test COMMAND vision_target_queue_test)
@@ -120,6 +124,7 @@ if(BUILD_TESTING)
     rclcpp geometry_msgs nav_msgs std_msgs diagnostic_msgs sensor_msgs visualization_msgs tf2
   )
   target_link_libraries(required_node_test ${OpenCV_LIBS})
+  target_link_options(required_node_test PRIVATE -Wl,--wrap=rcl_publish)
   # These regression fixtures use the original 7.5 x 10 m arena, independently
   # of the operator's current field size and exploration switch defaults.
   add_test(NAME required_node_test COMMAND required_node_test

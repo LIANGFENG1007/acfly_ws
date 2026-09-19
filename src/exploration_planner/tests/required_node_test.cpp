@@ -41,6 +41,7 @@
 #include "exploration_planner/vision_candidates.hpp"
 #include "exploration_planner/vision_target_queue.hpp"
 #include "exploration_planner/vision_near_confirmation.hpp"
+#include "exploration_planner/cloud_xyz.hpp"
 #include "vision_shm_test_writer.hpp"
 
 // Dependencies are already included; this access override affects only the node.
@@ -49,6 +50,27 @@
 #include "../src/exploration_planner_node.cpp"
 #undef main
 #undef private
+
+geometry_msgs::msg::TwistStamped last_published_command;
+size_t published_commands = 0;
+std_msgs::msg::Header last_completed_goal;
+size_t published_completions = 0;
+
+// Inspect the final command after all node-level limiters; keep publications
+// inside this test process instead of sending any flight topic over DDS.
+extern "C" rcl_ret_t __wrap_rcl_publish(const rcl_publisher_t* publisher,
+                                       const void* message, rmw_publisher_allocation_t*)
+{
+    if (std::string(rcl_publisher_get_topic_name(publisher)) == "/exploration/cmd_vel") {
+        last_published_command = *static_cast<const geometry_msgs::msg::TwistStamped*>(message);
+        ++published_commands;
+    }
+    if (std::string(rcl_publisher_get_topic_name(publisher)) == "/exploration/finished_goal") {
+        last_completed_goal = *static_cast<const std_msgs::msg::Header*>(message);
+        ++published_completions;
+    }
+    return RCL_RET_OK;
+}
 
 namespace {
 
@@ -59,11 +81,14 @@ void require(bool value, const std::string& message)
 
 void reset(ExplorationNode& node, Vec2 start)
 {
+    node.pose_freshness_ = SensorFreshness{};
+    node.pose_freshness_.observe(0, node.steady_seconds());
     node.px_ = start.x; node.py_ = start.y; node.pz_ = .8; node.yaw_ = 0;
     node.v_fwd_est_ = node.v_lat_est_ = node.yaw_rate_est_ = 0;
     node.global_tracker_->set_trajectory({});
     node.global_has_ = node.global_failed_ = node.global_goal_blocked_ = false;
     node.global_at_goal_ = node.global_braking_blocked_ = false;
+    node.required_goal_holding_ = false;
     node.command_projection_blocked_ = node.measured_projection_blocked_ = false;
     node.required_blocked_time_valid_ = false;
     node.global_traj_.clear(); node.global_raw_.clear();
@@ -395,8 +420,8 @@ void continuous_route_and_missed_corner(ExplorationNode& node)
     require(!tracker.reorienting() && std::abs(command.yaw_rate) < 1e-9,
             "short forward vertex must not become a rearward carrot through prediction");
     command = tracker.update(2.25, 0, 0, .4, 0, .10, 0);
-    require(command.v_fwd == 0 && command.yaw_rate == 0 && !command.needs_replan,
-            "after overshooting the vertex, brake before planning or yawing back");
+    require(command.v_fwd == 0 && command.yaw_rate == 0 && command.needs_replan,
+            "a missed vertex must request checked replanning even while drifting");
     command = tracker.update(2.25, 0, 0, 0, 0, .10, 0);
     require(command.needs_replan && command.v_fwd == 0 && command.yaw_rate == 0,
             "stopped aircraft must request a fresh checked path instead of chasing the passed vertex");
@@ -429,19 +454,18 @@ void settled_turn_search_handoff(ExplorationNode& node)
             geometry_msgs::msg::TwistStamped command;
             const bool turning = node.step_turn_for_solution({}, command);
             if (!turning) {
-                require(drift <= node.gains_.align_stop_speed &&
-                        std::abs(rate) <= node.gains_.align_stop_yaw_rate,
-                        "turn-search must not hand off a path while translation or yaw is still fast");
+                require(std::abs(rate) <= node.gains_.align_stop_yaw_rate,
+                        "turn-search must settle yaw before path handoff");
                 handed_off = true;
                 break;
             }
-            require(command.twist.linear.x == 0 && command.twist.linear.y == 0,
-                    "turn-search must brake translation");
-            if (drift > node.gains_.align_stop_speed)
-                require(std::abs(command.twist.angular.z) < 1e-9,
-                        "turn-search must brake before rotating");
+            require(std::hypot(command.twist.linear.x, command.twist.linear.y) <= .20 + 1e-9,
+                    "turn-search XY correction exceeds hold speed");
+            if (i == 0 && std::abs(angles.second - angles.first) > .1)
+                require(std::abs(command.twist.angular.z) > 0,
+                        "turn-search paused yaw on residual horizontal speed");
             const double dt = node.gains_.dt;
-            drift *= std::exp(-dt / .35);
+            drift = .10 + (drift - .10) * std::exp(-dt / .35);
             rate += (1 - std::exp(-dt / .15)) * (command.twist.angular.z - rate);
             rotation += rate * dt;
             node.yaw_ = std::atan2(std::sin(node.yaw_ + rate * dt), std::cos(node.yaw_ + rate * dt));
@@ -565,19 +589,9 @@ void reverse_handoff_brakes_on_the_existing_endpoint(ExplorationNode& node)
     node.px_ = 2.35; node.v_fwd_est_ = .2;
     VelCmd command; command.at_goal = true;
     node.finish_observation(command, {});
-    require(node.have_observation_target_ && node.tracker_->has_trajectory() &&
-            command.v_fwd == 0 && command.yaw_rate == 0,
-            "arrival released the old endpoint while the aircraft was still sliding");
-    node.px_ = 2.55; node.v_fwd_est_ = .1;
-    command = {}; command.v_fwd = .3; command.yaw_rate = .2;
-    node.finish_observation(command, {});
-    require(node.observation_arrived_ && node.have_observation_target_ &&
-            command.v_fwd == 0 && command.yaw_rate == 0,
-            "sliding outside the endpoint tolerance reactivated a turn back toward the old point");
-    node.v_fwd_est_ = 0;
-    node.finish_observation(command, {});
-    require(!node.observation_arrived_ && !node.have_observation_target_ && node.plan_pending_,
-            "latched observation arrival did not release after stopping");
+    require(!node.have_observation_target_ && node.plan_pending_ &&
+            command.v_fwd < 0 && command.yaw_rate == 0,
+            "arrival must release the endpoint with active braking despite horizontal drift");
 
     reset(node, {2, 0}); node.v_fwd_est_ = .04;
     require(node.adopt_explore_path(reversal, {1, 1}, &observation) &&
@@ -673,12 +687,13 @@ void turn_search_uses_the_stopped_pose_and_bounded_retry(ExplorationNode& node)
     node.v_fwd_est_ = .3;
     geometry_msgs::msg::TwistStamped command;
     node.step_turn_for_solution({}, command);
-    require(!node.turn_heading_valid_ && command.twist.angular.z == 0,
-            "turn search committed its heading while still coasting");
+    require(node.turn_heading_valid_ && command.twist.angular.z > 0 && command.twist.linear.x < 0,
+            "turn search did not start yaw and XY correction together");
     node.px_ = 4; node.v_fwd_est_ = 0;
     node.step_turn_for_solution({}, command);
-    require(node.turn_heading_valid_ && std::abs(node.turn_heading_ - 3 * M_PI / 4) < 1e-6,
-            "turn search kept its pre-braking bearing after the actual position changed");
+    require(node.turn_heading_valid_ && std::abs(node.turn_heading_ - M_PI / 2) < 1e-6 &&
+            node.turn_hold_.anchor().x == 3 && command.twist.linear.x < 0,
+            "drift changed the latched turn heading/anchor or lost XY correction");
 
     node.enter_turn_for_solution({4, 0}, target, probe, 1);
     node.v_fwd_est_ = .3;
@@ -986,28 +1001,44 @@ void visual_straight_approach_regression()
         }
     }
     require(reached, "fixed-yaw XY approach did not settle at its target");
-    node.px_ = goal.x; node.py_ = goal.y;
-    node.v_fwd_est_ = node.v_lat_est_ = 0;
+    node.px_ = goal.x + node.vision_target_tol_ + .01; node.py_ = goal.y;
+    node.v_fwd_est_ = .20; node.v_lat_est_ = .10;
     node.vision_straight_velocity_ = {};
     node.on_timer();
+    require(node.vision_hover_track_ == 0 && node.vision_hover_since_ < 0,
+            "hover began outside the target position tolerance");
+    node.px_ = goal.x + node.vision_target_tol_ - .01;
+    node.on_timer();
     require(node.vision_hover_track_ == uid && node.vision_hover_since_ >= 0 &&
-            node.last_yaw_rate_ == 0, "arrival failed to begin the fixed-yaw hover");
+            node.last_yaw_rate_ == 0, "moving entry into the target radius failed to begin hover");
     node.vision_hover_since_ = node.steady_seconds() - 2.9;
     node.on_timer();
     require(node.vision_queue_->visited().empty() && node.vision_straight_track_ == uid &&
             node.last_yaw_rate_ == 0, "visual task completed before three seconds");
     node.px_ += .15;
-    node.vision_hover_since_ = node.steady_seconds() - 3.1;
+    node.vision_hover_since_ = node.steady_seconds() - 1.5;
+    const double hover_started = node.vision_hover_since_;
+    node.v_fwd_est_ = node.vision_target_stop_speed_ + .05;
     node.on_timer();
-    require(node.vision_queue_->visited().empty() && node.vision_hover_track_ == 0 &&
-            node.last_yaw_rate_ == 0, "drift during hover completed the task or resumed yaw steering");
+    require(node.vision_queue_->visited().empty() && node.vision_hover_track_ == uid &&
+            node.vision_hover_since_ == hover_started && node.last_yaw_rate_ == 0,
+            "position/speed drift reset the dwell timer, completed early or resumed yaw steering");
+    require(node.vision_straight_velocity_.x < 0,
+            "hover drift did not command correction toward the target");
     node.px_ = goal.x;
+    node.v_fwd_est_ = 0;
     node.on_timer();
+    require(node.vision_hover_since_ == hover_started && node.vision_queue_->visited().empty(),
+            "returning to the target restarted the dwell timer");
+    node.px_ += .15;
+    node.v_fwd_est_ = node.vision_target_stop_speed_ + .05;
     node.vision_hover_since_ = node.steady_seconds() - 3.1;
     node.on_timer();
     require(node.vision_queue_->visited().size() == 1 && node.vision_straight_track_ == 0 &&
             node.vision_queue_->active() && node.vision_queue_->active()->track_id != uid,
-            "completed hover retained fixed-yaw mode or failed FIFO handoff");
+            "elapsed dwell while drifting failed to complete or hand off to the next target");
+    require(node.vision_hover_track_ == 0 && node.vision_hover_since_ < 0,
+            "next target inherited the previous dwell timer");
     node.on_timer();
     require(node.vision_straight_track_ == 0 && std::abs(node.last_yaw_rate_) > 1e-6,
             "next distant target failed to restore original yaw steering");
@@ -1065,6 +1096,414 @@ void visual_hover_restores_exploration_display()
                 "resumed display geometry differs from the route being flown");
     std::cout << "first exploration route after visual hover restored without adopting a second route\n";
 }
+void malformed_cloud_does_not_terminate_node()
+{
+    ExplorationNode node;
+    node.vision_reader_.reset();
+    reset(node, {2, 0});
+    node.has_pose_ = node.corridor_enabled_ = true;
+    auto cloud = std::make_shared<sensor_msgs::msg::PointCloud2>();
+    cloud->header.frame_id = "camera_init";
+    cloud->width = cloud->height = 1;
+    cloud->point_step = cloud->row_step = 12;
+    cloud->data.resize(12);  // A malformed packet has no x/y/z field definitions.
+    node.on_cloud(cloud);
+    node.on_corridor_cloud(cloud);
+    require(node.obs_map_->snapshot().empty(), "malformed cloud changed the obstacle map");
+    require(node.corridor_cloud_filter_reason_ == "invalid_xyz_layout", "missing malformed-cloud reason");
+
+    // Two organized rows with unaligned XYZ fields and padding that is not a point.
+    sensor_msgs::msg::PointCloud2 padded;
+    padded.header.frame_id = "camera_init";
+    padded.header.stamp.sec = 1;
+    padded.width = 1; padded.height = 2;
+    padded.point_step = 13; padded.row_step = 28;
+    padded.data.resize(56, 0xff);
+    const std::array<const char*, 3> names{"x", "y", "z"};
+    for (size_t axis = 0; axis < 3; ++axis) {
+        sensor_msgs::msg::PointField field;
+        field.name = names[axis]; field.offset = 1 + 4 * axis;
+        field.datatype = sensor_msgs::msg::PointField::FLOAT32; field.count = 1;
+        padded.fields.push_back(field);
+    }
+    const float samples[2][3] = {{1.25f, -.5f, .8f}, {2.75f, -.5f, .8f}};
+    for (bool big_endian : {false, true}) {
+        padded.is_bigendian = big_endian;
+        for (size_t row = 0; row < 2; ++row) {
+            for (size_t axis = 0; axis < 3; ++axis) {
+                uint32_t bits;
+                std::memcpy(&bits, &samples[row][axis], 4);
+                for (size_t byte = 0; byte < 4; ++byte)
+                    padded.data[row * 28 + 1 + axis * 4 + byte] =
+                        static_cast<uint8_t>(bits >> (8 * (big_endian ? 3 - byte : byte)));
+            }
+        }
+        CloudXYZ xyz(padded);
+        require(xyz.valid(), "valid padded XYZ layout rejected");
+        size_t count = 0;
+        xyz.for_each([&](float x, float y, float z) {
+            require(count < 2 && x == samples[count][0] && y == samples[count][1] && z == samples[count][2],
+                    "row padding or byte order corrupted coordinates");
+            ++count;
+        });
+        require(count == 2, "organized cloud lost points");
+        *cloud = padded;
+        node.on_corridor_cloud(cloud);
+        require(node.corridor_cloud_kept_points_ == 2, "valid cloud failed to recover after bad packet");
+        ++padded.header.stamp.sec;
+    }
+    for (int defect = 0; defect < 5; ++defect) {
+        *cloud = padded;
+        if (defect == 0) cloud->data.pop_back();
+        if (defect == 1) cloud->fields[2].offset = cloud->point_step - 1;
+        if (defect == 2) cloud->fields[0].datatype = sensor_msgs::msg::PointField::FLOAT64;
+        if (defect == 3) cloud->point_step = 0;
+        if (defect == 4) cloud->row_step = 12;
+        require(!CloudXYZ(*cloud).valid(), "invalid XYZ payload accepted");
+        node.on_cloud(cloud);
+        node.on_corridor_cloud(cloud);
+        require(node.corridor_cloud_filter_reason_ == "invalid_xyz_layout", "invalid packet accepted by callback");
+    }
+    *cloud = padded;
+    cloud->header.stamp.sec = -1;
+    node.on_corridor_cloud(cloud);
+    require(node.corridor_cloud_filter_reason_ == "invalid_stamp", "invalid cloud timestamp accepted");
+    *cloud = padded;
+    cloud->header.frame_id = "body";
+    node.on_cloud(cloud);
+    require(node.obs_map_->snapshot().empty(), "wrong-frame cloud entered exploration map");
+    *cloud = sensor_msgs::msg::PointCloud2();
+    cloud->header.stamp.sec = padded.header.stamp.sec;
+    node.on_cloud(cloud);
+    require(node.corridor_cloud_filter_reason_ == "empty_input", "empty input was not diagnosed");
+    require(node.corridor_->points().size() == 2, "empty packet erased real wall evidence");
+    std::cout << "malformed, empty, padded and endian XYZ cloud regressions passed\n";
+}
+
+void new_goal_resets_execution()
+{
+    ExplorationNode node;
+    node.vision_reader_.reset();
+    reset(node, {2, 0});
+    node.has_pose_ = node.has_goal_ = true;
+    node.exploration_enabled_ = true;
+    GlobalResult route;
+    route.ok = true;
+    route.path = {{2, 0}, {3, 0}};
+    require(node.adopt_explore_path(route, {3, 0}), "seed old exploration route");
+    node.poi_queue_.push_back({2, 0});
+    node.poi_mode_ = ExplorationNode::PoiMode::WAIT_RELEASE;
+    auto goal = std::make_shared<geometry_msgs::msg::PointStamped>();
+    goal->header.frame_id = "camera_init";
+    goal->header.stamp.sec = 99;
+    goal->point.x = 6;
+    node.on_goal(goal);
+    require(node.poi_mode_ == ExplorationNode::PoiMode::EXPLORE && node.poi_queue_.empty() &&
+            !node.tracker_->has_trajectory() && !node.explore_has_committed_ && node.traj_.empty(),
+            "new exploration mission inherited old POI wait or old route");
+}
+
+void invalid_odom_stamp_preserves_pose()
+{
+    ExplorationNode node;
+    node.vision_reader_.reset();
+    reset(node, {2, 0});
+    auto odom = std::make_shared<nav_msgs::msg::Odometry>();
+    odom->pose.pose.orientation.w = 1;
+    odom->pose.pose.position.x = 3;
+    odom->header.stamp.sec = -1;
+    node.on_odom(odom);
+    require(node.px_ == 2, "negative odometry stamp changed the current pose");
+    odom->header.stamp.sec = 1;
+    odom->header.stamp.nanosec = 1000000000u;
+    node.on_odom(odom);
+    require(node.px_ == 2, "noncanonical odometry stamp changed the current pose");
+    odom->header.stamp.nanosec = 0;
+    node.on_odom(odom);
+    require(node.px_ == 3, "valid odometry failed to recover after invalid timestamp");
+}
+
+void duplicate_goal_preserves_progress()
+{
+    ExplorationNode node;
+    node.vision_reader_.reset();
+    reset(node, {2, 0});
+    auto goal = std::make_shared<geometry_msgs::msg::PointStamped>();
+    goal->header.frame_id = "camera_init";
+    goal->header.stamp.sec = 99;
+    goal->point.x = 6;
+    node.on_goal(goal);
+    require(node.corridor_->configure({6, 0}, {6, -3}), "configure repeated-goal fixture");
+    node.corridor_->start({6, 0}, node.steady_seconds());
+    node.on_goal(goal);
+    require(node.corridor_->phase() == CorridorPhase::Rotate,
+            "repeated delivery of the same goal restarted the mission during corridor execution");
+    goal->point.x = 5;
+    node.on_goal(goal);
+    require(node.goal_.x == 6 && node.corridor_->phase() == CorridorPhase::Rotate,
+            "conflicting coordinates reused the same completion identity");
+    node.finished_ = true;
+    goal->point.x = 6;
+    node.on_goal(goal);
+    require(node.finished_, "duplicate goal reopened an already completed mission");
+}
+
+void invalid_goal_preserves_current_mission()
+{
+    ExplorationNode node;
+    node.vision_reader_.reset();
+    auto goal = std::make_shared<geometry_msgs::msg::PointStamped>();
+    goal->header.frame_id = "camera_init";
+    goal->header.stamp.sec = 99;
+    goal->point.x = 6;
+    node.on_goal(goal);
+    goal->header.stamp.sec = 100;
+    goal->point.x = std::numeric_limits<double>::quiet_NaN();
+    node.on_goal(goal);
+    require(node.goal_.x == 6 && node.goal_stamp_.sec == 99,
+            "invalid new goal destroyed the current valid mission");
+    goal->point.x = 5;
+    goal->header.frame_id = "untransformed_camera_frame";
+    node.on_goal(goal);
+    require(node.goal_.x == 6 && node.goal_stamp_.sec == 99, "wrong-frame goal replaced the current mission");
+    node.on_poi(goal);
+    goal->header.frame_id = "camera_init";
+    goal->header.stamp.sec = -1;
+    node.on_goal(goal);
+    require(node.goal_stamp_.sec == 99, "negative-stamp goal replaced current mission");
+    goal->header.stamp.sec = 100;
+    goal->header.stamp.nanosec = 1000000000u;
+    node.on_goal(goal);
+    require(node.goal_stamp_.sec == 99, "malformed-stamp goal replaced current mission");
+    goal->header.stamp.nanosec = 0;
+    goal->point.x = std::numeric_limits<double>::quiet_NaN();
+    node.on_poi(goal);
+    goal->point.x = 1e100;
+    node.on_poi(goal);
+    require(node.poi_queue_.empty() && node.poi_seen_.empty(), "invalid POI entered the flight queue or integer key");
+}
+
+void missing_visual_frames_do_not_hold_forever()
+{
+    ExplorationNode node;
+    reset(node, {2, 0});
+    node.vision_reader_ = std::make_unique<VisionShmReader>("/dev/null", .5, .02);
+    node.has_pose_ = node.has_goal_ = true;
+    node.homing_ = false;
+    node.goal_ = {7, 4.25};
+    node.vision_queue_->enqueue({VisionCandidate{1, {3, 0}, 10, true, 1, 1}}, {2, 0});
+    node.activate_visual_target(node.steady_seconds() - 30);
+    require(node.vision_queue_->active() && node.vision_near_->near_entered(), "enter near visual confirmation");
+    node.poll_vision_shm();
+    require(!node.vision_queue_->active() && node.vision_queue_->visited().empty() &&
+            node.vision_last_event_ == "near_timeout_deferred",
+            "missing visual frames held the target forever or falsely marked it completed");
+}
+
+void motion_pose_dropout_liveness()
+{
+    ExplorationNode node;
+    node.vision_reader_.reset();
+    reset(node, {2, 0});
+    node.has_pose_ = node.has_goal_ = true;
+    node.homing_ = true;
+    node.goal_ = {4, 0};
+    node.pose_freshness_.observe(1, node.steady_seconds() - node.ccfg_.pose_timeout - .1);
+    const double coverage = node.grid_->coverage_ratio();
+    node.on_timer();
+    const auto& cmd = last_published_command.twist;
+    require(cmd.linear.x == 0 && cmd.linear.y == 0 && cmd.angular.z == 0 &&
+            node.grid_->coverage_ratio() == coverage,
+            "stale ordinary-flight odometry still produced motion or new coverage");
+    node.pose_freshness_.observe(2, node.steady_seconds());
+    node.on_timer();
+    require(std::hypot(cmd.linear.x, cmd.linear.y) > 0 && !node.finished_,
+            "fresh odometry failed to resume the original mission after a dropout");
+}
+
+void completion_publish_liveness()
+{
+    ExplorationNode node;
+    node.vision_reader_.reset();
+    reset(node, {2, 0});
+    node.has_pose_ = true;
+    node.exploration_enabled_ = false;
+    node.corridor_enabled_ = false;
+    auto goal = std::make_shared<geometry_msgs::msg::PointStamped>();
+    goal->header.frame_id = "camera_init";
+    goal->header.stamp.sec = 42;
+    goal->header.stamp.nanosec = 123;
+    goal->point.x = 2;
+    const auto before = published_completions;
+    node.on_goal(goal);
+    node.on_timer();
+    require(node.finished_ && published_completions == before + 1 && last_completed_goal == goal->header,
+            "completion did not echo the exact original goal identity");
+    ++goal->header.stamp.sec;
+    node.on_goal(goal);
+    node.on_timer();
+    require(node.finished_ && published_completions == before + 2 && last_completed_goal == goal->header,
+            "new mission at the same endpoint reused an old completion identity");
+}
+
+void retreat_timeout_liveness()
+{
+    ExplorationNode node;
+    node.vision_reader_.reset();
+    reset(node, {2, 0});
+    const Obstacles obstacles{{2.4, 0, .1}};
+    geometry_msgs::msg::TwistStamped cmd;
+    require(node.try_retreat(obstacles, cmd) && node.retreating_, "start near-obstacle recovery");
+    node.retreat_start_ = node.now() - rclcpp::Duration::from_seconds(node.retreat_timeout_ + .1);
+    require(!node.try_retreat(obstacles, cmd), "recovery must expire when aircraft cannot move");
+    for (int i = 0; i < 20; ++i)
+        require(!node.try_retreat(obstacles, cmd), "expired recovery restarted at the same position on the next tick");
+    node.py_ += .25;
+    require(node.try_retreat(obstacles, cmd), "a materially changed position must allow a fresh recovery attempt");
+}
+
+void retreat_checks_the_other_obstacle()
+{
+    ExplorationNode node;
+    node.vision_reader_.reset();
+    reset(node, {2, 0});
+    const double d = node.ggcfg_.robot_radius + node.ggcfg_.inflate + .11;
+    const Obstacles obstacles{{2 + d, 0, .1}, {2 - d - .02, 0, .1}};
+    require(obstacle_segment_clear({2, 0}, {2, 0}, obstacles, node.ggcfg_), "retreat fixture must start clear");
+    const auto cmd = node.do_retreat(obstacles);
+    // A full retreat toward the slightly farther obstacle is unsafe even
+    // though it increases clearance from the nearest obstacle.
+    require(std::hypot(cmd.x, cmd.y) < 1e-9,
+            "retreat moved away from the nearest obstacle straight into the other obstacle");
+}
+
+void exhausted_exploration_route()
+{
+    ExplorationNode node;
+    node.vision_reader_.reset();
+    reset(node, {2, 0});
+    node.has_pose_ = node.has_goal_ = true;
+    node.homing_ = false;
+    node.done_coverage_ = 1.1;
+    node.goal_ = {7, 4.25};
+    GlobalResult route;
+    route.ok = true;
+    route.path = {{2, 0}, {3, 0}};
+    require(node.adopt_explore_path(route, {3, 0}), "adopt ordinary exploration route");
+    node.px_ = 3;
+    node.on_timer();
+    require(node.plan_pending_ && !node.explore_has_committed_ && !node.tracker_->has_trajectory(),
+            "ordinary exploration endpoint retained its exhausted route and zero command");
+}
+
+void visual_turn_final_output()
+{
+    ExplorationNode node;
+    node.vision_reader_.reset();
+    reset(node, {2, 0});
+    node.has_pose_ = node.has_goal_ = true;
+    node.homing_ = false;
+    node.goal_ = {7, 4.25};
+    node.yaw_ = M_PI;
+    node.v_fwd_est_ = .15;
+    node.vision_queue_->enqueue({VisionCandidate{1, {5, 0}, 10, true, 1, 1}}, {2, 0});
+    node.activate_visual_target(node.steady_seconds());
+    const auto before = published_commands;
+    node.on_timer();
+    const auto& cmd = last_published_command.twist;
+    const double speed = std::hypot(cmd.linear.x, cmd.linear.y);
+    require(published_commands == before + 1 && std::abs(cmd.angular.z) > 0 && speed > 0,
+            "visual turn failed to publish simultaneous XY correction and yaw");
+    require(speed <= node.global_gains_.max_accel * node.global_gains_.dt + 1e-9,
+            "visual postprocessor boosted the validated small hold correction beyond its acceleration limit");
+
+    reset(node, {2, 0});
+    VelCmd correction;
+    correction.holding_position = true;
+    correction.v_fwd = .2;
+    const Obstacles nearby{{2 + node.ggcfg_.robot_radius + node.required_motion_inflate_ + .12, 0, .1}};
+    require(!node.required_velocity_clear({.2, 0}, nearby), "obstacle must block the proposed hold correction");
+    const Vec2 safe = node.guard_required_command(correction, nearby, true);
+    require(node.required_velocity_clear(safe, nearby) && safe.x < .2,
+            "checked visual route incorrectly exempted an off-route hold correction from obstacle checks");
+}
+
+void observation_turn_with_drift()
+{
+    ExplorationNode node;
+    reset(node, {2, 0});
+    node.have_observation_target_ = true;
+    node.observation_target_.view_heading = 0;
+    node.explore_target_ = {2, 0};
+    node.yaw_ = M_PI;
+    node.v_fwd_est_ = .15;
+    node.grid_->mark_scan(2, 0, M_PI, {});
+    VelCmd command;
+    command.at_goal = true;
+    node.finish_observation(command, {});
+    require(node.observation_turn_active_ && std::abs(command.yaw_rate) > 0 && command.v_fwd < 0,
+            "observation yaw did not start with XY correction at nonzero speed");
+    // wrap_pi chooses +pi for this half-turn, so advance in that direction.
+    node.px_ += .15; node.py_ += .10; node.yaw_ = -M_PI / 2;
+    node.grid_->mark_scan(node.px_, node.py_, 0, {});
+    node.grid_->mark_scan(node.px_, node.py_, -M_PI / 2, {});
+    node.finish_observation(command, {});
+    require(node.observation_turn_active_ && command.yaw_rate != 0 &&
+            node.observation_hold_.anchor().x == 2 && node.observation_hold_.anchor().y == 0,
+            "new visibility or drift interrupted the committed observation turn: active=" +
+            std::to_string(node.observation_turn_active_) + " yaw=" + std::to_string(command.yaw_rate) +
+            " anchor=" + std::to_string(node.observation_hold_.anchor().x) + "," +
+            std::to_string(node.observation_hold_.anchor().y));
+    node.yaw_ = 0;
+    node.finish_observation(command, {});
+    require(!node.observation_turn_active_ && !node.have_observation_target_ && node.plan_pending_,
+            "observation yaw completion still waits for low horizontal speed");
+}
+
+void required_drift_regressions()
+{
+    ExplorationNode node;
+    reset(node, {.03, 0});
+    node.v_fwd_est_ = -.1;
+    PositionHold boundary_hold;
+    boundary_hold.begin({.05, 0});
+    const auto inward = node.turn_position_correction(boundary_hold, {});
+    require(inward.x > 0 && node.turn_correction_clear(inward, {}) &&
+            !node.turn_correction_clear({-.1, 0}, {}),
+            "short inward XY correction was required to cross the entire boundary margin in one tick");
+    reset(node, {-.08, -.15});
+    node.yaw_ = M_PI;
+    node.v_fwd_est_ = .12;
+    const auto backed_up = node.pd_to_point_avoid({2, 0}, {});
+    require(!node.global_failed_ && std::abs(node.last_yaw_rate_) > 0 && backed_up.x < 0,
+            "backing behind the takeoff origin prevents a valid inward turn/velocity command");
+    reset(node, {.08, -.15});
+    node.yaw_ = M_PI;
+    node.v_fwd_est_ = .12;  // Drifting out of the field after backing away at takeoff.
+    const auto turn = node.pd_to_point_avoid({2, 0}, {});
+    require(!node.global_failed_ && node.global_tracker_->reorienting() &&
+            std::abs(node.last_yaw_rate_) > 0 && turn.x < 0,
+            "offset boundary takeoff cannot turn and correct outward drift simultaneously");
+    node.required_blocked_replan_s_ = .1;
+    node.required_blocked_time_valid_ = true;
+    node.required_blocked_since_ = node.steady_seconds() - 1;
+    const auto replans = node.required_blocked_replans_;
+    node.pd_to_point_avoid({2, 0}, {});
+    require(node.required_blocked_replans_ > replans,
+            "persistent drift prevents retrying a blocked required path");
+
+    reset(node, {1.95, 0});
+    node.v_fwd_est_ = .15;
+    auto correction = node.pd_to_point_avoid({2, 0}, {});
+    require(node.global_at_goal_ && node.required_goal_holding_ && correction.x < 0,
+            "arrival tolerance or distance envelope erased active endpoint braking");
+    node.py_ = .15;
+    for (int i = 0; i < 20; ++i) correction = node.pd_to_point_avoid({2, 0}, {});
+    require(correction.y < 0 && std::abs(node.last_yaw_rate_) < 1e-9 &&
+            node.required_goal_hold_.anchor().x == 2 && node.required_goal_hold_.anchor().y == 0,
+            "endpoint drift relatches the anchor or turns to chase the goal bearing");
+}
+
 void corridor_registered_cloud_regression()
 {
     ExplorationNode node;
@@ -1097,9 +1536,9 @@ void corridor_registered_cloud_regression()
     ++cloud->header.stamp.sec;
     node.pz_ = 4;
     node.on_cloud(cloud);
-    require(node.corridor_->points().empty() &&
+    require(!node.corridor_->points().empty() &&
             node.corridor_cloud_filter_reason_ == "height_slice_empty",
-            "height rejection does not explain absent display points");
+            "empty height packets erased the bounded measured window");
     node.pz_ = .8;
     node.yaw_rate_est_ = node.corridor_cloud_max_yaw_rate_ + .1;
     node.on_cloud(cloud);
@@ -1114,7 +1553,7 @@ void corridor_registered_cloud_regression()
     ++cloud->header.stamp.sec;
     node.corridor_cloud_topic_ = "/corridor/cloud_registered_dense";
     node.on_cloud(cloud);
-    require(node.corridor_->points().empty(), "registered scans leaked into the selected dense input");
+    require(node.corridor_->points().size() == 2, "registered scans changed the selected dense input");
     node.on_corridor_cloud(cloud);
     require(node.corridor_->points().size() == 2 && node.corridor_cloud_filter_reason_ == "accepted",
             "explicit dense callback failed after changing hardware default");
@@ -1132,6 +1571,24 @@ int main(int argc, char** argv)
     rclcpp::init(argc, argv, options);
     int result = 0;
     try {
+        malformed_cloud_does_not_terminate_node();
+        invalid_odom_stamp_preserves_pose();
+        std::string goal_errors;
+        for (auto test : {new_goal_resets_execution, duplicate_goal_preserves_progress,
+                          invalid_goal_preserves_current_mission}) {
+            try { test(); }
+            catch (const std::exception& error) { goal_errors += std::string(error.what()) + "\n"; }
+        }
+        require(goal_errors.empty(), goal_errors);
+        missing_visual_frames_do_not_hold_forever();
+        motion_pose_dropout_liveness();
+        retreat_checks_the_other_obstacle();
+        completion_publish_liveness();
+        retreat_timeout_liveness();
+        visual_turn_final_output();
+        exhausted_exploration_route();
+        observation_turn_with_drift();
+        required_drift_regressions();
         corridor_registered_cloud_regression();
         exploration_switch_regression();
         boundary_home_endpoint_regression();
@@ -1284,8 +1741,9 @@ int main(int argc, char** argv)
         node.pd_to_point_avoid({6, 0}, {{4, 0, .2}});
         node.v_fwd_est_ = 2;
         const Vec2 stopped = node.pd_to_point_avoid({6, 0}, {{4, 0, .2}});
-        require(node.global_braking_blocked_ && node.measured_projection_blocked_ && stopped.x == 0 && stopped.y == 0,
-                "unsafe measured stopping projection did not brake");
+        require(node.global_braking_blocked_ && node.measured_projection_blocked_ && stopped.x < 0 &&
+                std::hypot(stopped.x, stopped.y) <= .20 + 1e-9 && node.required_velocity_clear(stopped, {{4, 0, .2}}),
+                "unsafe measured stopping projection did not apply a checked counter-velocity");
         node.v_fwd_est_ = 0;
         const Vec2 resumed = node.pd_to_point_avoid({6, 0}, {{4, 0, .2}});
         require(resumed.x <= node.global_gains_.max_accel * node.global_gains_.dt + 1e-9,

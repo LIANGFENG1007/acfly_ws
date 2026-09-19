@@ -156,16 +156,16 @@ void run_test()
     require(outputs.size() == count_at_auto, "OFFBOARD stream continued after AUTO.LAND took over");
     require(mode_requests == 1, "AUTO.LAND request repeated after takeover");
 
-    // A second exploration using position control locks measured yaw as well.
+    // Re-entering exploration captures the new measured landing yaw as well.
     drone.stop();
     state.mode = "OFFBOARD";
     spin_for(0.05, sensors);
-    drone.enter_exploration_position();
-    drone.set_exploration_position_slam(8.25, -4.25, 0.8, 0.0);
+    drone.enter_exploration();
+    drone.set_velocity_body(0.1, -0.1, -0.2);
     drone.land(true);
     drone.tick();
     spin_for(0.02);
-    near(outputs.back().yaw, heading + 0.1, "Position exploration kept its old commanded yaw");
+    near(outputs.back().yaw, heading + 0.1, "Re-entered exploration kept its old heading");
 
     // Unrelated missions retain their immediate AUTO.LAND behavior.
     drone.stop();
@@ -177,7 +177,7 @@ void run_test()
     require(mode_requests == 2, "Default landing unexpectedly added a handover delay");
     require(outputs.size() == count_before_plain_land, "Default landing gained new setpoints");
     std::cout << "PASS: fixed-yaw handover, retained position, idempotent calls, mode takeover, "
-                 "velocity/position exploration and unchanged default landing\n";
+                 "re-entered velocity exploration and unchanged default landing\n";
 }
 
 }  // namespace

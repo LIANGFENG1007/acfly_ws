@@ -90,7 +90,11 @@ bool required_path_clear(const Vec2& cur, const Path2& path, const Vec2& goal,
 // extra-margin violation may recover monotonically without having fully exited
 // by the end of this segment. Field policy must be checked separately.
 bool obstacle_segment_clear(const Vec2& start, const Vec2& end,
-                             const Obstacles& obs, const GlobalConfig& cfg);
+                            const Obstacles& obs, const GlobalConfig& cfg);
+
+// A short correction may enter the field margin monotonically over several
+// control ticks. This does not validate a complete mission path.
+bool field_motion_clear(const Vec2& start, const Vec2& end, const GlobalConfig& cfg);
 
 // 校验一条【已采纳的绕障折线】在当前障碍图下是否仍全程无碰撞（不含墙——墙准静态，
 //   靠 plan_global_path 重算时处理；这里只防"旧路径被新出现/移动的障碍挡住"）。

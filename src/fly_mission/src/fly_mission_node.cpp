@@ -10,6 +10,7 @@
 // ============================================================================
 
 #include "fly_mission/fly_mission_node.hpp"
+#include "fly_mission/exploration_completion.hpp"
 
 #include <nlohmann/json.hpp>
 #include <chrono>
@@ -47,37 +48,13 @@ FlyMissionNode::FlyMissionNode()
             ext_cmd_time_  = now();   // ★收到时刻★：给 exploration() 判新鲜度用(见那里说明)
         });
 
-    // 自主探索位置环目标。位置目标只在 EXPLORATION 状态被消费，不影响其他任务。
-    target_pose_sub_ = create_subscription<geometry_msgs::msg::PoseStamped>(
-        "/exploration/target_pose", 10,
-        [this](const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
-            explore_pos_x_ = msg->pose.position.x;
-            explore_pos_y_ = msg->pose.position.y;
-            explore_pos_z_ = msg->pose.position.z;
-            const auto& q = msg->pose.orientation;
-            const double n = q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w;
-            if (n > 1e-9) {
-                tf2::Quaternion tq(q.x, q.y, q.z, q.w);
-                tf2::Matrix3x3 m(tq);
-                double roll, pitch;
-                m.getRPY(roll, pitch, explore_pos_yaw_);
-            }
-            explore_pos_valid_ = true;
-            explore_pos_time_ = now();
-        });
-
-    // 算法 → 主控：探索完成标志（latched）
+    // 完成消息携带原始 goal 的时间戳，忙时只收到最后一条也能确认本次任务。
     const auto latched = rclcpp::QoS(1).transient_local();
-    finished_sub_ = create_subscription<std_msgs::msg::Bool>(
-        "/exploration/finished", latched,
-        [this](const std_msgs::msg::Bool::SharedPtr msg) {
-            if (!explore_entered_) return;
-            if (!msg->data) {
-                explore_done_ = false;
-                explore_finished_reset_seen_ = true;
-            } else if (explore_finished_reset_seen_) {
+    finished_sub_ = create_subscription<std_msgs::msg::Header>(
+        "/exploration/finished_goal", latched,
+        [this](const std_msgs::msg::Header::SharedPtr msg) {
+            if (explore_entered_ && completion_matches_goal(*msg, exploration_goal_header_))
                 explore_done_ = true;
-            }
         });
 
     corridor_active_sub_ = create_subscription<std_msgs::msg::Bool>(
@@ -85,7 +62,6 @@ FlyMissionNode::FlyMissionNode()
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
             if (!explore_entered_) return;
             corridor_active_ = msg->data;
-            if (corridor_active_) explore_pos_valid_ = false;
         });
 
     // 主控 → 算法：探索终点（latched，进入探索时发一次）

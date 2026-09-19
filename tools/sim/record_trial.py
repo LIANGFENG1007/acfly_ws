@@ -206,7 +206,6 @@ class TrialRecorder:
             (State, "/mavros/state", self.state, sensor),
             (ExtendedState, "/mavros/extended_state", self.extended_state, sensor),
             (TwistStamped, "/exploration/cmd_vel", self.command, sensor),
-            (PoseStamped, "/exploration/target_pose", lambda m: self.pose("target", m.pose, m.header), sensor),
             (Bool, "/exploration/finished", self.finished, latched),
             (Bool, "/exploration/corridor_active", self.corridor_active, latched),
             (PointStamped, "/exploration/goal", self.set_goal, latched),

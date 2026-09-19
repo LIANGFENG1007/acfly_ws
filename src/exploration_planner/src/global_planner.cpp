@@ -681,6 +681,11 @@ bool path_clear(const Vec2& cur, const Path2& path,
     });
 }
 
+bool field_motion_clear(const Vec2& start, const Vec2& end, const GlobalConfig& cfg)
+{
+    return field_segment_free(start, end, cfg);
+}
+
 bool path_inside_safe_field(const Path2& path, const GlobalConfig& cfg)
 {
     if (path.empty()) return false;

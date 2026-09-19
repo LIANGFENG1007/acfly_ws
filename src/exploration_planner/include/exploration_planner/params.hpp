@@ -33,16 +33,9 @@ inline constexpr double FIELD_MIN_X = -0.3;   //-0.5
 inline constexpr double FIELD_MIN_Y = -0.8;   //-2.1
 inline constexpr double FIELD_MAX_X =  2.0;   // 4.8
 inline constexpr double FIELD_MAX_Y =  4.43;   // 2.3
-// ★整套运动控制方式★
-//   true  = 使用位置环控制运动目标；
-//   false = 使用原有速度环/速度指令控制方式。
-//   当前代码值决定默认模式，运行时也可通过 ROS 参数 use_position_control 覆盖。
-inline constexpr bool USE_POSITION_CONTROL = false;
-
 // ★自主探索·车式前进模式★（仅影响 exploration_planner 的轨迹跟踪）
-//   true  = 只给机体前向速度，航向偏差较大时先原地转向；不再用横向速度侧移。
+//   true  = 巡航只给机体前向速度；原地转向时允许XY速度纠偏以维持固定位置。
 //   false = 保留旧的全向跟踪方式（允许 v_lat 横向纠偏）。
-//   这与 USE_POSITION_CONTROL 独立：无论位置环还是速度环，均可使用车式轨迹跟踪。
 inline constexpr bool EXPLORATION_CARLIKE_MODE = true;
 
 // 视觉SHM目标管理。当前实现确认、队列、近距投票；飞行访问在下一阶段接入。
@@ -65,12 +58,12 @@ inline constexpr double VISION_NEAR_SPEED_MPS = 0.40; // 近距请求速度上�
 inline constexpr double VISION_NEAR_TIMEOUT_S = 8.00; // 进入近距后尚未确认的最长等待(s)
 inline constexpr double VISION_RETRY_DELAY_S = 5.00; // 暂缓后冷却时间，且冷却后必须重新看到才重排(s)
 
-inline constexpr double VISION_HOVER_S = 3.00; // 目标到位停稳后的悬停时间(s)
+inline constexpr double VISION_HOVER_S = 3.00; // 首次进入目标位置容差后计时(s)，不等待停稳，偏移继续矫正但不重置
 // 视觉临时目标最后这段距离停止主动转头，改为水平XY打点；悬停完成后恢复。
 // 0 = 关闭；直线被障碍挡住时继续走原避障路径，直线可通行后再切换。
 inline constexpr double VISION_STRAIGHT_APPROACH_M = 0.20;
 inline constexpr double VISION_TARGET_TOL_M = 0.10; // 精确目标到位位置容差(m)
-inline constexpr double VISION_TARGET_STOP_SPEED_MPS = 0.05; // 目标到位停稳速度(m/s)
+inline constexpr double VISION_TARGET_STOP_SPEED_MPS = 0.05; // 兼容旧配置保留，已不用于视觉目标悬停计时条件
 
 // 探索终点后的走廊任务。入口/H 坐标由 fly_mission 的参数区发送，均为 camera_init 系。
 // true: 到探索终点等待路线，然后转向、进入、穿门、到 H 才 finished。
@@ -97,7 +90,7 @@ inline constexpr double CORRIDOR_ARRIVAL_HYSTERESIS = 1.50; // 到点后偏离�
 inline constexpr double CORRIDOR_YAW_TOL_DEG = 5.0;
 inline constexpr double CORRIDOR_HEADING_STOP_DEG = 15.0;
 inline constexpr double CORRIDOR_POINT_TOL = 0.08;
-inline constexpr double CORRIDOR_STOP_SPEED = 0.04;
+inline constexpr double CORRIDOR_STOP_SPEED = 0.04; // 兼容旧配置保留，转向和H点交接不再等待此速度
 inline constexpr double CORRIDOR_SETTLE_S = 0.25;
 inline constexpr double CORRIDOR_LOOKAHEAD = 0.25;
 inline constexpr double CORRIDOR_APPROACH_M = 1.20; // 提前在门前此距离附近完成对中(m)，中间点不要求停稳
@@ -111,8 +104,8 @@ inline constexpr double CORRIDOR_CENTER_TOL = 0.015; // 穿越前对门中心横
 inline constexpr double CORRIDOR_GATE_ASSOC_M = 0.15;
 inline constexpr int CORRIDOR_CONFIRM_FRAMES = 3;
 inline constexpr double CORRIDOR_CLOUD_TIMEOUT_S = 0.50; // 本机连续未收到新点云帧的时长，不与传感器时钟相减
-inline constexpr double CORRIDOR_CLOUD_WINDOW_S = 0.30;
-inline constexpr double CORRIDOR_POSE_TIMEOUT_S = 0.30; // 本机连续未收到新有效里程计帧的时长
+inline constexpr double CORRIDOR_CLOUD_WINDOW_S = 1.00; // 累计真实墙面点；新数据/门洞射线仍受独立超时检查
+inline constexpr double CORRIDOR_POSE_TIMEOUT_S = 0.30; // 本机连续未收到新有效里程计帧的时长；探索/归航/通道共用
 inline constexpr double CORRIDOR_Z_BELOW = 0.60; // 相对当前飞机高度的点云截取下界(m)
 inline constexpr double CORRIDOR_Z_ABOVE = 0.10; // 相对当前飞机高度的点云截取上界(m)
 inline constexpr double CORRIDOR_SELF_RADIUS = 0.10; // 仅去掉雷达自身近距离回波(m)
@@ -231,7 +224,7 @@ inline constexpr double ARC_SAMPLE_DS = 0.05;  // 沿弧长采样步长 (m)
 // ---------------------------------------------------------------------------
 // 轨迹跟踪 + PID（机体系输出：前进 v_fwd / 横向纠偏 v_lat / yaw_rate）
 //   v_fwd 上限 0.6，跟随曲率动态降：v_fwd = V_MAX / (1 + K_CURV*|κ|)
-//   全向模式横向只做低限纠偏；车式模式由 EXPLORATION_CARLIKE_MODE 强制关闭横移，主转向靠 yaw_rate
+//   全向模式横向做低限纠偏；车式模式巡航关闭横移，原地转向允许XY定点补偿。
 // ---------------------------------------------------------------------------
 inline constexpr double V_MAX        = 0.50;   // 探索前进速度上限 (m/s)，弯道按曲率和航向误差平滑降速
 inline constexpr double V_MIN        = 0.00;   // 前进速度下限 (m/s)，防止过弯停死。
@@ -260,7 +253,7 @@ inline constexpr double CARLIKE_YAW_FILTER_S = 0.12; // 无外部角速度测量
 inline constexpr double CARLIKE_PREDICTION_S = 0.20; // 根据惯性速度提前修正前瞻方位(s)
 inline constexpr double CARLIKE_LATERAL_PREDICTION_S = 0.55; // 沿路线法向预测横向惯性(s)：适度提前收住越线，不放大偏航P增益
 inline constexpr double CARLIKE_ALIGN_RESUME_DEG = 25.0; // 真正大角度停车纠偏后进入此角度即可继续转弯前进
-inline constexpr double CARLIKE_ALIGN_STOP_SPEED = 0.06; // 先刹至此平移速度(m/s)再开始大转向
+inline constexpr double CARLIKE_ALIGN_STOP_SPEED = 0.06; // 兼容旧配置保留，不再阻塞转向/尖角/重规划
 inline constexpr double CARLIKE_ALIGN_STOP_YAW_RATE = 0.12; // 转向惯性降至此角速度后才前进(rad/s)
 inline constexpr double CARLIKE_ALIGN_SETTLE_S = 0.06; // 真正大角度恢复的短确认时间(s)
 inline constexpr double CARLIKE_STOP_ALIGN_DEG = 75.0; // 超过此夹角才停车转向；普通弧线只减速
@@ -289,11 +282,11 @@ inline constexpr double V_EST_ALPHA  = 0.30;   // 位置差分估速度低通系
 // ---------------------------------------------------------------------------
 // 完成判定 + 归航刹停
 //   覆盖率达标 → 进入"归航"：算法侧对到终点的位置误差跑 PD，平滑刹停，
-//   精确停在目标点（不再夹安全区）。停稳(到点+速度够小) → finished。
+//   到达有效终点位置容差即可交接，持续XY纠偏，不等待速度归零。
 // ---------------------------------------------------------------------------
 inline constexpr double DONE_COVERAGE   = 0.90;  // 完程度(已探索大格占比)达此值即"扫完"→归航
 inline constexpr double GOAL_TOL_XY     = 0.10;  // 到终点位置容差 (m)，精确停所以收紧
-inline constexpr double GOAL_STOP_V     = 0.05;  // 停稳速度阈值 (m/s)，到点且慢于此才算停稳
+inline constexpr double GOAL_STOP_V     = 0.05;  // 速度安全投影的噪声阈值(m/s)，不再作为到点交接条件
 
 // 归航/POI末段速度制动：方向始终由安全轨迹给定，剩余弧长与实测速度仅调整速度大小
 inline constexpr double KP_GOAL     = 1.20;   // 位置误差 → 速度的 P (1/s)
@@ -301,7 +294,7 @@ inline constexpr double KD_GOAL     = 0.80;   // 速度阻尼 D（越大刹得�
 inline constexpr double V_GOAL_MAX  = 0.60;   // 归航段速度上限 (m/s)，末段按剩余距离刹停
 inline constexpr double REQUIRED_CONNECTOR_LENGTH_M = 1.00; // 归航/POI到真目标的显式末端直线最大长度(m)，不放松障碍余量
 inline constexpr double REQUIRED_MOTION_INFLATE = 0.15; // 仅速度刹停投影的内层余量(m)，限制到[0,global_margin]；规划保持原余量
-inline constexpr double REQUIRED_BLOCKED_REPLAN_S = 0.50; // 停稳且连续被速度安全检查阻挡此时长后重搜(s)；0关闭
+inline constexpr double REQUIRED_BLOCKED_REPLAN_S = 0.50; // 速度安全检查连续阻挡此时长后重搜(s)，漂移不重置；0关闭
 
 // ---------------------------------------------------------------------------
 // 主循环 / 看门狗
@@ -433,7 +426,8 @@ inline constexpr double RETREAT_V_MAX      = 0.35; // 后退限速(m/s)：低速
 //      "traveled < RETREAT_MAX_DIST"永远成立 → 无限重试。(已改为直接投影到机体系，不掉头)
 //   ② A* 误判无解：3 个障碍各距 0.8m 环绕时，relax 突围只放行 ±0.60m 方框，
 //      出框即恢复"障碍r+0.60"禁入 → 膨胀圆叠加封死出路 → probe 也无解 → 落到 retreat 分支。
-//   本参数是【兜底闸】：与"退够距离"是【或】关系，先满足哪个都退出后退态，绝不卡死。
+//   与"退够距离"是【或】关系，先满足哪个都退出本轮后退，并阻止原地重新计时；
+//   位置显著改变或有新的有效路线后才允许重试。没有安全路线时仍可能持续等待。
 //   调大→给退不动的情形更多机会；调小→更快放弃转去别处。<=0 关闭超时(退回旧行为，不推荐)。
 inline constexpr double RETREAT_TIMEOUT_S  = 2.0;  // 进入后退态超此秒数仍没退够 → 判"退不动"，交上层跳带/悬停
 

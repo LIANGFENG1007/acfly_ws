@@ -67,6 +67,8 @@ bool CorridorController::configure(const Vec2& entry, const Vec2& h)
 void CorridorController::start(const Vec2& red, double now)
 {
     red_ = red;
+    rotation_hold_.begin(red);
+    heading_recovery_ = false;
     last_update_ = now;
     transition(configured_ ? CorridorPhase::Rotate : CorridorPhase::WaitRoute);
 }
@@ -74,11 +76,18 @@ void CorridorController::start(const Vec2& red, double now)
 void CorridorController::observe(const Path2& points, double stamp)
 {
     if (!std::isfinite(stamp)) return;
-    visibility_points_ = points;
-    has_sensor_origin_ = false;
-    if (stamp < cloud_time_) clouds_.clear();
+    if (stamp < cloud_time_) {
+        clouds_.clear();
+        visibility_points_.clear();
+        evidence_time_ = -1e9;
+    }
     cloud_time_ = stamp;
-    ++cloud_sequence_;
+    if (!points.empty()) {
+        visibility_points_ = points;
+        has_sensor_origin_ = false;
+        evidence_time_ = stamp;
+        ++cloud_sequence_;  // Empty packets are not independent door confirmations.
+    }
     clouds_.push_back({stamp, points});
     while (!clouds_.empty() && stamp - clouds_.front().stamp > cfg_.cloud_window)
         clouds_.pop_front();
@@ -93,15 +102,19 @@ void CorridorController::observe(const Path2& points, double stamp)
         }
     }
     points_.clear();
-    if (points.empty()) return;  // An empty current frame is not free-space evidence.
+    // Sparse scan packets may alternate between wall hits and no height-slice
+    // hits. Keep only the explicitly bounded measured window, never infer free
+    // space from an empty packet or extend the age of its last valid rays.
     for (const auto& item : voxels) points_.push_back(item.second);
 }
 
 void CorridorController::observe(const Path2& points, double stamp, const Vec2& sensor_origin)
 {
     observe(points, stamp);
-    sensor_origin_ = sensor_origin;
-    has_sensor_origin_ = true;
+    if (!points.empty()) {
+        sensor_origin_ = sensor_origin;
+        has_sensor_origin_ = true;
+    }
 }
 
 void CorridorController::transition(CorridorPhase phase)
@@ -109,6 +122,7 @@ void CorridorController::transition(CorridorPhase phase)
     if (phase == phase_) return;
     phase_ = phase;
     settled_since_ = -1.0;
+    heading_recovery_ = false;
 }
 
 bool CorridorController::stable(bool condition, double now)
@@ -122,9 +136,42 @@ CorridorCommand CorridorController::hold(const Vec2& position, const std::string
 {
     previous_velocity_ = {};
     previous_yaw_rate_ = 0.0;
+    rotation_hold_.stop();
+    heading_hold_.stop();
     CorridorCommand cmd;
     cmd.target = position;
     cmd.status = reason;
+    return cmd;
+}
+
+CorridorCommand CorridorController::rotateAt(PositionHold& hold, const Vec2& position,
+                                              double yaw, double vf, double vl, double dt)
+{
+    auto correction = hold.update(position, yaw, vf, vl, cfg_.position_kp,
+                                  cfg_.velocity_kd, cfg_.align_speed, cfg_.acceleration, dt);
+    const double c = std::cos(yaw), s = std::sin(yaw);
+    const Vec2 world{c * correction.x - s * correction.y, s * correction.x + c * correction.y};
+    const double speed = std::hypot(world.x, world.y);
+    const double horizon = std::max(0.5, speed / (2.0 * cfg_.acceleration));
+    const Vec2 projected{position.x + world.x * horizon, position.y + world.y * horizon};
+    // Rotation predates corridor cloud acquisition. Available returns can veto
+    // XY correction without cancelling yaw; empty scans never authorize entry.
+    if (!points_.empty() && !CorridorPerception::pathClear(
+            points_, position, projected, cfg_.perception.robot_width * 0.5)) {
+        correction = {};
+        hold.stop();
+    }
+    CorridorCommand cmd;
+    cmd.forward = correction.x;
+    cmd.lateral = correction.y;
+    cmd.target = hold.anchor();
+    cmd.path = {position, cmd.target};
+    const double desired = std::clamp(cfg_.yaw_kp * angle(cfg_.initial_yaw - yaw),
+                                      -cfg_.max_yaw_rate, cfg_.max_yaw_rate);
+    const double step = cfg_.yaw_accel * dt;
+    cmd.yaw_rate = std::clamp(desired, previous_yaw_rate_ - step, previous_yaw_rate_ + step);
+    previous_yaw_rate_ = cmd.yaw_rate;
+    previous_velocity_ = {c * cmd.forward - s * cmd.lateral, s * cmd.forward + c * cmd.lateral};
     return cmd;
 }
 
@@ -142,8 +189,18 @@ CorridorCommand CorridorController::translate(const Vec2& position, double yaw,
                                              double longitudinal_limit)
 {
     const double error = angle(cfg_.initial_yaw - yaw);
-    if (std::fabs(error) > cfg_.heading_stop && std::hypot(vf, vl) > cfg_.stop_speed)
-        return hold(position, "Braking to hold corridor heading");
+    if (!heading_recovery_ && std::fabs(error) > cfg_.heading_stop) {
+        heading_hold_.begin(position);
+        heading_recovery_ = true;
+    }
+    if (heading_recovery_) {
+        if (std::fabs(error) > cfg_.heading_tolerance) {
+            auto cmd = rotateAt(heading_hold_, position, yaw, vf, vl, dt);
+            cmd.status = "Restoring corridor heading with XY hold";
+            return cmd;
+        }
+        heading_recovery_ = false;
+    }
     const double d = distance(position, target);
     const double deadband = std::min(cfg_.point_tolerance, cfg_.center_tolerance) * 0.25;
     const double c = std::cos(yaw), s = std::sin(yaw);
@@ -242,6 +299,34 @@ CorridorCommand CorridorController::update(const Vec2& position, double yaw, dou
                                            double vl, double now, bool pose_fresh)
 {
     const double dt = last_update_ < 0.0 ? 0.02 : std::clamp(now - last_update_, 0.001, 0.10);
+    const double prior_yaw_command = previous_yaw_rate_;
+    auto cmd = updateMotion(position, yaw, vf, vl, now, pose_fresh);
+    const double evidence_timeout = cfg_.cloud_window > 0.0
+        ? std::min(cfg_.cloud_window, cfg_.cloud_timeout) : cfg_.cloud_timeout;
+    // With fresh measurements, waiting for wall/door evidence still holds the
+    // first waiting position. It must not silently hand XY to the flight controller.
+    // Missing pose/cloud data and actual occupied corrections remain stop cases.
+    const bool can_hold = pose_fresh && finite(position) && std::isfinite(yaw) &&
+        std::isfinite(vf) && std::isfinite(vl) && std::isfinite(now) &&
+        now >= evidence_time_ && now - evidence_time_ <= evidence_timeout && !points_.empty() &&
+        phase_ != CorridorPhase::Idle && phase_ != CorridorPhase::WaitRoute &&
+        !cmd.finished && cmd.path.empty();
+    if (can_hold) {
+        if (!waiting_for_evidence_) waiting_hold_.begin(position);
+        waiting_for_evidence_ = true;
+        previous_yaw_rate_ = prior_yaw_command;
+        auto holding = rotateAt(waiting_hold_, position, yaw, vf, vl, dt);
+        holding.status = cmd.status;
+        return holding;
+    }
+    waiting_for_evidence_ = false;
+    return cmd;
+}
+
+CorridorCommand CorridorController::updateMotion(const Vec2& position, double yaw, double vf,
+                                                 double vl, double now, bool pose_fresh)
+{
+    const double dt = last_update_ < 0.0 ? 0.02 : std::clamp(now - last_update_, 0.001, 0.10);
     if (now < last_update_) { clouds_.clear(); points_.clear(); cloud_time_ = -1e9; }
     last_update_ = now;
     if (!pose_fresh || !finite(position) || !std::isfinite(yaw) || !std::isfinite(vf) || !std::isfinite(vl) || !std::isfinite(now))
@@ -261,19 +346,26 @@ CorridorCommand CorridorController::update(const Vec2& position, double yaw, dou
         cmd.finished = true;
         return cmd;
     }
-    const double speed = std::hypot(vf, vl);
     if (phase_ == CorridorPhase::Rotate) {
-        if (speed > cfg_.stop_speed) { settled_since_ = -1.0; return hold(position, "Braking at exploration endpoint"); }
+        // Show measured walls and openings while yaw is in progress too.
+        if (cloud_sequence_ != processed_sequence_ && now >= evidence_time_ &&
+            now - evidence_time_ <= cfg_.cloud_timeout && !points_.empty()) {
+            processed_sequence_ = cloud_sequence_;
+            observation_ = perception_.analyze(points_, position, passed_s_, &visibility_points_,
+                has_sensor_origin_ ? &sensor_origin_ : nullptr);
+        }
+        auto cmd = rotateAt(rotation_hold_, position, yaw, vf, vl, dt);
+        cmd.status = "Rotate to entry heading with XY hold";
         const double error = angle(cfg_.initial_yaw - yaw);
         if (stable(std::fabs(error) <= cfg_.heading_tolerance, now)) {
             transition(CorridorPhase::Entry);
-            return hold(position, "Heading aligned: entering corridor");
+            cmd.status = "Heading aligned: entering corridor";
         }
-        auto cmd = hold(position, "Rotate to entry heading");
-        cmd.yaw_rate = std::clamp(cfg_.yaw_kp * error, -cfg_.max_yaw_rate, cfg_.max_yaw_rate);
         return cmd;
     }
-    if (now - cloud_time_ > cfg_.cloud_timeout || now < cloud_time_ || points_.empty()) {
+    const double evidence_timeout = cfg_.cloud_window > 0.0
+        ? std::min(cfg_.cloud_window, cfg_.cloud_timeout) : cfg_.cloud_timeout;
+    if (now - evidence_time_ > evidence_timeout || now < evidence_time_ || points_.empty()) {
         confirmations_ = 0;
         settled_since_ = -1.0;
         return hold(position, "Waiting for fresh corridor cloud");
@@ -325,8 +417,12 @@ CorridorCommand CorridorController::update(const Vec2& position, double yaw, dou
             if (distance(position, h_) > cfg_.point_tolerance * cfg_.arrival_hysteresis)
                 transition(CorridorPhase::Search);
             else {
-                if (stable(speed <= cfg_.stop_speed, now)) transition(CorridorPhase::Done);
-                return hold(position, "Settling at H");
+                auto cmd = translate(position, yaw, h_, cfg_.align_speed, vf, vl, dt);
+                if (stable(!cmd.path.empty() && distance(position, h_) <= cfg_.point_tolerance &&
+                    std::fabs(angle(cfg_.initial_yaw - yaw)) <= cfg_.heading_tolerance, now))
+                    transition(CorridorPhase::Done);
+                if (cmd.status.empty()) cmd.status = "Holding position at H";
+                return cmd;
             }
         }
         if (!gate_locked_ && confirmations_ >= cfg_.confirm_frames &&

@@ -195,8 +195,11 @@ Result run(const Scenario& scenario, bool production)
                            measured_yaw_rate) :
             tracker.update(observed_x, observed_y, observed_yaw, observed_fwd, observed_lat, 0.08);
         if (!std::isfinite(command.v_fwd) || !std::isfinite(command.v_lat) ||
-            !std::isfinite(command.yaw_rate) || command.v_fwd < -1e-8 ||
-            command.v_fwd > config.v_max + 1e-8 || std::abs(command.v_lat) > 1e-8 ||
+            !std::isfinite(command.yaw_rate) ||
+            (command.holding_position
+                ? std::hypot(command.v_fwd, command.v_lat) > config.turn_hold_speed + 1e-8
+                : (command.v_fwd < -1e-8 || command.v_fwd > config.v_max + 1e-8 ||
+                   std::abs(command.v_lat) > 1e-8)) ||
             std::abs(command.yaw_rate) > config.max_yaw_rate + 1e-8) {
             result.bounded = false;
             break;
@@ -206,8 +209,8 @@ Result run(const Scenario& scenario, bool production)
 
         // Translational inertia acts in the world frame: rotating the body
         // cannot instantly rotate the vehicle's existing velocity vector.
-        const double target_vx = std::cos(yaw) * command.v_fwd;
-        const double target_vy = std::sin(yaw) * command.v_fwd;
+        const double target_vx = std::cos(yaw) * command.v_fwd - std::sin(yaw) * command.v_lat;
+        const double target_vy = std::sin(yaw) * command.v_fwd + std::cos(yaw) * command.v_lat;
         vx += (target_vx - vx) * kDt / scenario.velocity_lag;
         vy += (target_vy - vy) * kDt / scenario.velocity_lag;
         yaw_rate += (command.yaw_rate - yaw_rate) * kDt / scenario.yaw_lag;

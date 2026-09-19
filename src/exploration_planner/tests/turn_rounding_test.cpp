@@ -110,6 +110,7 @@ Result follow(const Trajectory& path, bool noisy = false)
     double yaw = 0, vx = 0, vy = 0, yaw_rate = 0, prior_command = 0, prior_yaw_command = 0;
     double ox = position.x, oy = position.y, oyaw = 0, ofwd = 0, olat = 0;
     int last_sign = 0, sample = 0;
+    bool previous_hold = false;
     Result result;
     for (int tick = 0; tick < 4500; ++tick) {
         const double c = std::cos(yaw), s = std::sin(yaw);
@@ -123,12 +124,16 @@ Result follow(const Trajectory& path, bool noisy = false)
         }
         const VelCmd command = tracker.update(ox, oy, oyaw, ofwd, olat, .08, yaw_rate);
         require(std::isfinite(command.v_fwd) && std::isfinite(command.yaw_rate) &&
-            command.v_fwd >= 0 && command.v_fwd <= g.v_max && command.v_lat == 0 &&
+            (command.holding_position
+                ? std::hypot(command.v_fwd, command.v_lat) <= g.turn_hold_speed + 1e-9
+                : (command.v_fwd >= 0 && command.v_fwd <= g.v_max && command.v_lat == 0)) &&
             std::abs(command.yaw_rate) <= g.max_yaw_rate + 1e-9 &&
-            command.v_fwd - prior_command <= g.max_accel * dt + 1e-9 &&
+            (command.holding_position || previous_hold ||
+             command.v_fwd - prior_command <= g.max_accel * dt + 1e-9) &&
             (command.at_goal || std::abs(command.yaw_rate - prior_yaw_command) <= g.max_yaw_accel * dt + 1e-9),
             "turn command violated existing velocity/acceleration limits");
         prior_command = command.v_fwd; prior_yaw_command = command.yaw_rate;
+        previous_hold = command.holding_position;
         if (tick * dt > 2 && distance(position, path.back().p) > .6) {
             result.minimum_speed = std::min(result.minimum_speed, command.v_fwd);
             if (command.v_fwd < .05) result.slow += dt;
@@ -139,8 +144,8 @@ Result follow(const Trajectory& path, bool noisy = false)
             if (last_sign && sign != last_sign) ++result.yaw_reversals;
             last_sign = sign;
         }
-        vx += (c * command.v_fwd - vx) * dt / .4;
-        vy += (s * command.v_fwd - vy) * dt / .4;
+        vx += (c * command.v_fwd - s * command.v_lat - vx) * dt / .4;
+        vy += (s * command.v_fwd + c * command.v_lat - vy) * dt / .4;
         yaw_rate += (command.yaw_rate - yaw_rate) * dt / .4;
         position.x += vx * dt; position.y += vy * dt;
         yaw = std::atan2(std::sin(yaw + yaw_rate * dt), std::cos(yaw + yaw_rate * dt));
@@ -233,12 +238,12 @@ void preserved_stop()
                 c * vx + s * vy, -s * vx + c * vy, .08, yaw_rate);
             if (!released && tracker.last_lookahead().y > 1e-6) {
                 released = true;
-                require(std::hypot(vx, vy) <= g.align_stop_speed + 1e-9 &&
+                require(command.holding_position &&
                     distance(position, {2, 0}) <= .08 + 1e-9,
-                    "sharp fallback was released before braking at the original vertex");
+                    "sharp fallback must begin XY hold and turn within the original vertex tolerance");
             }
-            vx += (c * command.v_fwd - vx) * dt / .4;
-            vy += (s * command.v_fwd - vy) * dt / .4;
+            vx += (c * command.v_fwd - s * command.v_lat - vx) * dt / .4;
+            vy += (s * command.v_fwd + c * command.v_lat - vy) * dt / .4;
             yaw_rate += (command.yaw_rate - yaw_rate) * dt / .4;
             position.x += vx * dt; position.y += vy * dt;
             yaw = std::atan2(std::sin(yaw + yaw_rate * dt), std::cos(yaw + yaw_rate * dt));

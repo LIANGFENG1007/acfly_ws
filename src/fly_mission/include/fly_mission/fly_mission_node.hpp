@@ -176,8 +176,7 @@ private:
 
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Subscription<geometry_msgs::msg::TwistStamped>::SharedPtr cmd_sub_;
-    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr  target_pose_sub_;
-    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr             finished_sub_;
+    rclcpp::Subscription<std_msgs::msg::Header>::SharedPtr           finished_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr             corridor_active_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr            start_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr             trigger_sub_;
@@ -196,12 +195,6 @@ private:
     bool corridor_active_ = false;
     std_msgs::msg::Header exploration_goal_header_;
     double exploration_route_z_ = 0.0;
-
-    // 自主探索位置环目标（仅 EXPLORATION 使用）
-    double explore_pos_x_ = 0.0, explore_pos_y_ = 0.0;
-    double explore_pos_z_ = 0.0, explore_pos_yaw_ = 0.0;
-    bool   explore_pos_valid_ = false;
-    rclcpp::Time explore_pos_time_;
 
     MissionState state_ = MissionState::BOOT_CHECK;
     MissionState state_before_find_ = MissionState::RUN_EXT_WAYPOINTS;  // 进 FINDFIGURE 前的状态(处理完回它)
@@ -286,7 +279,6 @@ private:
     bool   ext_cmd_valid_   = false;   // 本次探索是否收到过算法速度
     rclcpp::Time ext_cmd_time_;        // 最近一条算法速度的收到时刻(判新鲜度)
     bool   explore_done_    = false;   // 算法报告探索及后续过门任务完成
-    bool   explore_finished_reset_seen_ = false; // 已收到本次任务的 finished=false
     bool   explore_entered_ = false;   // EXPLORATION 是否已初始化（锁高+发路线）
 
     // ---- 二次起飞 ----

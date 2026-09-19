@@ -207,18 +207,16 @@ void FlyMissionNode::step_wait_after_takeoff()
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  探索：首次进入锁高 + 发红点/入口/H；通道阶段强制转发速度，其余兼容位置目标
+//  探索：首次进入锁高 + 发红点/入口/H；全程转发机体系速度
 //  gx,gy = 探索终点 (SLAM 系，原点=起飞点)
 // ════════════════════════════════════════════════════════════════════════════
 void FlyMissionNode::exploration(double gx, double gy)
 {
     if (!explore_entered_) {
         drone_.enter_exploration();
-        // 每次进入探索重新等待当前规划器的模式消息，避免沿用上一次任务的旧位置目标。
-        explore_pos_valid_ = false;
+        // 每次进入探索重新等待当前任务的速度命令。
         ext_cmd_valid_ = false;
         explore_done_ = false;
-        explore_finished_reset_seen_ = false;
         corridor_active_ = false;
         geometry_msgs::msg::PointStamped goal;
         goal.header.stamp    = now();
@@ -237,24 +235,7 @@ void FlyMissionNode::exploration(double gx, double gy)
         publish_exploration_corridor_route(false);
     }
 
-    // 原地转向/过门必须用限速的速度命令；即使速度暂未到，也先停止追旧位置目标。
-    if (corridor_active_ && drone_.action_mode() == ActionMode::EXTERNAL_POS) {
-        drone_.set_velocity_body(0.0, 0.0, 0.0);
-    }
-    // 位置环模式：规划器发布 /exploration/target_pose。目标 z 由主控锁定为进入探索时高度，
-    // 位置目标过期时由 DroneController 锁定当前位置，避免继续追旧目标。
-    const bool pos_fresh = explore_pos_valid_ &&
-        (now() - explore_pos_time_).seconds() <= params::EXPLORE_CMD_TIMEOUT_S;
-    if (!corridor_active_ &&
-        (pos_fresh || drone_.action_mode() == ActionMode::EXTERNAL_POS)) {
-        if (pos_fresh) {
-            drone_.set_exploration_position_slam(
-                explore_pos_x_, explore_pos_y_, drone_.current_z(), explore_pos_yaw_);
-        }
-        return;
-    }
-
-    // 速度兼容模式：只转发【新鲜】的速度；数据过期就不转发，让 drone_ 的看门狗接管保高悬停。
+    // 速度控制：只转发【新鲜】的速度；数据过期就不转发，让 drone_ 的看门狗接管保高悬停。
     //
     //   ★为什么必须判新鲜度(勿改回只判 ext_cmd_valid_)★：
     //   ext_cmd_valid_ 只表示本次任务"收到过速度"，不能证明当前仍有新命令。若只判它，

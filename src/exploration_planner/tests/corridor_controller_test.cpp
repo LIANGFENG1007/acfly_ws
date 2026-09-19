@@ -143,8 +143,8 @@ int main() {
     startInside(empty);
     for (int i = 0; i < 40; ++i) {
         const auto command = empty.step(true, true);
-        require(command.forward == 0.0 && command.lateral == 0.0 && !command.finished,
-                "empty current clouds stop translation instead of accepting cached free space");
+        if (i > 16) require(command.forward == 0.0 && command.lateral == 0.0 && !command.finished,
+                "empty packets extended the 0.3-second lifetime of measured free space");
     }
     Simulation stale(1.0);
     startInside(stale);
