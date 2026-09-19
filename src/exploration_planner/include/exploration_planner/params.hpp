@@ -113,7 +113,7 @@ inline constexpr int CORRIDOR_CONFIRM_FRAMES = 3;
 inline constexpr double CORRIDOR_CLOUD_TIMEOUT_S = 0.50; // 本机连续未收到新点云帧的时长，不与传感器时钟相减
 inline constexpr double CORRIDOR_CLOUD_WINDOW_S = 0.30;
 inline constexpr double CORRIDOR_POSE_TIMEOUT_S = 0.30; // 本机连续未收到新有效里程计帧的时长
-inline constexpr double CORRIDOR_Z_BELOW = 0.80; // 相对当前飞机高度的点云截取下界(m)
+inline constexpr double CORRIDOR_Z_BELOW = 0.60; // 相对当前飞机高度的点云截取下界(m)
 inline constexpr double CORRIDOR_Z_ABOVE = 0.10; // 相对当前飞机高度的点云截取上界(m)
 inline constexpr double CORRIDOR_SELF_RADIUS = 0.10; // 仅去掉雷达自身近距离回波(m)
 inline constexpr double CORRIDOR_SENSOR_RANGE = 6.0;
@@ -154,7 +154,7 @@ inline constexpr double COVERAGE_THRESH = 0.90;   // 大格完成阈值（占比
 //   当前 100° → 半开角 ±50°
 // ---------------------------------------------------------------------------
 inline constexpr double FOV_DEG   = 100.0;   // 总开角 (度)
-inline constexpr double FOV_RANGE = 1.0;     // 可视半径 (m)
+inline constexpr double FOV_RANGE = 3.0;     // 可视半径 (m)
 
 // ---------------------------------------------------------------------------
 // 覆盖路径规划（牛耕往返）
@@ -233,7 +233,7 @@ inline constexpr double ARC_SAMPLE_DS = 0.05;  // 沿弧长采样步长 (m)
 //   v_fwd 上限 0.6，跟随曲率动态降：v_fwd = V_MAX / (1 + K_CURV*|κ|)
 //   全向模式横向只做低限纠偏；车式模式由 EXPLORATION_CARLIKE_MODE 强制关闭横移，主转向靠 yaw_rate
 // ---------------------------------------------------------------------------
-inline constexpr double V_MAX        = 0.30;   // 探索前进速度上限 (m/s)，弯道按曲率和航向误差平滑降速
+inline constexpr double V_MAX        = 0.50;   // 探索前进速度上限 (m/s)，弯道按曲率和航向误差平滑降速
 inline constexpr double V_MIN        = 0.00;   // 前进速度下限 (m/s)，防止过弯停死。
                                                //   ★当前为 0 = 该下限保护是空操作★(tracker 里那段 if 恒不生效)。
                                                //   若实测出现"过弯降速到几乎不动"，调到 0.05~0.10 即可启用兜底。
