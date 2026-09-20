@@ -61,7 +61,7 @@ inline constexpr double VISION_RETRY_DELAY_S = 5.00; // 暂缓后冷却时间，
 inline constexpr double VISION_HOVER_S = 3.00; // 首次进入目标位置容差后计时(s)，不等待停稳，偏移继续矫正但不重置
 // 视觉临时目标最后这段距离停止主动转头，改为水平XY打点；悬停完成后恢复。
 // 0 = 关闭；直线被障碍挡住时继续走原避障路径，直线可通行后再切换。
-inline constexpr double VISION_STRAIGHT_APPROACH_M = 0.20;
+inline constexpr double VISION_STRAIGHT_APPROACH_M = 0.40;
 inline constexpr double VISION_TARGET_TOL_M = 0.10; // 精确目标到位位置容差(m)
 inline constexpr double VISION_TARGET_STOP_SPEED_MPS = 0.05; // 兼容旧配置保留，已不用于视觉目标悬停计时条件
 
