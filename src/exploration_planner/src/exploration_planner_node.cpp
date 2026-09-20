@@ -58,6 +58,7 @@
 #include "exploration_planner/vision_target_queue.hpp"
 #include "exploration_planner/vision_near_confirmation.hpp"
 #include "exploration_planner/cloud_xyz.hpp"
+#include "exploration_planner/velocity_slew.hpp"
 
 using namespace std::chrono_literals;
 using namespace exploration;
@@ -212,6 +213,9 @@ public:
             dd("heading_gate_deg",
                carlike_mode_ ? params::CARLIKE_HEADING_GATE_DEG : params::HEADING_GATE_DEG) * M_PI / 180.0;
         gains_.forward_only = carlike_mode_;
+        gains_.compensate_lateral_drift = carlike_mode_;
+        gains_.drift_velocity_gain = std::max(0.0, dd("carlike_drift_kd", params::CARLIKE_DRIFT_KD));
+        xy_brake_accel_ = std::max(0.0, dd("xy_brake_accel", params::XY_BRAKE_ACCEL));
         gains_.max_accel = dd("carlike_max_accel", params::CARLIKE_MAX_ACCEL);
         gains_.max_yaw_accel = dd("carlike_max_yaw_accel", params::CARLIKE_MAX_YAW_ACCEL);
         gains_.yaw_filter_tau = dd("carlike_yaw_filter_s", params::CARLIKE_YAW_FILTER_S);
@@ -657,6 +661,8 @@ private:
         look_valid_ = false;
         last_yaw_rate_ = 0.0;
         poi_mode_ = PoiMode::EXPLORE;
+        last_command_world_ = {};
+        recovery_holding_ = false;
         poi_queue_.clear();
         poi_seen_.clear();
         release_pending_ = false;
@@ -1793,7 +1799,14 @@ private:
         look_valid_ = true;
         global_at_goal_ = command.at_goal;
         const double remaining = global_tracker_->remaining_distance();
-        if (command.at_goal || required_goal_holding_) {
+        // Arc progress can reach the last few centimetres while drift keeps the
+        // aircraft outside the actual arrival circle. Capture the exact endpoint
+        // with XY velocity once its short direct connection has been checked;
+        // otherwise the near-zero forward cap can strand it beside the endpoint.
+        const bool terminal_capture = command.lateral_correction && remaining <= goal_tol_ &&
+            std::hypot(target.x - px_, target.y - py_) <= global_gains_.endpoint_slow_r &&
+            required_path_clear(cur, Path2{cur, target}, target, obs, required_cfg);
+        if (command.at_goal || required_goal_holding_ || terminal_capture) {
             if (!required_goal_holding_) {
                 required_goal_hold_.begin(target);
                 required_goal_yaw_ = yaw_;
@@ -1813,12 +1826,21 @@ private:
             // Apply the distance/damping envelope continuously. Switching it
             // on only at endpoint_slow_r introduced a discrete speed drop at
             // that radius even on a straight, completely clear home route.
-            const double toward_speed = std::max(0.0,
-                (v_fwd_est_ * command.v_fwd + v_lat_est_ * command.v_lat) / speed);
-            const double cap = std::max(0.0, kp_goal_ * remaining - kd_goal_ * toward_speed);
-            const double scale = std::min(1.0, cap / speed);
-            command.v_fwd *= scale;
-            command.v_lat *= scale;
+            if (command.lateral_correction) {
+                // Remaining arc length limits forward travel, not the side
+                // correction needed to resist drift. Scaling both to zero near
+                // the endpoint can leave a moving aircraft unable to arrive.
+                const double cap = std::max(0.0, kp_goal_ * remaining -
+                    kd_goal_ * std::max(0.0, v_fwd_est_));
+                command.v_fwd = std::min(command.v_fwd, cap);
+            } else {
+                const double toward_speed = std::max(0.0,
+                    (v_fwd_est_ * command.v_fwd + v_lat_est_ * command.v_lat) / speed);
+                const double cap = std::max(0.0, kp_goal_ * remaining - kd_goal_ * toward_speed);
+                const double scale = std::min(1.0, cap / speed);
+                command.v_fwd *= scale;
+                command.v_lat *= scale;
+            }
             global_tracker_->constrain_forward_command(command.v_fwd);
         }
         return guard_required_command(command, obs, vision_queue_ && vision_queue_->active());
@@ -1837,9 +1859,9 @@ private:
         // a nearby obstacle even when the checked path is clear, causing an
         // endless replan/zero-speed loop.  Keep measured-velocity protection
         // below, but do not reject the path-following command itself here.
-        // XY hold corrections are not along the checked visual route; validate
-        // their own direction even when that route is still clear.
-        command_projection_blocked_ = (!checked_visual_path || command.holding_position) &&
+        // XY hold and cruise drift corrections are not along the checked visual
+        // route; validate their own direction even when that route is clear.
+        command_projection_blocked_ = (!checked_visual_path || command.holding_position || command.lateral_correction) &&
             !required_velocity_clear(desired, obs);
         if (command_projection_blocked_ && required_velocity_clear({0.0, 0.0}, obs)) {
             // A stopping projection beyond the permitted corridor may still
@@ -1873,7 +1895,7 @@ private:
             // left the aircraft drifting and prevented this guard from releasing.
             if (std::isfinite(measured_speed) && measured_speed > 1e-9) {
                 const double cap = std::min({0.20, v_goal_max_, kd_goal_ * measured_speed,
-                    required_brake_speed_ + global_gains_.max_accel * global_gains_.dt});
+                    required_brake_speed_ + std::max(global_gains_.max_accel, xy_brake_accel_) * global_gains_.dt});
                 const Vec2 braking{-measured.x * cap / measured_speed, -measured.y * cap / measured_speed};
                 if (required_velocity_clear(braking, obs)) {
                     command.v_fwd = c * braking.x + s * braking.y;
@@ -1904,7 +1926,85 @@ private:
             required_blocked_time_valid_ = false;
         }
         last_yaw_rate_ = command.yaw_rate;
+        global_tracker_->constrain_lateral_command(command.v_lat);
         return {command.v_fwd, command.v_lat};
+    }
+
+    Vec2 recovery_velocity(const Obstacles& obs, bool required_geometry)
+    {
+        recovery_requested_ = true;
+        if (!recovery_holding_) {
+            recovery_anchor_ = {px_, py_};
+            recovery_holding_ = true;
+        }
+        const double c = std::cos(yaw_), s = std::sin(yaw_);
+        const Vec2 measured{c * v_fwd_est_ - s * v_lat_est_, s * v_fwd_est_ + c * v_lat_est_};
+        const double cap = std::min(0.20, v_goal_max_);
+        const auto body = [c, s](Vec2 v) { return Vec2{c * v.x + s * v.y, -s * v.x + c * v.y}; };
+        const auto safe = [&](Vec2 v) {
+            return required_geometry ? required_velocity_clear(v, obs) : turn_correction_clear(body(v), obs);
+        };
+        const auto limit = [cap](Vec2 v) {
+            const double speed = std::hypot(v.x, v.y);
+            if (speed > cap) { v.x *= cap / speed; v.y *= cap / speed; }
+            return v;
+        };
+        Vec2 desired{kp_goal_ * (recovery_anchor_.x - px_) - kd_goal_ * measured.x,
+                     kp_goal_ * (recovery_anchor_.y - py_) - kd_goal_ * measured.y};
+        desired = limit(slew_velocity(last_command_world_, limit(desired), measured,
+                                     gains_.max_accel, xy_brake_accel_, gains_.dt));
+        if (safe(desired)) {
+            recovery_status_ = "holding_after_path_failure";
+            return body(desired);
+        }
+        // Returning to the anchor can be blocked by newly observed geometry.
+        // Keep a separately checked counter-velocity, seeded from the last
+        // actual output so a replan/defer cannot restart its ramp at zero.
+        const double speed = std::hypot(measured.x, measured.y);
+        if (speed > 1e-6) {
+            const Vec2 direction{-measured.x / speed, -measured.y / speed};
+            const double previous = std::max(0.0, direction.x * last_command_world_.x +
+                                                  direction.y * last_command_world_.y);
+            const double magnitude = std::min({cap, kd_goal_ * speed,
+                previous + std::max(gains_.max_accel, xy_brake_accel_) * gains_.dt});
+            const Vec2 brake{direction.x * magnitude, direction.y * magnitude};
+            if (safe(brake)) {
+                recovery_status_ = "braking_after_path_failure";
+                return body(brake);
+            }
+        }
+        // No command may bypass physical obstacle overlap or field limits.
+        recovery_status_ = "no_safe_recovery_velocity";
+        return {};
+    }
+
+    VelCmd guard_explore_velocity(VelCmd command, const Obstacles& obs)
+    {
+        if (!command.lateral_correction) return command;
+        // Lateral compensation changes the velocity from the original reference
+        // tangent. Check the full vector AND the aircraft's actual drift.
+        const bool measured_safe = turn_correction_clear({v_fwd_est_, v_lat_est_}, obs);
+        bool desired_safe = turn_correction_clear({command.v_fwd, command.v_lat}, obs);
+        if (measured_safe && !desired_safe) {
+            // A partial correction may fit when the full correction does not.
+            for (double scale : {0.75, 0.50, 0.25, 0.0}) {
+                if (turn_correction_clear({command.v_fwd, command.v_lat * scale}, obs)) {
+                    command.v_lat *= scale;
+                    desired_safe = true;
+                    break;
+                }
+            }
+        }
+        if (!measured_safe || !desired_safe) {
+            const Vec2 brake = recovery_velocity(obs, false);
+            command.v_fwd = brake.x;
+            command.v_lat = brake.y;
+            command.holding_position = true;
+            if (!obstacle_segment_clear({px_, py_}, {px_, py_}, obs, ggcfg_)) command.yaw_rate = 0.0;
+        }
+        tracker_->constrain_forward_command(command.v_fwd);
+        tracker_->constrain_lateral_command(command.v_lat);
+        return command;
     }
 
     void reset_visual_approach()
@@ -1933,7 +2033,7 @@ private:
         const Vec2 measured{c * v_fwd_est_ - s * v_lat_est_, s * v_fwd_est_ + c * v_lat_est_};
         if (!latched) {
             vision_straight_track_ = target.track_id;
-            vision_straight_velocity_ = measured;
+            vision_straight_velocity_ = last_command_world_;
             global_tracker_->set_trajectory({});
             required_blocked_time_valid_ = false;
             RCLCPP_INFO(get_logger(), "[视觉目标] 区域#%llu 距离 %.2fm，停止主动转头，切换XY直线接近",
@@ -1949,11 +2049,8 @@ private:
             if (speed > cap && speed > 1e-9) { v.x *= cap / speed; v.y *= cap / speed; }
         };
         limit(desired);
-        const Vec2 change{desired.x - vision_straight_velocity_.x, desired.y - vision_straight_velocity_.y};
-        const double step = std::hypot(change.x, change.y);
-        const double scale = step > 1e-9 ? std::min(1.0, gains_.max_accel * gains_.dt / step) : 1.0;
-        desired = {vision_straight_velocity_.x + scale * change.x,
-                   vision_straight_velocity_.y + scale * change.y};
+        desired = slew_velocity(vision_straight_velocity_, desired, measured,
+                                gains_.max_accel, xy_brake_accel_, gains_.dt);
         limit(desired);
         global_target_ = target.position;
         global_connector_start_ = cur;
@@ -2244,14 +2341,19 @@ private:
             // Stages 3/4: data-only queue and near confirmation. These targets
             // still do not change the navigation goal or flight commands.
             poll_vision_shm();
+            recovery_requested_ = false;
 
             if (!has_pose_) {
                 // 无位姿：发零速度占位
+                last_command_world_ = {};
+                recovery_holding_ = false;
                 cmd_pub_->publish(cmd);
                 return;
             }
 
             if (!corridor_->active() && !pose_freshness_.fresh(steady_seconds(), ccfg_.pose_timeout)) {
+                last_command_world_ = {};
+                recovery_holding_ = false;
                 // The same odometry requirement applies before the corridor:
                 // neither flight control nor coverage can use a frozen pose.
                 RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
@@ -2565,6 +2667,7 @@ private:
                             tracker_->set_trajectory({});
                         }
                         finish_observation(vc, obstacles);
+                        vc = guard_explore_velocity(vc, obstacles);
                         if (vc.holding_position && !turn_correction_clear({vc.v_fwd, vc.v_lat}, obstacles))
                             vc.v_fwd = vc.v_lat = 0.0;
                         if (vc.holding_position &&
@@ -2605,7 +2708,26 @@ private:
                 }
             }
 
+            // Keep a fixed XY anchor and active braking across path failure,
+            // target deferral and rejected retreat. An unsafe recovery remains
+            // explicitly blocked; this is not permission to drive through trees.
+            const bool waiting_for_path = (homing_ || poi_active || vision_target_active)
+                ? global_failed_ : (explore_failed_ && !tracker_->has_trajectory() && !turning_for_solution_);
+            if (has_goal_ && !finished_ && !corridor_active && waiting_for_path &&
+                std::hypot(cmd.twist.linear.x, cmd.twist.linear.y) < 1e-9) {
+                const Vec2 recovery = recovery_velocity(obstacles, homing_ || poi_active || vision_target_active);
+                cmd.twist.linear.x = recovery.x;
+                cmd.twist.linear.y = recovery.y;
+            }
             } // 常规探索/归航；走廊任务独立处理墙与门。
+
+            if (!recovery_requested_) {
+                recovery_holding_ = false;
+                recovery_status_ = "none";
+            }
+            const double command_c = std::cos(yaw_), command_s = std::sin(yaw_);
+            last_command_world_ = {command_c * cmd.twist.linear.x - command_s * cmd.twist.linear.y,
+                                  command_s * cmd.twist.linear.x + command_c * cmd.twist.linear.y};
 
             if (++diagnostic_ticks_ % 10 == 0) {
                 publish_diagnostics = true;
@@ -2637,6 +2759,9 @@ private:
                     value(key, std::to_string(scalar));
                 };
                 value("mode", corridor_active ? "corridor" : (homing_ ? "homing" : "exploration"));
+                value("recovery_velocity_status", recovery_status_);
+                number("recovery_anchor_x", recovery_anchor_.x);
+                number("recovery_anchor_y", recovery_anchor_.y);
                 value("exploration_enabled", exploration_enabled_ ? "true" : "false");
                 value("vision_shm_status", vision_reader_
                     ? VisionShmReader::status_name(vision_reader_->status()) : "disabled");
@@ -2945,6 +3070,11 @@ private:
     std::unique_ptr<TrajectoryTracker> tracker_;
     std::unique_ptr<TrajectoryTracker> global_tracker_;
     TrackerGains global_gains_{};
+    double xy_brake_accel_ = params::XY_BRAKE_ACCEL;
+    Vec2 last_command_world_{};
+    Vec2 recovery_anchor_{};
+    bool recovery_holding_ = false, recovery_requested_ = false;
+    std::string recovery_status_ = "none";
     std::unique_ptr<Visualizer>        viz_obj_;
     std::unique_ptr<ObstacleMap>       obs_map_;
 

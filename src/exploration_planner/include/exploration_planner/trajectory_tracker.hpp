@@ -4,7 +4,7 @@
 //  输入：参考轨迹 + 当前位姿(x,y,yaw) + 当前估计速度(用于 D 项)。
 //  输出：机体系速度命令 —— 前进 v_fwd / 横向纠偏 v_lat / yaw_rate。
 //    v_fwd 上限 V_MAX，按曲率/朝向误差/临近终点动态降速；
-//    yaw_rate 为主转向；车式巡航 v_lat 为 0，原地转向时允许XY位置纠偏。
+//    yaw_rate 为主转向；节点启用受避障检查的巡航横漂补偿，转向时保持XY。
 // ============================================================================
 
 #pragma once
@@ -24,7 +24,10 @@ struct TrackerGains {
     double kp_yaw, kd_yaw, max_yaw_rate;
     double kp_lat, kd_lat, max_v_lat;
     double heading_gate_rad;   // 车式模式开始减速的角度；全向模式仍使用停车门限
-    bool   forward_only = false; // 巡航只允许前向；原地转向允许XY定点纠偏
+    bool   forward_only = false; // 巡航纵向只允许前进；转向允许XY定点纠偏
+    // Opt in only when the caller validates the added lateral velocity.
+    bool   compensate_lateral_drift = false;
+    double drift_velocity_gain = 0.80;
     // ★控制周期 (s)★：D 项数值差分的分母。★必须等于 update() 的真实调用周期★
     //   (= TIMER_PERIOD_MS/1000)，由节点构造时按 TIMER_PERIOD_MS 推导填入，勿写死。
     //   2026-08 修：此前 tracker 内写死 0.05 而实际周期是 0.02，微分项恒为真值的 0.4 倍
@@ -55,6 +58,7 @@ struct VelCmd {
     bool   at_goal  = false; // 已到轨迹末端(终点)容差内
     bool   needs_replan = false; // 已滑过未通过的尖角，停稳后从实际位置重新规划
     bool   holding_position = false; // 原地转向的XY补偿，由调用方校验实际运动方向
+    bool   lateral_correction = false; // 巡航横漂补偿也必须校验实际速度向量
 };
 
 class TrajectoryTracker
@@ -100,6 +104,8 @@ public:
     {
         previous_forward_command_ = std::clamp(previous_forward_command_, 0.0, std::max(0.0, maximum));
     }
+
+    void constrain_lateral_command(double accepted) { previous_lateral_command_ = accepted; }
 
     // 最近一次用到的前瞻参考点（给可视化）
     Vec2 last_lookahead() const { return last_look_; }

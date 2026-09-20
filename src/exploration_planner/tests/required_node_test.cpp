@@ -42,6 +42,7 @@
 #include "exploration_planner/vision_target_queue.hpp"
 #include "exploration_planner/vision_near_confirmation.hpp"
 #include "exploration_planner/cloud_xyz.hpp"
+#include "exploration_planner/velocity_slew.hpp"
 #include "vision_shm_test_writer.hpp"
 
 // Dependencies are already included; this access override affects only the node.
@@ -168,6 +169,13 @@ void seed26_motion_regression(ExplorationNode& node)
     const Vec2 goal{7, 4.25};
     const double motion_margin = node.required_motion_inflate_;
     const double planning_margin = node.ggcfg_.inflate;
+    // Preserve the captured forward-only pursuit chord to exercise the original
+    // margin/replan defect. Drift compensation can turn that chord outward and
+    // legitimately avoid the block; check that enabled output separately below.
+    auto compensated_tracker = std::move(node.global_tracker_);
+    auto captured_gains = node.global_gains_;
+    captured_gains.compensate_lateral_drift = false;
+    node.global_tracker_ = std::make_unique<TrajectoryTracker>(captured_gains);
     seed26_reference(node);
     node.required_motion_inflate_ = planning_margin;
     const Vec2 old_command = node.pd_to_point_avoid(goal, obstacles);
@@ -209,6 +217,15 @@ void seed26_motion_regression(ExplorationNode& node)
     require(node.global_path_searches_ > before_search && !node.global_failed_ &&
             required_path_clear({node.px_, node.py_}, node.global_raw_, goal, obstacles, node.ggcfg_),
             "blocked recovery must produce another fully validated path");
+    node.global_tracker_ = std::move(compensated_tracker);
+    seed26_reference(node);
+    node.required_motion_inflate_ = planning_margin;
+    const Vec2 compensated = node.pd_to_point_avoid(goal, obstacles);
+    const double c = std::cos(node.yaw_), s = std::sin(node.yaw_);
+    require(node.required_velocity_clear({c * compensated.x - s * compensated.y,
+                                         s * compensated.x + c * compensated.y}, obstacles),
+            "compensated seed26 command must obey the same planning margin");
+    node.required_motion_inflate_ = motion_margin;
     std::cout << "seed26 motion-margin, stopped-noise and blocked-replan regressions passed\n";
 }
 
@@ -1096,6 +1113,184 @@ void visual_hover_restores_exploration_display()
                 "resumed display geometry differs from the route being flown");
     std::cout << "first exploration route after visual hover restored without adopting a second route\n";
 }
+void recorded_xy_handoffs()
+{
+    struct Sample { Vec2 position, target, velocity, previous; double yaw; };
+    const Sample samples[]{
+        {{2.582, .809}, {2.544786, .436249}, {.321, -.275}, {.027, -.096}, -74.58 * M_PI / 180},
+        {{1.742, -1.889}, {1.652182, -1.514532}, {-.328, .167}, {-.082, .113}, 124.71 * M_PI / 180}};
+    for (const auto& sample : samples) {
+        for (double response : {.4, .9}) {
+            ExplorationNode node;
+            node.vision_reader_.reset();
+            reset(node, sample.position);
+            node.vision_straight_approach_m_ = .4;
+            node.homing_ = false;
+            node.yaw_ = sample.yaw;
+            node.last_command_world_ = sample.previous;
+            VisionVisitTarget target;
+            target.track_id = 91;
+            target.position = sample.target;
+            const double c = std::cos(sample.yaw), s = std::sin(sample.yaw);
+            Vec2 velocity = sample.velocity;
+            bool reached = false;
+            double furthest = 0;
+            for (int tick = 0; tick < 600; ++tick) {
+                node.v_fwd_est_ = c * velocity.x + s * velocity.y;
+                node.v_lat_est_ = -s * velocity.x + c * velocity.y;
+                const Vec2 body = node.visual_target_velocity(target, {});
+                const Vec2 world{c * body.x - s * body.y, s * body.x + c * body.y};
+                if (tick == 0) {
+                    require(std::hypot(world.x - sample.previous.x, world.y - sample.previous.y) <=
+                            node.xy_brake_accel_ * node.gains_.dt + 1e-9,
+                            "recorded XY handoff jumped from the previous output to measured inertia");
+                    require((world.x - sample.previous.x) * velocity.x < 0,
+                            "recorded sideways inertia was reinforced at XY handoff");
+                }
+                require(node.last_yaw_rate_ == 0 && !node.global_failed_,
+                        "fixed-yaw approach lost its valid route");
+                const double alpha = 1 - std::exp(-.02 / response);
+                velocity.x += alpha * (world.x - velocity.x);
+                velocity.y += alpha * (world.y - velocity.y);
+                node.px_ += velocity.x * .02; node.py_ += velocity.y * .02;
+                const double distance = std::hypot(node.px_ - sample.target.x, node.py_ - sample.target.y);
+                furthest = std::max(furthest, distance);
+                if (distance < .10 && std::hypot(velocity.x, velocity.y) < .05) { reached = true; break; }
+            }
+            std::cout << "recorded handoff lag=" << response << " maximum radius=" << furthest << '\n';
+            require(reached && furthest < .46, "recorded near-goal state still made a large orbit or failed to settle");
+        }
+    }
+}
+
+void cruise_drift_compensation_is_checked()
+{
+    ExplorationNode node;
+    node.vision_reader_.reset();
+    reset(node, {2.3, .08});
+    const auto route = node.make_polyline_trajectory({{2, 0}, {5, 0}});
+    node.tracker_->set_trajectory(route);
+    node.v_fwd_est_ = .2; node.v_lat_est_ = .12;
+    VelCmd cmd;
+    for (int tick = 0; tick < 25; ++tick)
+        cmd = node.tracker_->update(node.px_, node.py_, 0, .2, .12, .1, 0);
+    require(cmd.v_fwd > 0 && cmd.v_lat < -.05 && cmd.lateral_correction,
+            "ordinary forward cruise ignored real sideways drift");
+    const auto free = node.guard_explore_velocity(cmd, {});
+    require(free.v_lat < 0 && free.v_fwd > 0, "clear drift correction was suppressed");
+    // A second obstacle below the aircraft must still veto the correction.
+    const Obstacles below{{node.px_, node.py_ - .73, .1}};
+    const auto constrained = node.guard_explore_velocity(cmd, below);
+    require(node.turn_correction_clear({constrained.v_fwd, constrained.v_lat}, below),
+            "lateral drift correction moved toward a second obstacle without validation");
+    const auto overlap = node.guard_explore_velocity(cmd, {{node.px_, node.py_, .1}});
+    require(overlap.v_fwd == 0 && overlap.v_lat == 0 && overlap.yaw_rate == 0,
+            "cruise recovery bypassed physical overlap");
+}
+
+void cruise_with_continuous_drift()
+{
+    // A bounded constant lateral disturbance plus actuator lag exercises the
+    // combined yaw/XY controller and obstacle guard, not only correction signs.
+    for (bool required : {false, true}) {
+        for (double lag : {.4, .9}) {
+            for (double wind : {-.10, .10}) {
+                ExplorationNode node;
+                node.vision_reader_.reset();
+                reset(node, {2, 0});
+                const Vec2 goal{5, 0};
+                const Obstacles trees{{3.5, .9, .10}, {3.5, -.9, .10}};
+                node.tracker_->set_trajectory(node.make_polyline_trajectory({{2, 0}, goal}));
+                Vec2 velocity{0, wind};
+                double yaw_rate = 0, max_error = 0, min_clearance = 100;
+                bool reached = false;
+                for (int tick = 0; tick < 2500; ++tick) {
+                    const double c = std::cos(node.yaw_), s = std::sin(node.yaw_);
+                    node.v_fwd_est_ = c * velocity.x + s * velocity.y;
+                    node.v_lat_est_ = -s * velocity.x + c * velocity.y;
+                    node.yaw_rate_est_ = yaw_rate;
+                    VelCmd cmd;
+                    if (required) {
+                        const Vec2 body = node.pd_to_point_avoid(goal, trees);
+                        require(!node.global_failed_, "drifting required flight lost its clear path");
+                        cmd.v_fwd = body.x; cmd.v_lat = body.y;
+                        cmd.yaw_rate = node.last_yaw_rate_;
+                    } else {
+                        cmd = node.tracker_->update(node.px_, node.py_, node.yaw_,
+                            node.v_fwd_est_, node.v_lat_est_, .1, yaw_rate);
+                        require(!cmd.needs_replan, "straight cruise with drift unexpectedly needs replan");
+                        cmd = node.guard_explore_velocity(cmd, trees);
+                    }
+                    const Vec2 world{c * cmd.v_fwd - s * cmd.v_lat, s * cmd.v_fwd + c * cmd.v_lat};
+                    node.last_command_world_ = world;
+                    const double response = 1 - std::exp(-.02 / lag);
+                    velocity.x += response * (world.x - velocity.x);
+                    velocity.y += response * (world.y + wind - velocity.y);
+                    yaw_rate += (1 - std::exp(-.02 / .15)) * (cmd.yaw_rate - yaw_rate);
+                    node.px_ += velocity.x * .02; node.py_ += velocity.y * .02;
+                    node.yaw_ = std::atan2(std::sin(node.yaw_ + yaw_rate * .02),
+                                           std::cos(node.yaw_ + yaw_rate * .02));
+                    max_error = std::max(max_error, std::abs(node.py_));
+                    for (const auto& tree : trees)
+                        min_clearance = std::min(min_clearance,
+                            std::hypot(node.px_ - tree.cx, node.py_ - tree.cy) - tree.r);
+                    if (std::hypot(node.px_ - goal.x, node.py_ - goal.y) < .10) {
+                        reached = true; break;
+                    }
+                }
+                std::cout << "continuous drift required=" << required << " lag=" << lag
+                          << " wind=" << wind << " max_error=" << max_error
+                          << " minimum tree clearance=" << min_clearance
+                          << " reached=" << reached << " end=" << node.px_ << ',' << node.py_
+                          << " yaw=" << node.yaw_ << " remaining=" << node.global_tracker_->remaining_distance()
+                          << " holding=" << node.required_goal_holding_ << " blocked=" << node.global_block_reason_ << '\n';
+                require(reached && max_error < .20 && min_clearance >= node.ggcfg_.robot_radius + .15,
+                        "continuous drift caused a stall, excessive deviation or tree approach");
+            }
+        }
+    }
+}
+
+void path_failure_keeps_safe_braking()
+{
+    ExplorationNode node;
+    node.vision_reader_.reset();
+    reset(node, {2, 0});
+    node.has_pose_ = node.has_goal_ = true;
+    node.homing_ = true;
+    node.goal_ = {6, 0};
+    node.v_fwd_est_ = .12; node.v_lat_est_ = .10;
+    node.last_command_world_ = {-.07, -.06};
+    // Occupied destination forces the actual on_timer failure branch while
+    // preserving a clear braking area around the drifting aircraft.
+    for (int i = 0; i < 3; ++i) node.obs_map_->integrate({{6, 0}}, 2, 0, 0, true);
+    node.on_timer();
+    const auto first = last_published_command.twist;
+    require(node.global_failed_ && first.linear.x < -.05 && first.linear.y < -.04 &&
+            node.recovery_holding_, "path failure discarded the existing safe counter-velocity");
+    const Vec2 anchor = node.recovery_anchor_;
+    node.px_ += .08; node.py_ += .05;
+    node.on_timer();
+    require(node.recovery_anchor_.x == anchor.x && node.recovery_anchor_.y == anchor.y &&
+            last_published_command.twist.linear.x < 0 && last_published_command.twist.linear.y < 0,
+            "failed-path hold followed the drifting aircraft instead of preserving its anchor");
+
+    // Full retreat is blocked by a different obstacle, but a small checked
+    // counter-velocity is feasible. The fallback must not require 0.5 m of room.
+    reset(node, {2, 0});
+    node.recovery_holding_ = false;
+    node.last_command_world_ = {-.04, 0};
+    node.v_fwd_est_ = .1;
+    const Obstacles narrow{{2.81, 0, .1}, {1.17, 0, .1}};
+    require(node.do_retreat(narrow).x == 0, "fixture needs a rejected full retreat");
+    const Vec2 short_brake = node.recovery_velocity(narrow, false);
+    require(short_brake.x < 0 && node.turn_correction_clear(short_brake, narrow),
+            "rejected retreat also discarded a feasible short braking correction");
+    const Vec2 stopped = node.recovery_velocity({{2, 0, .1}}, false);
+    require(stopped.x == 0 && stopped.y == 0 && node.recovery_status_ == "no_safe_recovery_velocity",
+            "unavailable recovery must diagnose and reject physical overlap");
+}
+
 void malformed_cloud_does_not_terminate_node()
 {
     ExplorationNode node;
@@ -1572,6 +1767,10 @@ int main(int argc, char** argv)
     int result = 0;
     try {
         malformed_cloud_does_not_terminate_node();
+        recorded_xy_handoffs();
+        cruise_drift_compensation_is_checked();
+        cruise_with_continuous_drift();
+        path_failure_keeps_safe_braking();
         invalid_odom_stamp_preserves_pose();
         std::string goal_errors;
         for (auto test : {new_goal_resets_execution, duplicate_goal_preserves_progress,

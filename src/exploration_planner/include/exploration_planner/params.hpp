@@ -34,7 +34,7 @@ inline constexpr double FIELD_MIN_Y = -2.7;                //-0.8;   //-2.1
 inline constexpr double FIELD_MAX_X = 4.86;               // 2.0;   // 4.8
 inline constexpr double FIELD_MAX_Y = 2.4;               // 4.43;   // 2.3
 // ★自主探索·车式前进模式★（仅影响 exploration_planner 的轨迹跟踪）
-//   true  = 巡航只给机体前向速度；原地转向时允许XY速度纠偏以维持固定位置。
+//   true  = 巡航以前进/yaw跟踪为主，允许受避障检查的横漂补偿；转向时保持XY。
 //   false = 保留旧的全向跟踪方式（允许 v_lat 横向纠偏）。
 inline constexpr bool EXPLORATION_CARLIKE_MODE = true;
 
@@ -276,6 +276,8 @@ inline constexpr int    CARLIKE_TURN_BLEND_SAMPLES = 12; // Bézier 过渡段采
 inline constexpr double KP_LAT       = 0.80;   // 横向偏差 → v_lat 的 P
 inline constexpr double KD_LAT       = 0.04;   // v_lat 的 D（口径修正后的真实值，等价于旧 0.10@dt=0.05，见上方 KD_YAW 说明）
 inline constexpr double MAX_V_LAT    = 0.20;   // 横向纠偏速度上限 (m/s)，压很低
+inline constexpr double CARLIKE_DRIFT_KD = 0.80; // 普通前进时实测横漂速度的阻尼（不改旧全向KD_LAT）
+inline constexpr double XY_BRAKE_ACCEL = 0.80; // 刹车/反向纠偏的指令变化上限(m/s²)，普通加速仍用CARLIKE_MAX_ACCEL
 
 inline constexpr double V_EST_ALPHA  = 0.30;   // 位置差分估速度低通系数（同主控思路）
 

@@ -394,6 +394,21 @@ VelCmd TrajectoryTracker::update(double px, double py, double yaw,
         v = std::min(v, lateral_accel / std::abs(filtered_yaw_rate_));
     v = std::clamp(v, 0.0, g_.v_max);
     cmd.v_fwd = std::min(v, previous_forward_command_ + std::max(0.0, g_.max_accel) * dt);
+    if (g_.compensate_lateral_drift) {
+        // Correct displacement and actual velocity normal to the route. Do not
+        // differentiate a moving lookahead/segment target to estimate drift.
+        const double normal_command = -(g_.kp_lat * e_ct + g_.drift_velocity_gain * path_lateral_velocity);
+        const double lateral_target = clamp_abs(normal_command * std::cos(nearest.theta - yaw), g_.max_v_lat);
+        const double step = std::max(0.0, g_.max_lateral_accel) * dt;
+        cmd.v_lat = std::clamp(lateral_target, previous_lateral_command_ - step,
+                                               previous_lateral_command_ + step);
+        // Forward-only still forbids commanded reverse travel during cruise.
+        // Reserve speed for the lateral correction rather than exceeding v_max.
+        cmd.v_fwd = std::min(cmd.v_fwd, std::sqrt(std::max(0.0,
+            g_.v_max * g_.v_max - cmd.v_lat * cmd.v_lat)));
+        previous_lateral_command_ = cmd.v_lat;
+        cmd.lateral_correction = true;
+    }
     previous_forward_command_ = cmd.v_fwd;
     return cmd;
 }
