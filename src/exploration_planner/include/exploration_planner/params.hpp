@@ -55,7 +55,7 @@ inline constexpr double VISION_BLACKLIST_RADIUS_M = 0.60; // 完成后以最终�
 inline constexpr int VISION_NEAR_CONFIRM_FRAMES = 10; // 近处独立的新帧窗口；ID票数平票继续采样
 inline constexpr double VISION_NEAR_DISTANCE_M = 2.00; // 小于此水平距离开始近距确认(m)
 inline constexpr double VISION_NEAR_SPEED_MPS = 0.40; // 近距请求速度上限，待飞行执行接入后消费(m/s)
-inline constexpr double VISION_NEAR_TIMEOUT_S = 8.00; // 进入近距后尚未确认的最长等待(s)
+inline constexpr double VISION_NEAR_TIMEOUT_S = 3.00; // 近距精确坐标收集窗口(s)，不足10帧则使用已有平均
 inline constexpr double VISION_RETRY_DELAY_S = 5.00; // 暂缓后冷却时间，且冷却后必须重新看到才重排(s)
 
 inline constexpr double VISION_HOVER_S = 3.00; // 首次进入目标位置容差后计时(s)，不等待停稳，偏移继续矫正但不重置

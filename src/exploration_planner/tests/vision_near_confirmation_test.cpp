@@ -112,12 +112,30 @@ void current_object_only_and_fresh_activation()
 
 void missing_near_data_times_out_without_confirmation()
 {
-    VisionNearConfirmation near;
+    VisionNearConfig config;
+    config.confirmation_timeout = 3.0;
+    VisionNearConfirmation near(config);
     near.begin(target(), 100, 100);
     near.position({1, 0}, 100);
-    require(!near.timed_out(107.9) && near.timed_out(108), "bounded near confirmation timeout incorrect");
+    require(!near.timed_out(102.9) && near.timed_out(103), "bounded near confirmation timeout incorrect");
     auto f = frame(161, 3);
     require(!send(near, f) && !near.confirmed(), "late sample bypassed expired confirmation deadline");
+}
+
+void partial_window_uses_received_mean()
+{
+    VisionNearConfig config;
+    config.confirmation_timeout = 3.0;
+    VisionNearConfirmation near(config);
+    near.begin(target(), 100, 100);
+    near.position({1, 0}, 100);
+    send(near, frame(1, 4, 2.0));
+    send(near, frame(2, 4, 2.2));
+    require(near.timed_out(103), "partial near window did not expire at three seconds");
+    const auto result = near.finalize_partial();
+    require(result && result->samples == 2 && result->class_id == 4 &&
+            result->position.x > 2.0 && result->position.x < 2.2,
+            "partial near window did not return the received weighted mean");
 }
 }
 
@@ -129,6 +147,7 @@ int main()
         duplicates_misses_and_restarts();
         current_object_only_and_fresh_activation();
         missing_near_data_times_out_without_confirmation();
+        partial_window_uses_received_mean();
         std::cout << "vision_near_confirmation_test: 2m gate, 10-frame vote, ties and refined coordinates passed\n";
         return 0;
     } catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }

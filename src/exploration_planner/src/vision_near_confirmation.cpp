@@ -87,6 +87,26 @@ int VisionNearConfirmation::winner() const
     return tie ? 0 : best;
 }
 
+std::optional<VisionRefinement> VisionNearConfirmation::finalize_partial()
+{
+    if (!track_id_ || result_ || count_ <= 0 || !std::isfinite(last_stamp_) || last_stamp_ <= 0 ||
+        !std::isfinite(weighted_position_.x) || !std::isfinite(weighted_position_.y))
+        return std::nullopt;
+    // A partial window still needs a usable class ID for the existing queue
+    // contract. On a tie, choose the lowest voted ID deterministically; the
+    // coordinate is always the weighted mean of the accepted samples.
+    int id = 0, maximum = 0;
+    for (int candidate = 1; candidate <= 6; ++candidate) {
+        if (votes_[candidate] > maximum) {
+            maximum = votes_[candidate];
+            id = candidate;
+        }
+    }
+    if (!id) return std::nullopt;
+    result_ = VisionRefinement{track_id_, weighted_position_, id, count_, last_stamp_};
+    return result_;
+}
+
 std::optional<VisionRefinement> VisionNearConfirmation::update(
     const VisionFrame& frame, const Vec2& aircraft, double now, const std::vector<Vec2>& others)
 {

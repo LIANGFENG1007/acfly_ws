@@ -2248,6 +2248,18 @@ private:
             vision_queue_->pending().size());
     }
 
+    // A target that was not refined yet remains the active flight target. A
+    // lost frame or a temporary ambiguity restarts only the near confirmation;
+    // it must never advance the FIFO before the target is completed.
+    void restart_visual_confirmation(double current_time)
+    {
+        if (!vision_queue_->active()) return;
+        const auto& active = *vision_queue_->active();
+        vision_near_->begin(active, current_time,
+            std::max(active.confirmed_stamp, vision_last_frame_.stamp));
+        vision_near_->position({px_, py_}, current_time);
+    }
+
     void poll_vision_shm()
     {
         vision_new_frame_.reset();
@@ -2298,9 +2310,8 @@ private:
                                 static_cast<unsigned long long>(uid), refined->samples, refined->class_id,
                                 refined->position.x, refined->position.y);
                         } else {
-                            vision_queue_->defer_active(uid, current_time);
-                            vision_near_->reset();
-                            vision_last_event_ = "invalid_refinement_deferred";
+                            restart_visual_confirmation(current_time);
+                            vision_last_event_ = "invalid_refinement_retry_same_target";
                         }
                     }
                 }
@@ -2311,12 +2322,17 @@ private:
             if (has_pose_) vision_near_->position({px_, py_}, current_time);
             if (vision_queue_->active() && vision_near_->timed_out(current_time)) {
                 const auto uid = vision_queue_->active()->track_id;
-                vision_queue_->defer_active(uid, current_time);
-                vision_near_->reset();
-                vision_last_event_ = "near_timeout_deferred";
-                RCLCPP_WARN(get_logger(), "[视觉近距] 区域#%llu 超时未确认，暂缓并处理其他目标；不记为完成",
-                    static_cast<unsigned long long>(uid));
-                activate_visual_target(current_time);
+                const auto partial = vision_near_->finalize_partial();
+                if (partial && vision_queue_->refine_active(*partial)) {
+                    vision_last_event_ = "near_partial_refined_same_target";
+                    RCLCPP_WARN(get_logger(), "[视觉近距] 区域#%llu 3秒内仅收到%d帧，使用已有加权平均坐标；继续当前目标",
+                        static_cast<unsigned long long>(uid), partial->samples);
+                } else {
+                    restart_visual_confirmation(current_time);
+                    vision_last_event_ = "near_timeout_no_refinement";
+                    RCLCPP_WARN(get_logger(), "[视觉近距] 区域#%llu 3秒内没有有效精确帧，保留粗坐标并继续当前目标",
+                        static_cast<unsigned long long>(uid));
+                }
             }
         }
     }
@@ -2502,22 +2518,17 @@ private:
                 if (global_failed_ || global_goal_blocked_) {
                     cmd.twist.linear.x = cmd.twist.linear.y = cmd.twist.angular.z = 0.0;
                     vision_last_event_ = "visual_path_unavailable";
-                    // An occupied/out-of-bounds visual point must not stall
-                    // exploration indefinitely.  Defer it for a later fresh
-                    // observation and release control back to exploration.
+                    // An occupied/out-of-bounds visual point is still the active
+                    // mission target. Keep it in the queue and retry its path;
+                    // completion is the only event allowed to advance the FIFO.
                     const auto uid = target.track_id;
-                    vision_queue_->defer_active(uid, steady_seconds());
                     reset_visual_approach();
-                    vision_near_->reset();
                     vision_hover_track_ = 0;
                     vision_hover_since_ = -1.0;
-                    global_has_ = global_failed_ = global_goal_blocked_ = false;
                     global_braking_blocked_ = false;
                     global_tracker_->set_trajectory({});
-                    plan_pending_ = true;
-                    vision_target_active = false;
                     RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-                        "[视觉目标] 区域#%llu 当前不可达，暂缓并继续探索",
+                        "[视觉目标] 区域#%llu 当前不可达，保持当前目标并重试，不切换目标",
                         static_cast<unsigned long long>(uid));
                 } else {
                     const double normal_speed = std::hypot(vb.x, vb.y);

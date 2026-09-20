@@ -29,6 +29,10 @@ public:
     void interrupt();
     std::optional<VisionRefinement> update(const VisionFrame& frame, const Vec2& aircraft,
         double now, const std::vector<Vec2>& other_target_positions = {});
+    // End the bounded near-range collection window. If at least one valid
+    // sample was received, return its weighted mean even when fewer than the
+    // normal confirmation-frame count arrived.
+    std::optional<VisionRefinement> finalize_partial();
 
     std::uint64_t track_id() const { return track_id_; }
     bool near_entered() const { return near_entered_; }

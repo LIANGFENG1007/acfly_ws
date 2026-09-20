@@ -1490,9 +1490,36 @@ void missing_visual_frames_do_not_hold_forever()
     node.activate_visual_target(node.steady_seconds() - 30);
     require(node.vision_queue_->active() && node.vision_near_->near_entered(), "enter near visual confirmation");
     node.poll_vision_shm();
-    require(!node.vision_queue_->active() && node.vision_queue_->visited().empty() &&
-            node.vision_last_event_ == "near_timeout_deferred",
-            "missing visual frames held the target forever or falsely marked it completed");
+    require(node.vision_queue_->active() && node.vision_queue_->active()->track_id == 1 &&
+            node.vision_queue_->visited().empty() &&
+            node.vision_last_event_ == "near_timeout_no_refinement" &&
+            node.vision_near_->track_id() == 1,
+            "missing visual frames switched targets or falsely marked the active target completed");
+}
+
+void blocked_visual_target_keeps_fifo_order()
+{
+    ExplorationNode node;
+    node.vision_reader_.reset();
+    reset(node, {2, 0});
+    node.has_pose_ = node.has_goal_ = true;
+    node.goal_ = {4.5, 2};
+    node.pose_freshness_.observe(1, node.steady_seconds());
+    node.vision_queue_->enqueue({
+        VisionCandidate{11, {4.0, 0.0}, 10, true, 1, 1},
+        VisionCandidate{12, {4.5, 1.0}, 10, true, 1, 1}}, {2, 0});
+    node.activate_visual_target(node.steady_seconds());
+    require(node.vision_queue_->active() && node.vision_queue_->active()->track_id == 11 &&
+            node.vision_queue_->pending().size() == 1, "blocked visual FIFO fixture was not initialized");
+    // Make the active target itself occupied in the same obstacle model used by
+    // the required planner. It must be retried, not replaced by track 12.
+    for (int i = 0; i < 4; ++i)
+        node.obs_map_->integrate({{4.0, 0.0}}, node.px_, node.py_, node.yaw_, true);
+    node.on_timer();
+    require(node.vision_queue_->active() && node.vision_queue_->active()->track_id == 11 &&
+            node.vision_queue_->pending().size() == 1 && node.vision_queue_->visited().empty() &&
+            node.vision_last_event_ == "visual_path_unavailable",
+            "blocked visual target was replaced before completion");
 }
 
 void motion_pose_dropout_liveness()
@@ -1780,6 +1807,7 @@ int main(int argc, char** argv)
         }
         require(goal_errors.empty(), goal_errors);
         missing_visual_frames_do_not_hold_forever();
+        blocked_visual_target_keeps_fifo_order();
         motion_pose_dropout_liveness();
         retreat_checks_the_other_obstacle();
         completion_publish_liveness();
