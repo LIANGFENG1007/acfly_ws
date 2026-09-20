@@ -241,12 +241,12 @@ inline constexpr double EXPLORE_LAND_HEADING_HANDOVER_SEC = 0.30; // H点降落�
 // 探索红点与后续通道任务，坐标均为 camera_init / SLAM 系 (m)。
 // 可用同名小写 ROS 参数在启动时覆盖；入口/H 也可在红点等待时用 ros2 param set 调整。
 // 以下使用现场给定坐标；若改为 NaN，表示未配置，飞机到红点后保高等待，不自动降落。
-inline constexpr double EXPLORE_GOAL_X = 1.9;   // 原探索终点（图中红点）
-inline constexpr double EXPLORE_GOAL_Y = 3.84;
+inline constexpr double EXPLORE_GOAL_X = 4.77;   // 原探索终点（图中红点）
+inline constexpr double EXPLORE_GOAL_Y = 2.3;
 inline constexpr bool   EXPLORE_CORRIDOR_ENABLED = true; // false: 红点完成后按旧流程降落
-inline constexpr double CORRIDOR_ENTRY_X = 3.5;  // 保持 -90 度朝向横移进入通道的第一个点 x
-inline constexpr double CORRIDOR_ENTRY_Y = 3.75;  // 进入通道的第一个点 y
-inline constexpr double CORRIDOR_H_X = 3.7;      // 穿过全部门后的 H 点 x
+inline constexpr double CORRIDOR_ENTRY_X = 5.7;  // 保持 -90 度朝向横移进入通道的第一个点 x
+inline constexpr double CORRIDOR_ENTRY_Y = 2.3;  // 进入通道的第一个点 y
+inline constexpr double CORRIDOR_H_X = 5.7;      // 穿过全部门后的 H 点 x
 inline constexpr double CORRIDOR_H_Y = -1.0;     // 穿过全部门后的 H 点 y
 // ---------------------------------------------------------------------------
 // ★ 小车雷达追踪（TrackCar / TRACK_CAR 状态）★  ← 追踪调参都在这一段

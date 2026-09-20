@@ -29,10 +29,10 @@ inline constexpr double HOME_GOAL_WALL_MARGIN = 0.0;
 //   例：起飞点世界 (-4,0)，10x10 场地世界 x,y ∈ [-5,5]
 //       → SLAM x ∈ [-5-(-4), 5-(-4)] = [-1, 9]，y ∈ [-5, 5]
 // ---------------------------------------------------------------------------
-inline constexpr double FIELD_MIN_X = -0.3;   //-0.5
-inline constexpr double FIELD_MIN_Y = -0.8;   //-2.1
-inline constexpr double FIELD_MAX_X =  2.0;   // 4.8
-inline constexpr double FIELD_MAX_Y =  4.43;   // 2.3
+inline constexpr double FIELD_MIN_X = -0.3;                //-0.3;   //-0.5
+inline constexpr double FIELD_MIN_Y = -2.7;                //-0.8;   //-2.1
+inline constexpr double FIELD_MAX_X = 4.86;               // 2.0;   // 4.8
+inline constexpr double FIELD_MAX_Y = 2.4;               // 4.43;   // 2.3
 // ★自主探索·车式前进模式★（仅影响 exploration_planner 的轨迹跟踪）
 //   true  = 巡航只给机体前向速度；原地转向时允许XY速度纠偏以维持固定位置。
 //   false = 保留旧的全向跟踪方式（允许 v_lat 横向纠偏）。
