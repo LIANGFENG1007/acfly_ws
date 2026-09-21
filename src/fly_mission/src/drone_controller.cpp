@@ -54,6 +54,19 @@ DroneController::DroneController(rclcpp::Node* node)
                     "[odom] 无效位置/姿态，丢弃本帧并重置速度差分，等待有效定位");
                 return;
             }
+            if (msg->header.stamp.sec < 0 || msg->header.stamp.nanosec >= 1000000000u) return;
+            const std::int64_t source_stamp = static_cast<std::int64_t>(msg->header.stamp.sec)*1000000000LL +
+                msg->header.stamp.nanosec;
+            if (source_stamp == pose_source_stamp_) return; // Frozen/repeated frame is not a fresh pose.
+            if (source_stamp < pose_source_stamp_) {
+                pose_source_stamp_ = source_stamp;
+                pose_receipt_valid_ = prev_pose_valid_ = false;
+                v_est_x_ = v_est_y_ = v_est_z_ = 0.0;
+                return; // Require progression after a sensor/clock restart.
+            }
+            pose_source_stamp_ = source_stamp;
+            pose_received_ = std::chrono::steady_clock::now();
+            pose_receipt_valid_ = true;
             current_pose_.header = msg->header;
             current_pose_.pose   = msg->pose.pose;
 
@@ -319,15 +332,21 @@ void DroneController::tick()
     // EXTERNAL_VEL：探索算法发来机体系速度，旋转到 local(NED) 系发布；带看门狗保高
     if (action_mode_ == ActionMode::EXTERNAL_VEL) {
         const double cz = current_pose_.pose.position.z;
-        // 高度保持：PD 把高度锁回 explore_z_，限到平飞档微调速度
-        const double vz = clamp_abs(
-            params::KP_Z * (explore_z_ - cz) - params::KD_Z * v_est_z_,
-            params::MAX_SPEED_Z_LEVEL);
-
-        // 看门狗：>0.3s 没有新速度命令 → 水平/yaw 清零，只保高悬停
         const double age = ext_valid_ ? (node_->now() - ext_cmd_time_).seconds() : 1e9;
-        if (age > 0.3) {
-            publish_setpoint(0.0, 0.0, vz, 0.0);
+        const double local_age = std::chrono::duration<double>(std::chrono::steady_clock::now()-ext_received_).count();
+        const bool pose_fresh = has_fresh_pose();
+        const bool stale = !pose_fresh || age < 0 || age > ext_cmd_timeout_ || local_age > ext_cmd_timeout_;
+        if (stale && !ext_watchdog_holding_) {
+            ext_hold_x_ = current_x(); ext_hold_y_ = current_y();
+            // A dead planner must not leave an old descent running.
+            explore_z_ = cz; explore_z_speed_ = params::MAX_SPEED_Z_LEVEL;
+            ext_watchdog_holding_ = true;
+        }
+        const double vz = clamp_abs(params::KP_Z * (explore_z_ - cz) - params::KD_Z * v_est_z_, explore_z_speed_);
+        if (stale) {
+            const double vx = pose_fresh ? clamp_abs(params::KP_XY * (ext_hold_x_ - current_x()) - params::KD_XY * v_est_x_, .2) : 0;
+            const double vy = pose_fresh ? clamp_abs(params::KP_XY * (ext_hold_y_ - current_y()) - params::KD_XY * v_est_y_, .2) : 0;
+            publish_setpoint(vx, vy, pose_fresh ? vz : 0, 0.0);
         } else {
             // 机体系 → local：vx=c*v_fwd-s*v_lat, vy=s*v_fwd+c*v_lat
             const double yaw = current_yaw();
@@ -1296,21 +1315,52 @@ void DroneController::enter_exploration()
     // 锁定当前高度为探索期间的保持高度
     explore_z_ = current_pose_.pose.position.z;
     ext_v_fwd_ = ext_v_lat_ = ext_yaw_rate_ = 0.0;
+    explore_z_speed_ = params::MAX_SPEED_Z_LEVEL;
+    ext_watchdog_holding_ = false;
     ext_valid_ = false;                       // 还没收到算法速度 → 看门狗先保高
     reset_for_new_action(settle_valid_, wait_active_);
     action_mode_ = ActionMode::EXTERNAL_VEL;
 }
 
-void DroneController::set_velocity_body(double v_fwd, double v_lat, double yaw_rate)
+bool DroneController::has_fresh_pose(double timeout) const
 {
+    if (!has_pose_ || !pose_receipt_valid_ || !std::isfinite(timeout) || timeout <= 0) return false;
+    const double ros_age = (node_->now() - prev_pose_time_).seconds();
+    const double local_age = std::chrono::duration<double>(std::chrono::steady_clock::now()-pose_received_).count();
+    return ros_age >= 0 && ros_age <= timeout && local_age >= 0 && local_age <= timeout;
+}
+
+void DroneController::set_exploration_altitude(double absolute_z, double speed_limit)
+{
+    if (!std::isfinite(absolute_z) || !std::isfinite(speed_limit) || speed_limit <= 0) return;
+    explore_z_ = absolute_z;
+    explore_z_speed_ = std::min(speed_limit, params::MAX_SPEED_Z);
+}
+
+void DroneController::expire_external_velocity()
+{
+    if (ext_valid_) {
+        ext_valid_ = false;
+        // tick() may already have latched the anchor at the source deadline.
+        // Keep that anchor when the mission dispatcher notices the same expiry.
+    }
+}
+
+void DroneController::set_velocity_body(double v_fwd, double v_lat, double yaw_rate, double valid_for_seconds)
+{
+    if (!std::isfinite(v_fwd) || !std::isfinite(v_lat) || !std::isfinite(yaw_rate) ||
+        !std::isfinite(valid_for_seconds) || valid_for_seconds < 0) return;
     if (action_mode_ != ActionMode::EXTERNAL_VEL) {
         reset_for_new_action(settle_valid_, wait_active_);
         action_mode_ = ActionMode::EXTERNAL_VEL;
     }
+    ext_watchdog_holding_ = false;
     ext_v_fwd_    = v_fwd;
     ext_v_lat_    = v_lat;
     ext_yaw_rate_ = yaw_rate;
     ext_cmd_time_ = node_->now();
+    ext_received_ = std::chrono::steady_clock::now();
+    ext_cmd_timeout_ = std::min(.3, valid_for_seconds);
     ext_valid_    = true;
 }
 

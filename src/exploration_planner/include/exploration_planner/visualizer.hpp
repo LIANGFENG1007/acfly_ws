@@ -41,6 +41,12 @@ struct CorridorVisualState {
     int gates_passed = 0;
 };
 
+struct DeliveryVisualState {
+    double package_offset = 0.0; // Actual configured front/left/right mount distance; zero hides markers.
+    bool target_valid = false;
+    Vec2 target; // Visual object position, before compensating for the package offset.
+};
+
 class Visualizer
 {
 public:
@@ -61,7 +67,8 @@ public:
                    const Obstacles& obstacles,
                    bool turning, int turn_dir,
                    bool unreachable_valid, const Vec2& unreachable_pos,
-                   const CorridorVisualState& corridor = {});
+                   const CorridorVisualState& corridor = {},
+                   const DeliveryVisualState& delivery = {});
 
 private:
     GridConfig cfg_;

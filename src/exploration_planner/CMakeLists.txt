@@ -8,6 +8,7 @@ endif()
 # ── 依赖 ──
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(acfly_interfaces REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
@@ -41,6 +42,7 @@ add_executable(exploration_planner_node
 target_compile_features(exploration_planner_node PRIVATE cxx_std_17)
 
 ament_target_dependencies(exploration_planner_node
+  acfly_interfaces
   rclcpp
   geometry_msgs
   nav_msgs
@@ -76,6 +78,9 @@ install(DIRECTORY launch/
 )
 
 if(BUILD_TESTING)
+  add_executable(visual_drop_test tests/visual_drop_test.cpp src/vision_target_queue.cpp)
+  target_compile_features(visual_drop_test PRIVATE cxx_std_17)
+  add_test(NAME visual_drop_test COMMAND visual_drop_test)
   add_executable(stationary_turn_test tests/stationary_turn_test.cpp
     src/corridor_controller.cpp src/corridor_perception.cpp src/trajectory_tracker.cpp)
   target_compile_features(stationary_turn_test PRIVATE cxx_std_17)
@@ -121,6 +126,7 @@ if(BUILD_TESTING)
   )
   target_compile_features(required_node_test PRIVATE cxx_std_17)
   ament_target_dependencies(required_node_test
+    acfly_interfaces
     rclcpp geometry_msgs nav_msgs std_msgs diagnostic_msgs sensor_msgs visualization_msgs tf2
   )
   target_link_libraries(required_node_test ${OpenCV_LIBS})
@@ -128,7 +134,7 @@ if(BUILD_TESTING)
   # These regression fixtures use the original 7.5 x 10 m arena, independently
   # of the operator's current field size and exploration switch defaults.
   add_test(NAME required_node_test COMMAND required_node_test
-    --ros-args -p viz:=false -p corridor_enabled:=false -p exploration_enabled:=true
+    --ros-args -p visual_drop_enabled:=false -p viz:=false -p corridor_enabled:=false -p exploration_enabled:=true
     -p field_min_x:=0.0 -p field_min_y:=-5.0 -p field_max_x:=7.5 -p field_max_y:=5.0
     -p fov_range:=3.0 -p v_max:=0.6)
   set_tests_properties(required_node_test PROPERTIES

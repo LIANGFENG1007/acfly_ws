@@ -113,10 +113,9 @@ public:
     bool queue(const std::string& text, int times = 1)
     {
         const std::string line = text + "\n";
-        for (int i = 0; i < times; ++i) {
-            if (txq_.size() + line.size() > kTxQueueMax) return false;   // 满了：丢弃
-            txq_ += line;
-        }
+        if (times < 1 || line.size() > (kTxQueueMax - txq_.size()) / static_cast<size_t>(times))
+            return false; // All-or-nothing: never leave a partial release batch queued.
+        for (int i = 0; i < times; ++i) txq_ += line;
         return true;
     }
 
@@ -140,7 +139,7 @@ public:
         const ssize_t n = ::write(fd_, txq_.data(), txq_.size());
         if (n < 0) {
             // EAGAIN(内核缓冲满) → 保留队列，下拍再写；其它错误 → 关闭重开
-            if (errno != EAGAIN && errno != EWOULDBLOCK) {
+            if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
                 ::close(fd_); fd_ = -1;
             }
             return 0;
@@ -151,6 +150,7 @@ public:
 
     // 队列里还剩多少字节没发出去(诊断用)。
     size_t pending() const { return txq_.size(); }
+    void cancel_pending() { txq_.clear(); }
 
 private:
     static constexpr size_t kTxQueueMax = 512;   // 够放十几条指令；超了说明串口不通

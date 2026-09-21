@@ -120,7 +120,8 @@ cv::Mat Visualizer::render(const GridSnapshot& grid,
                            const Obstacles& obstacles,
                            bool turning, int turn_dir,
                            bool unreachable_valid, const Vec2& unreachable_pos,
-                           const CorridorVisualState& corridor)
+                           const CorridorVisualState& corridor,
+                           const DeliveryVisualState& delivery)
 {
     update_bounds(corridor);
     cv::Mat img(H_, W_, CV_8UC3, cv::Scalar(40, 40, 40));   // 深灰底
@@ -319,6 +320,32 @@ cv::Mat Visualizer::render(const GridSnapshot& grid,
         const int d = std::max(7, static_cast<int>(std::lround(0.25 * scale_)));
         cv::line(img, cv::Point(u.x - d, u.y - d), cv::Point(u.x + d, u.y + d), cv::Scalar(0, 0, 255), 3, cv::LINE_AA);
         cv::line(img, cv::Point(u.x - d, u.y + d), cv::Point(u.x + d, u.y - d), cv::Scalar(0, 0, 255), 3, cv::LINE_AA);
+    }
+
+    // Package alignment overlay: object target first, then the three physical
+    // mount positions on top of the heading arrow/path so they remain visible.
+    if (delivery.target_valid && finite_point(delivery.target)) {
+        const cv::Point target = to_px(delivery.target.x, delivery.target.y);
+        const cv::Scalar orange(0, 160, 255);
+        cv::circle(img, target, 9, orange, 1, cv::LINE_AA);
+        cv::drawMarker(img, target, orange, cv::MARKER_CROSS, 24, 1, cv::LINE_AA);
+    }
+    if (pose_valid && std::isfinite(px) && std::isfinite(py) && std::isfinite(yaw) &&
+        std::isfinite(delivery.package_offset) && delivery.package_offset > 0.0) {
+        const double c = std::cos(yaw), s = std::sin(yaw), d = delivery.package_offset;
+        const std::array<Vec2, 3> offsets{{{d, 0}, {0, d}, {0, -d}}};
+        for (size_t i = 0; i < offsets.size(); ++i) {
+            const Vec2& b = offsets[i];
+            // Body +X is forward, +Y is left, matching the delivery controller.
+            const cv::Point p = to_px(px + c*b.x - s*b.y, py + s*b.x + c*b.y);
+            cv::circle(img, p, 5, cv::Scalar(245, 245, 245), cv::FILLED, cv::LINE_AA);
+            cv::circle(img, p, 4, cv::Scalar(255, 70, 0), cv::FILLED, cv::LINE_AA);
+            const std::string label = std::to_string(i + 1);
+            cv::putText(img, label, p + cv::Point(7, -6), cv::FONT_HERSHEY_SIMPLEX,
+                        .35, cv::Scalar(20, 20, 20), 3, cv::LINE_AA);
+            cv::putText(img, label, p + cv::Point(7, -6), cv::FONT_HERSHEY_SIMPLEX,
+                        .35, cv::Scalar(245, 245, 245), 1, cv::LINE_AA);
+        }
     }
 
     // ---- 6) 覆盖率文本 ----

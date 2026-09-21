@@ -10,6 +10,7 @@
 #include "fly_mission/avoidance.hpp"
 #include "fly_mission/shm_mailbox.hpp"
 #include "fly_mission/exploration_completion.hpp"
+#include "fly_mission/exploration_control.hpp"
 #include <atomic>
 #include <chrono>
 #include <deque>
@@ -83,6 +84,20 @@ int main(int argc, char** argv)
         const std_msgs::msg::Header empty;
         check(!fly_mission::completion_matches_goal(retained, goal) &&
               !fly_mission::completion_matches_goal(empty, empty), "invalid completion identity accepted");
+        acfly_interfaces::msg::ExplorationCommand control;
+        control.mission=goal;control.header.frame_id="base_link";control.header.stamp.sec=43;
+        control.altitude=.5;control.vertical_speed_limit=.4;control.release_index=1;control.target_id=1;
+        const auto valid=[&](const auto& m){return fly_mission::valid_exploration_control(m,goal,43.1,.3,.6);};
+        check(valid(control),"current scoped command rejected");
+        auto bad=control;--bad.mission.stamp.sec;check(!valid(bad),"old mission release accepted");
+        bad=control;bad.header.stamp.sec=42;check(!valid(bad),"stale control accepted");
+        bad=control;bad.header.stamp.sec=44;check(!valid(bad),"future control accepted");
+        bad=control;bad.velocity.linear.x=NAN;check(!valid(bad),"NaN XY accepted");
+        bad=control;bad.altitude=NAN;check(!valid(bad),"NaN height accepted");
+        bad=control;bad.vertical_speed_limit=.7;check(!valid(bad),"excessive vertical cap accepted");
+        bad=control;bad.target_id=0;check(!valid(bad),"anonymous release accepted");
+        bad=control;bad.release_index=4;check(!valid(bad),"fourth package accepted");
+        check(!fly_mission::valid_exploration_control(control,goal,43.1,.3,.6,&control),"duplicate command refreshed watchdog");
         auto node = std::make_shared<rclcpp::Node>("velocity_output_test",
             rclcpp::NodeOptions().arguments({"--ros-args", "-r",
                 "/mavros/setpoint_raw/local:=/velocity_output_test/setpoint"}));
@@ -98,8 +113,8 @@ int main(int argc, char** argv)
         pose->pose.pose.position.z = .8;
         pose->pose.pose.orientation.z = std::sin(M_PI / 4);
         pose->pose.pose.orientation.w = std::cos(M_PI / 4);
-        const auto odom = [&] {
-            pose->header.stamp = node->now();
+        const auto odom = [&](bool advancing = true) {
+            if (advancing) pose->header.stamp = node->now();
             std::shared_ptr<void> message = pose;
             drone.odom_sub_->handle_message(message, rclcpp::MessageInfo{});
         };
@@ -126,10 +141,57 @@ int main(int argc, char** argv)
         time(100.40); drone.tick();
         check(outputs.back().velocity.x == 0 && outputs.back().velocity.y == 0 && outputs.back().yaw_rate == 0,
               "expired external command bypassed the watchdog");
+        drone.set_exploration_altitude(.5,.4);
+        drone.set_velocity_body(.002, -.003, -.004); drone.tick();
+        check(outputs.back().velocity.x==0 && outputs.back().velocity.y==0 &&
+              outputs.back().velocity.z==0 && outputs.back().yaw_rate==0,
+              "fresh commands bypassed stale odometry and kept moving/descending");
+        time(100.42);odom();
+        drone.set_exploration_altitude(.8,.1);
         drone.set_velocity_body(.002, -.003, -.004); drone.tick();
         check(std::abs(outputs.back().velocity.x - .003) < 1e-8 &&
               std::abs(outputs.back().velocity.y - .002) < 1e-8,
               "fresh small commands failed to resume after timeout or were rounded to zero");
+
+        time(101); pose->pose.pose.position=geometry_msgs::msg::Point();pose->pose.pose.position.z=1.4;odom();
+        drone.v_est_x_=drone.v_est_y_=drone.v_est_z_=0;
+        drone.set_exploration_altitude(.5,.4);drone.set_velocity_body(.1,-.05,0);drone.tick();
+        check(std::abs(outputs.back().velocity.z+.4)<1e-6 && outputs.back().velocity.x>.04 && outputs.back().velocity.y>.09,
+              "descent lost coordinated XYZ output or retained 0.1m/s level cap");
+        drone.set_exploration_altitude(2.5,.6);drone.set_velocity_body(.1,-.05,0);drone.tick();
+        check(std::abs(outputs.back().velocity.z-.6)<1e-6,"climb lost old 0.6m/s cap");
+        time(101.4);odom();drone.v_est_z_=0;drone.tick();
+        check(drone.explore_z_==1.4 && outputs.back().velocity.z==0,"watchdog continued old vertical movement");
+        time(101.42);pose->pose.pose.position.x=.1;pose->pose.pose.position.y=.05;odom();drone.tick();
+        check(outputs.back().velocity.x<0 && outputs.back().velocity.y<0,"watchdog hold gave zero XY despite drift");
+        check((outputs.back().type_mask & (Target::IGNORE_PX|Target::IGNORE_PY|Target::IGNORE_PZ))==
+              (Target::IGNORE_PX|Target::IGNORE_PY|Target::IGNORE_PZ),"delivery switched FCU position mode");
+
+        time(101.80);pose->pose.pose.position.x=9;odom(false);
+        check(!drone.has_fresh_pose() && drone.current_x()==.1,"duplicate odometry refreshed age or replaced current pose");
+        drone.set_velocity_body(.1,.1,.1);drone.tick();
+        check(outputs.back().velocity.x==0 && outputs.back().velocity.y==0 && outputs.back().velocity.z==0,
+              "frozen source stamp bypassed motion guard");
+        time(101.82);pose->pose.pose.position.x=.1;odom();
+        drone.pose_received_ -= std::chrono::seconds(1); // ROS clock frozen, real receipt already stale.
+        check(!drone.has_fresh_pose(),"paused ROS clock defeated local pose timeout");
+        drone.set_velocity_body(.1,.1,.1);drone.tick();
+        check(outputs.back().velocity.x==0 && outputs.back().velocity.z==0,"stale steady-clock pose was used");
+        time(101.84);pose->header.stamp.sec=1;pose->header.stamp.nanosec=0;odom(false);
+        check(!drone.has_fresh_pose(),"sensor timestamp restart was accepted before progression");
+        pose->header.stamp.nanosec=20000000;odom(false);
+        check(drone.has_fresh_pose(),"progressing sensor failed to recover after restart");
+        drone.set_exploration_altitude(1.4,.1);drone.set_velocity_body(.02,.03,0);drone.tick();
+        check(std::abs(outputs.back().velocity.x+.03)<1e-6 && std::abs(outputs.back().velocity.y-.02)<1e-6,
+              "fresh pose after restart failed to resume XY feedback");
+
+        // Source lifetime is checked by the final publisher even when ROS time
+        // pauses and the mission dispatcher has not run its next expiry check.
+        drone.set_exploration_altitude(.5,.4);drone.set_velocity_body(.1,.1,.1,.01);
+        drone.ext_received_ -= std::chrono::milliseconds(20);drone.tick();
+        check(outputs.back().velocity.x==0 && outputs.back().velocity.y==0 &&
+              outputs.back().velocity.z==0 && outputs.back().yaw_rate==0,
+              "cached source deadline was extended by a paused ROS clock");
 
         std::cout << "Goal-scoped completion, final MAVROS XY/yaw payload, invalid odometry recovery, watchdog, tiny velocities passed\n";
     } catch (const std::exception& error) {

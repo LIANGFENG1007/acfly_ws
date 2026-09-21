@@ -41,6 +41,12 @@ FlyMissionNode::FlyMissionNode()
     cmd_sub_ = create_subscription<geometry_msgs::msg::TwistStamped>(
         "/exploration/cmd_vel", 10,
         [this](const geometry_msgs::msg::TwistStamped::SharedPtr msg) {
+            if (unified_control_ || !explore_entered_ || state_ != MissionState::EXPLORATION) return;
+            const double age = (now() - rclcpp::Time(msg->header.stamp)).seconds();
+            if (age < -.05 || age > params::EXPLORE_CMD_TIMEOUT_S ||
+                rclcpp::Time(msg->header.stamp) < rclcpp::Time(exploration_goal_header_.stamp)) return;
+            if (!std::isfinite(msg->twist.linear.x) || !std::isfinite(msg->twist.linear.y) ||
+                !std::isfinite(msg->twist.angular.z)) return;
             ext_v_fwd_     = msg->twist.linear.x;
             ext_v_lat_     = msg->twist.linear.y;
             ext_yaw_rate_  = msg->twist.angular.z;
@@ -50,6 +56,11 @@ FlyMissionNode::FlyMissionNode()
 
     // 完成消息携带原始 goal 的时间戳，忙时只收到最后一条也能确认本次任务。
     const auto latched = rclcpp::QoS(1).transient_local();
+    exploration_context_pub_ = create_publisher<acfly_interfaces::msg::ExplorationContext>("/exploration/context", latched);
+    drop_status_pub_ = create_publisher<acfly_interfaces::msg::DropStatus>("/exploration/drop_status", latched);
+    exploration_control_sub_ = create_subscription<acfly_interfaces::msg::ExplorationCommand>(
+        "/exploration/control", rclcpp::QoS(1),
+        [this](const acfly_interfaces::msg::ExplorationCommand::SharedPtr msg) { receive_exploration_control(*msg); });
     finished_sub_ = create_subscription<std_msgs::msg::Header>(
         "/exploration/finished_goal", latched,
         [this](const std_msgs::msg::Header::SharedPtr msg) {
@@ -213,7 +224,11 @@ void FlyMissionNode::on_timer()
 
     // ★Arduino 非阻塞发送泵★：把 arduino_send_async() 排队的字节往串口写一点。
     //   非阻塞(O_NONBLOCK + 不 tcdrain/不 usleep)，没东西发时直接返回，零开销。
-    arduino_.pump();
+    if (drop_sender_.pending() &&
+        (state_ != MissionState::EXPLORATION || !drone_.is_armed_offboard() ||
+         !drone_.has_fresh_pose() || explore_done_))
+        drop_sender_.cancel(arduino_);
+    drop_sender_.pump(exploration_steady_seconds(), arduino_);
 
     // ★小车位姿收包(UDP 模式必须每拍调)★：UDP 没有回调线程，不主动收就永远没数据
     //   → car_.latest() 恒 false → 追踪时飞机只会悬停。
@@ -239,7 +254,7 @@ void FlyMissionNode::on_timer()
         break;
 
     case MissionState::TAKEOFF:
-        takeoff(0.8);
+        takeoff(1.2);
         if (is_reached()) {
             RCLCPP_INFO(get_logger(), "[起飞] 完成");
             state_ = MissionState::WAIT_AFTER_TAKEOFF;

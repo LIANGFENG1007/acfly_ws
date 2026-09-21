@@ -38,7 +38,23 @@ inline constexpr double FIELD_MAX_Y = 2.4;               // 4.43;   // 2.3
 //   false = 保留旧的全向跟踪方式（允许 v_lat 横向纠偏）。
 inline constexpr bool EXPLORATION_CARLIKE_MODE = true;
 
-// 视觉SHM目标管理。当前实现确认、队列、近距投票；飞行访问在下一阶段接入。
+// 视觉SHM目标确认、排队和投放流程。
+// 视觉投放：提前减速，到采样距离后锁XY/Z/yaw，按SAMPLE_S收帧；包裹XY到位起4s，XY+Z连续2s可提前投放。
+// 高度=主控起飞雷达Z+0.5m；Z容差直接使用主控起飞TOL_Z；释放后锁XY回原高度。
+inline constexpr bool VISUAL_DROP_ENABLED = true;        // true=启用三包裹投放；false=旧的视觉到点悬停流程，不执行投放
+inline constexpr double VISUAL_DROP_ENTRY_M = 1.0;       // 开始采样的水平距离(m)：雷达到视觉粗坐标距离≤此值时，锁定当时的XY/Z/yaw
+inline constexpr double VISUAL_DROP_APPROACH_SLOW_M = 1.20; // 采样圈外的提前减速距离(m)：默认距目标2.20m开始逐渐降速，到1.00m进入采样
+inline constexpr double VISUAL_DROP_ENTRY_SPEED_MPS = 0.08; // 采样入口的接近速度上限(m/s)：保留小幅前进以穿过1m阈值，不用速度达标来阻塞采样；XY纠偏仍有效
+inline constexpr double VISUAL_DROP_SAMPLE_S = 2.0;      // 锁定位置后的采样时长(s)：新帧能收多少收多少，加权平均；无有效帧则用粗坐标
+inline constexpr double VISUAL_DROP_HEIGHT_M = 0.50;     // 投放时雷达相对起飞位置的高度(m)：目标Z=起飞雷达Z+此值，不是离目标物表面高度
+inline constexpr double VISUAL_DROP_XY_TOL_M = 0.10;     // 包裹水平到位容差(m)：经安装偏移补偿后的包裹XY距视觉目标≤此值即到位，不要求速度降到零
+inline constexpr double VISUAL_DROP_STABLE_S = 2.0;      // 提前投放所需连续稳定时间(s)：包裹XY和雷达Z均到位；超出任一容差则重新计这段时间
+inline constexpr double VISUAL_DROP_TIMEOUT_S = 4.0;     // 强制投放等待上限(s)：包裹XY首次到位即开始，漂移不重置；到时即发送，不再等待Z/稳定
+inline constexpr double VISUAL_DROP_OFFSET_M = 0.23;     // 包裹距雷达的水平安装距离(m)：第1个正前、第2个正左、第3个正右，按实际yaw旋转补偿
+inline constexpr double VISUAL_DROP_DESCEND_MPS = 0.40;  // 投放下降速度上限(m/s)：根据剩余XY距离估计到达时间并调整限速，实际Z速度由主控PD计算
+inline constexpr double VISUAL_DROP_CLIMB_MPS = 0.60;    // 释放后回升速度上限(m/s)：锁定释放时XY，回到开始采样时的高度；持续输出XY纠偏速度
+// Z到位容差使用主控的params::TOL_Z；下降/回升速度上限当前均不得超过0.60m/s。
+
 inline constexpr bool VISION_SHM_ENABLED = true;
 inline constexpr const char* VISION_SHM_PATH = "/dev/shm/uav_cv_out";
 inline constexpr double VISION_SHM_MAX_AGE_S = 0.50; // 图像采集单调时间距当前最大年龄(s)
@@ -52,6 +68,7 @@ inline constexpr double VISION_POSE_TIMEOUT_S = 0.30; // 位姿过期时不累�
 inline constexpr int VISION_MAX_CANDIDATES = 64; // 内部候选总容量，不是单帧目标数；不静默挤掉已确认目标
 inline constexpr int VISION_QUEUE_CAPACITY = 64; // 当前、等待、暂缓目标合计容量
 inline constexpr double VISION_BLACKLIST_RADIUS_M = 0.60; // 完成后以最终精确坐标为中心屏蔽(m)
+// 以下旧近距确认/悬停参数仅在 VISUAL_DROP_ENABLED=false 时控制旧访问流程。
 inline constexpr int VISION_NEAR_CONFIRM_FRAMES = 10; // 近处独立的新帧窗口；ID票数平票继续采样
 inline constexpr double VISION_NEAR_DISTANCE_M = 2.00; // 小于此水平距离开始近距确认(m)
 inline constexpr double VISION_NEAR_SPEED_MPS = 0.40; // 近距请求速度上限，待飞行执行接入后消费(m/s)

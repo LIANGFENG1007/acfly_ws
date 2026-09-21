@@ -5,6 +5,7 @@
 // ============================================================================
 
 #include "fly_mission/fly_mission_node.hpp"
+#include "fly_mission/exploration_control.hpp"
 
 namespace fly_mission {
 
@@ -216,6 +217,10 @@ void FlyMissionNode::exploration(double gx, double gy)
         drone_.enter_exploration();
         // 每次进入探索重新等待当前任务的速度命令。
         ext_cmd_valid_ = false;
+        unified_control_ = false;
+        control_received_ = -1;
+        drop_sender_.reset(arduino_);
+        drop_logged_ = 0;
         explore_done_ = false;
         corridor_active_ = false;
         geometry_msgs::msg::PointStamped goal;
@@ -226,6 +231,12 @@ void FlyMissionNode::exploration(double gx, double gy)
         goal.point.z = 0.0;
         exploration_goal_header_ = goal.header;
         exploration_route_z_ = drone_.current_z();
+        acfly_interfaces::msg::ExplorationContext context;
+        context.mission = goal.header;
+        context.home_z = drone_.home_z();
+        context.cruise_z = exploration_route_z_;
+        context.height_tolerance = params::TOL_Z;
+        exploration_context_pub_->publish(context);
         goal_pub_->publish(goal);
         publish_exploration_corridor_route(true);
         explore_entered_ = true;
@@ -242,20 +253,74 @@ void FlyMissionNode::exploration(double gx, double gy)
     //   规划节点挂掉/停发之后，这里每拍仍会拿【最后那个速度】调 set_velocity_body，
     //   而该函数内部会刷新 ext_cmd_time_(控制器自己那个) → drone_ 里的 0.3s 看门狗
     //   【永远不触发】→ 飞机带着最后一条速度命令一直飞下去(算法死了也没人叫停)。
-    //   加上本判断后：算法停发 → 这里停止转发 → 控制器看门狗超时 → 水平/yaw 清零、
-    //   只保高悬停，等算法恢复。
+    //   算法停发 → 停止转发 → 看门狗取消旧升降目标，定位新鲜时锁XY/Z反馈保持；
+    //   定位也过期时停止运动输出，等待恢复。
     if (!ext_cmd_valid_) {
         // 从未收到过速度：算法节点没起 / 还没算出第一条。悬停等(控制器看门狗保高)。
         RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
             "[探索] 还没收到过 /exploration/cmd_vel：exploration_planner_node 起了吗? "
             "→ 悬停保高等它");
-    } else if ((now() - ext_cmd_time_).seconds() <= params::EXPLORE_CMD_TIMEOUT_S) {
-        drone_.set_velocity_body(ext_v_fwd_, ext_v_lat_, ext_yaw_rate_);
+    } else if ((now() - ext_cmd_time_).seconds() >= 0 &&
+               (now() - ext_cmd_time_).seconds() <= params::EXPLORE_CMD_TIMEOUT_S &&
+               (!unified_control_ || (exploration_steady_seconds() - control_received_ <= params::EXPLORE_CMD_TIMEOUT_S &&
+                 valid_exploration_control(exploration_control_, exploration_goal_header_, now().seconds(),
+                     params::EXPLORE_CMD_TIMEOUT_S, params::MAX_SPEED_Z)))) {
+        if (unified_control_) drone_.set_exploration_altitude(exploration_control_.altitude,
+                                                            exploration_control_.vertical_speed_limit);
+        // The controller publishes before this dispatcher on the next tick.
+        // Pass the remaining source/receipt lifetime so its cache cannot send
+        // one more old descent command before we get a chance to expire it.
+        double command_age = (now() - ext_cmd_time_).seconds();
+        if (unified_control_) command_age = std::max({command_age,
+            now().seconds() - message_seconds(exploration_control_.header.stamp),
+            exploration_steady_seconds() - control_received_});
+        drone_.set_velocity_body(ext_v_fwd_, ext_v_lat_, ext_yaw_rate_,
+            std::max(0.0, params::EXPLORE_CMD_TIMEOUT_S - command_age));
+        exploration_drop_tick();
     } else {
+        // Freshness belongs to the source stamp, not just the receipt time.
+        // Retiring it here also prevents the controller adding another 0.3s.
+        drone_.expire_external_velocity();
+        const double source_age = unified_control_
+            ? now().seconds() - message_seconds(exploration_control_.header.stamp)
+            : (now() - ext_cmd_time_).seconds();
         RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000,
-            "[探索] /exploration/cmd_vel 已 %.2fs 无更新(>%.2fs)：算法挂了/停发了? "
-            "→ 停止转发，悬停保高等它恢复",
-            (now() - ext_cmd_time_).seconds(), params::EXPLORE_CMD_TIMEOUT_S);
+            "[探索] 控制指令已失效，源指令年龄 %.2fs、有效期 %.2fs；停止旧指令并反馈保持，等待恢复",
+            source_age, params::EXPLORE_CMD_TIMEOUT_S);
+    }
+}
+
+// Commands and release requests share one fresh, mission-scoped envelope.
+void FlyMissionNode::receive_exploration_control(const acfly_interfaces::msg::ExplorationCommand& msg)
+{
+    if (!explore_entered_ || explore_done_ || state_ != MissionState::EXPLORATION ||
+        msg.mission != exploration_goal_header_ || msg.header.frame_id != "base_link") return;
+    if (!valid_exploration_control(msg, exploration_goal_header_, now().seconds(),
+        params::EXPLORE_CMD_TIMEOUT_S, params::MAX_SPEED_Z, unified_control_ ? &exploration_control_ : nullptr)) return;
+    exploration_control_ = msg;
+    unified_control_ = ext_cmd_valid_ = true;
+    ext_v_fwd_ = msg.velocity.linear.x; ext_v_lat_ = msg.velocity.linear.y; ext_yaw_rate_ = msg.velocity.angular.z;
+    ext_cmd_time_ = now(); control_received_ = exploration_steady_seconds();
+}
+
+void FlyMissionNode::exploration_drop_tick()
+{
+    if (!unified_control_ || !drone_.is_armed_offboard() || !drone_.has_fresh_pose()) return;
+    const auto index = exploration_control_.release_index;
+    const auto target = exploration_control_.target_id;
+    const double t = exploration_steady_seconds();
+    drop_sender_.poll(t, arduino_);
+    drop_sender_.request(index, target, t, arduino_, params::ARDUINO_SEND_TIMES);
+    const auto result = drop_sender_.result(index, target);
+    if (!result) return;
+    acfly_interfaces::msg::DropStatus status;
+    status.mission = exploration_goal_header_; status.release_index = index; status.target_id = target;
+    status.success = result->success; status.detail = result->detail;
+    drop_status_pub_->publish(status);
+    if (index > drop_logged_) {
+        drop_logged_ = index;
+        if (status.success) RCLCPP_INFO(get_logger(), "[探索投放] 第%u次串口5条已写出", index);
+        else RCLCPP_ERROR(get_logger(), "[探索投放] 第%u次发送失败：%s；继续回升", index, status.detail.c_str());
     }
 }
 

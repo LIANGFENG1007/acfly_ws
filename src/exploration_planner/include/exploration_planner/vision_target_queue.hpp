@@ -56,11 +56,12 @@ public:
     // points, with spatial track ID as the final deterministic tie-breaker.
     void enqueue(std::vector<VisionCandidate> candidates, const Vec2& aircraft);
     bool activate_next(double now);
-    bool refine_active(const VisionRefinement& result);
+    bool refine_active(const VisionRefinement& result, bool allow_unknown_class = false);
+    void discard_waiting() { pending_.clear(); deferred_.clear(); }
     bool defer_active(std::uint64_t track_id, double now);
     // Called only by the future executor after arrival and its hover timer.
     // Near confirmation alone MUST NOT call this or mark the target visited.
-    bool complete_active(std::uint64_t track_id, double now);
+    bool complete_active(std::uint64_t track_id, double now, bool allow_coarse = false);
     void observe(const VisionFrame& frame, double now);
     VisionFrame filter_blacklisted(const VisionFrame& frame);
     bool blacklisted(const Vec2& point) const;

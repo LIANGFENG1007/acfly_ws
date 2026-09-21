@@ -54,6 +54,8 @@
 
 geometry_msgs::msg::TwistStamped last_published_command;
 size_t published_commands = 0;
+acfly_interfaces::msg::ExplorationCommand last_control;
+size_t published_controls = 0;
 std_msgs::msg::Header last_completed_goal;
 size_t published_completions = 0;
 
@@ -69,6 +71,10 @@ extern "C" rcl_ret_t __wrap_rcl_publish(const rcl_publisher_t* publisher,
     if (std::string(rcl_publisher_get_topic_name(publisher)) == "/exploration/finished_goal") {
         last_completed_goal = *static_cast<const std_msgs::msg::Header*>(message);
         ++published_completions;
+    }
+    if (std::string(rcl_publisher_get_topic_name(publisher)) == "/exploration/control") {
+        last_control = *static_cast<const acfly_interfaces::msg::ExplorationCommand*>(message);
+        ++published_controls;
     }
     return RCL_RET_OK;
 }
@@ -1784,6 +1790,109 @@ void corridor_registered_cloud_regression()
             "repeated cloud timestamps were not diagnosed");
     std::cout << "hardware corridor cloud routing and empty/rejected scan diagnostics passed\n";
 }
+void visual_sampling_brake_regression()
+{
+    using Phase = VisualDrop::Phase;
+    struct Scenario { const char* name; Vec2 start, object, wind; double lag, delay, yaw; };
+    const std::vector<Scenario> scenarios{
+        {"logged first target", {0,0}, {1.369,-.161}, {}, .65, .26, 0},
+        {"long straight", {1,0}, {4,0}, {}, .65, .26, 0},
+        {"slow response", {1,0}, {4,0}, {}, .80, .30, 0},
+        {"headwind", {1,0}, {4,0}, {-.04,0}, .65, .26, 0},
+        {"crosswind and turn", {1,-1}, {4,1}, {.015,.04}, .65, .26, -.4},
+        {"tailwind", {1,0}, {4,0}, {.04,0}, .65, .26, 0},
+    };
+    bool smooth = true;
+    for (const auto& scenario : scenarios) {
+        ExplorationNode node;
+        node.visual_drop_enabled_ = true;
+        node.vision_reader_.reset();
+        VisualDropConfig cfg; cfg.sample_seconds = 2.0;
+        node.visual_drop_ = VisualDrop(cfg);
+        auto goal = std::make_shared<geometry_msgs::msg::PointStamped>();
+        goal->header.frame_id = "camera_init"; goal->header.stamp = node.now();
+        goal->point.x = 7; goal->point.y = 4;
+        node.on_goal(goal);
+        acfly_interfaces::msg::ExplorationContext context;
+        context.mission = goal->header; context.home_z = .2; context.cruise_z = 1.4; context.height_tolerance = .1;
+        node.drop_context_ = context;
+        reset(node, scenario.start); node.pz_ = 1.4; node.yaw_ = scenario.yaw;
+        node.has_pose_ = node.has_goal_ = true;
+        const double base = node.steady_seconds();
+        node.vision_queue_->enqueue({{1, scenario.object,10,true,base-1,base}},scenario.start);
+        node.activate_visual_target(base);
+        constexpr double dt = .02;
+        std::deque<Vec2> delayed(static_cast<size_t>(std::lround(scenario.delay/dt)), Vec2{});
+        Vec2 velocity{}, anchor{}, direction{};
+        double yaw_rate=0, entered=-1, descending=-1, entry_speed=0, peak=0, retreat=0;
+        for (int tick=0; tick<3000; ++tick) {
+            const double elapsed=tick*dt;
+            const auto before=node.visual_drop_.phase();
+            const Vec2 body=node.visual_drop_velocity({},base+elapsed);
+            const auto phase=node.visual_drop_.phase();
+            if (before==Phase::Approach && phase==Phase::Sample) {
+                entered=elapsed; anchor={node.px_,node.py_};
+                direction={scenario.object.x-anchor.x,scenario.object.y-anchor.y};
+                const double distance=std::hypot(direction.x,direction.y);
+                require(distance<=cfg.entry_distance+1e-9 && distance>=cfg.entry_distance-.03,
+                        "sampling radius changed instead of braking before it");
+                direction.x/=distance; direction.y/=distance;
+                entry_speed=std::hypot(velocity.x,velocity.y);
+            }
+            if (phase==Phase::Descend && descending<0) descending=elapsed;
+            if (entered>=0) {
+                const double progress=(node.px_-anchor.x)*direction.x+(node.py_-anchor.y)*direction.y;
+                if (phase==Phase::Sample) peak=std::max(peak,progress);
+                retreat=std::max(retreat,peak-progress);
+            }
+            if (descending>=0 && elapsed>=descending+1.5) break;
+            const double c=std::cos(node.yaw_),s=std::sin(node.yaw_);
+            const Vec2 world{c*body.x-s*body.y,s*body.x+c*body.y};
+            delayed.push_back(world); const auto applied=delayed.front(); delayed.pop_front();
+            const double response=1.0-std::exp(-dt/scenario.lag);
+            velocity.x+=response*(applied.x+scenario.wind.x-velocity.x);
+            velocity.y+=response*(applied.y+scenario.wind.y-velocity.y);
+            yaw_rate+=(node.last_yaw_rate_-yaw_rate)*dt/.20;
+            node.px_+=velocity.x*dt; node.py_+=velocity.y*dt; node.yaw_+=yaw_rate*dt;
+            node.v_fwd_est_=std::cos(node.yaw_)*velocity.x+std::sin(node.yaw_)*velocity.y;
+            node.v_lat_est_=-std::sin(node.yaw_)*velocity.x+std::cos(node.yaw_)*velocity.y;
+            node.yaw_rate_est_=yaw_rate; node.last_command_world_=world;
+        }
+        require(entered>=0 && descending>entered && entered<50,
+                std::string(scenario.name)+": early braking stranded the target outside the sampling circle");
+        require(std::abs(descending-entered-cfg.sample_seconds)<.021,
+                "approach braking changed the full sampling interval");
+        std::cout<<"sample braking "<<scenario.name<<": entry="<<entered<<"s speed="<<entry_speed
+                 <<" overshoot="<<peak<<" retreat="<<retreat<<'\n';
+        smooth = smooth && entry_speed<=.18 && peak<=.10 && retreat<=.10;
+    }
+    require(smooth, "visual approach reached the sampling circle too fast and pulled back");
+}
+
+void visual_sampling_brake_preserves_correction()
+{
+    ExplorationNode node;
+    node.vision_reader_.reset();
+    reset(node, {2,0});
+    const Vec2 goal{4,0};
+    node.pd_to_point_avoid(goal, {}); // Commit the straight path before lateral drift.
+    node.py_=.12; node.v_fwd_est_=.08; node.v_lat_est_=.12;
+    Vec2 command;
+    for (int tick=0; tick<30; ++tick) command=node.pd_to_point_avoid(goal, {}, .08);
+    require(command.x>0 && command.x<=.08+1e-9 && command.y<-.08,
+            "approach cap removed lateral drift correction or stopped forward progress");
+    const Obstacles overlap{{node.px_,node.py_,.1}};
+    const auto blocked=node.pd_to_point_avoid(goal, overlap, .08);
+    require(blocked.x==0 && blocked.y==0,
+            "positive sampling entry speed bypassed physical obstacle checks");
+
+    reset(node, {2,0});
+    node.yaw_=M_PI; node.v_fwd_est_=.2;
+    for (int tick=0; tick<30; ++tick) command=node.pd_to_point_avoid(goal, {}, .01);
+    require(std::abs(node.last_yaw_rate_)>0 && command.x<-.01,
+            "approach travel cap restricted XY correction while turning");
+}
+
 }  // namespace
 
 int main(int argc, char** argv)
@@ -1999,6 +2108,180 @@ int main(int argc, char** argv)
         node.on_timer();
         require(!node.finished_ && !node.corridor_->active() && !node.retreating_,
                 "occupied home goal completed, entered corridor or retreated");
+        // Full delivery integration, using the actual node's safety controller,
+        // queue, context/status callbacks and unified output (all publishes wrapped).
+        {
+            using Phase = VisualDrop::Phase;
+            node.visual_drop_enabled_ = true;
+            // These deterministic timestamps use a one-second fixture, separate
+            // from the operator's current sampling parameter (now two seconds).
+            node.visual_drop_ = VisualDrop();
+            node.vision_reader_.reset();
+            node.exploration_enabled_ = true;
+            node.obs_map_ = std::make_unique<ObstacleMap>(node.ocfg_);
+            node.poi_mode_ = ExplorationNode::PoiMode::EXPLORE;
+            auto goal = std::make_shared<geometry_msgs::msg::PointStamped>();
+            goal->header.frame_id = "camera_init"; goal->header.stamp = node.now();
+            goal->point.x = 7; goal->point.y = 4;
+            node.on_goal(goal);
+            reset(node,{2,0}); node.has_pose_ = true;
+            const double base = node.steady_seconds();
+            std::vector<VisionCandidate> candidates;
+            for(unsigned i=1;i<=4;++i) candidates.push_back({i,{2.0+double(i),0},10,true,base-1,base});
+            node.vision_queue_->enqueue(candidates,{2,0}); node.activate_visual_target(base);
+            node.visual_drop_velocity({},base);
+            require(node.visual_drop_.phase()==Phase::Approach && node.vision_last_event_=="drop_waiting_for_takeoff_context",
+                    "missing takeoff context began descent");
+            auto context = std::make_shared<acfly_interfaces::msg::ExplorationContext>();
+            context->mission=goal->header; context->home_z=.2;context->cruise_z=1.4;context->height_tolerance=.1;
+            std::shared_ptr<void> context_message=context;
+            node.context_sub_->handle_message(context_message,rclcpp::MessageInfo{});
+            node.pz_=1.4;
+            for(unsigned i=1;i<=3;++i) {
+                const double t=base+20*i;
+                const Vec2 object{2.0+double(i),0};
+                node.px_=object.x-1;node.py_=0;node.pz_=1.4;node.yaw_=0;
+                node.last_command_world_={};node.v_fwd_est_=node.v_lat_est_=0;
+                node.activate_visual_target(t);
+                require(node.vision_queue_->active()->track_id==i,"queue switched visit order");
+                node.visual_drop_velocity({},t);
+                require(node.visual_drop_.phase()==Phase::Sample,"node missed 1m sample hold");
+                node.px_+=.1;
+                auto correction=node.visual_drop_velocity({},t+.2);
+                require(correction.x<0,"sample hold let XY drift with zero correction");
+                node.visual_drop_velocity({},t+1);
+                require(node.visual_drop_.phase()==Phase::Descend && node.visual_drop_.used_coarse(),
+                        "node stalled when no precise observations arrived");
+                const auto aim=node.visual_drop_.lidar_target(0);
+                require(node.drop_command_altitude_==.7 && node.drop_command_speed_>.1,
+                        "node lost takeoff-relative drop height or kept level speed cap");
+                node.px_=aim.x;node.py_=aim.y;node.last_command_world_={};
+                node.visual_drop_velocity({},t+2); // Z still above target, XY alone starts deadline.
+                node.px_+=.2;
+                node.visual_drop_velocity({},t+6);
+                require(node.visual_drop_.phase()==Phase::Send && node.visual_drop_.release_index()==i,
+                        "node restarted deadline after XY drift or gated it on Z");
+                auto wrong=std::make_shared<acfly_interfaces::msg::DropStatus>();
+                wrong->mission=goal->header;wrong->release_index=i;wrong->target_id=99;
+                std::shared_ptr<void> status_message=wrong;
+                node.drop_status_sub_->handle_message(status_message,rclcpp::MessageInfo{});
+                require(!node.drop_status_,"another target's acknowledgement accepted");
+                wrong->target_id=i;wrong->success=i!=2; // Send failure must also climb and count once.
+                node.drop_status_sub_->handle_message(status_message,rclcpp::MessageInfo{});
+                node.pz_=.7;
+                node.visual_drop_velocity({},t+6.02);
+                require(node.visual_drop_.phase()==Phase::Climb && node.visual_drop_.completed()==i &&
+                        node.drop_command_altitude_==1.4 && node.drop_command_speed_==.6,
+                        "serial outcome did not immediately begin climb");
+                node.drop_status_sub_->handle_message(status_message,rclcpp::MessageInfo{});
+                require(!node.drop_status_,"duplicate acknowledgement relatched climb XY");
+                node.last_command_world_={};node.px_+=.1;node.py_+=.05;
+                correction=node.visual_drop_velocity({},t+6.04);
+                require(correction.x<0&&correction.y<0,"climb did not correct both axes to fixed anchor");
+                if(i==2) node.coverage_closed_=true; // Coverage finished, third already queued.
+                if(i==3) {
+                    auto late_poi=std::make_shared<geometry_msgs::msg::PointStamped>();
+                    late_poi->header.frame_id="camera_init";
+                    late_poi->point.x=6;late_poi->point.y=1;
+                    node.on_poi(late_poi); // Arrives after the third release, during climb.
+                }
+                node.pz_=1.31;node.visual_drop_velocity({},t+7);
+                require(node.vision_queue_->visited().size()==i && node.visual_drop_.phase()==Phase::Idle,
+                        "coarse delivery/failure never completed visit after climb");
+            }
+            require(node.vision_queue_->pending().empty(),"third release kept unfinished targets");
+            node.pose_freshness_=SensorFreshness{};node.pose_freshness_.observe(1,node.steady_seconds());
+            node.on_timer();
+            require(node.homing_&&!node.vision_queue_->active(),"three deliveries did not bypass unfinished exploration");
+            require(published_controls>0 && last_control.mission==goal->header && last_control.altitude==1.4 &&
+                    last_control.release_index==0,"unified output lost restored altitude/mission or replayed release");
+            const auto publications=published_controls;
+            node.pose_freshness_=SensorFreshness{};node.on_timer();
+            require(published_controls==publications,"stale odometry refreshed a descent/release command");
+            // A blocked target must retain identity and altitude, not fly through an obstacle.
+            node.on_goal(std::make_shared<geometry_msgs::msg::PointStamped>());
+            node.drop_context_->mission=node.goal_header_;
+            reset(node,{2,0});node.pz_=1.4;node.has_pose_=true;node.has_goal_=true;node.homing_=false;
+            node.vision_queue_->enqueue({{8,{3,0},10,true,base-1,base}},{2,0});node.activate_visual_target(base);
+            node.visual_drop_velocity({},base);node.visual_drop_velocity({},base+1);
+            node.visual_drop_velocity({{2.77,0,.3}},base+1.02);
+            require(node.global_failed_ && node.vision_queue_->active()->track_id==8 && node.drop_command_altitude_==1.4,
+                    "blocked delivery switched target or descended without safe XY route");
+            // Coverage may finish after only two drops, but an existing third
+            // target must retain ownership; without that target, go to the end.
+            node.visual_drop_=VisualDrop();node.vision_queue_->reset();node.coverage_closed_=true;
+            node.homing_=false;node.has_goal_=true;node.has_pose_=true;
+            node.pose_freshness_=SensorFreshness{};node.pose_freshness_.observe(1,node.steady_seconds());
+            node.vision_queue_->enqueue({{9,{3,0},10,true,base-1,base}},{2,0});
+            node.on_timer();
+            require(!node.homing_ && node.vision_queue_->active() && node.vision_queue_->active()->track_id==9,
+                    "coverage completion skipped already queued target");
+            node.visual_drop_=VisualDrop();node.vision_queue_->reset();node.coverage_closed_=true;
+            node.on_timer();require(node.homing_,"empty visual queue blocked coverage-complete home handoff");
+            // Closed loop with finite response lag and continuous XY disturbance.
+            // Exercise actual output directions rather than teleporting between states.
+            goal->header.stamp.sec += 1;node.on_goal(goal);
+            context->mission=goal->header;node.drop_context_=*context;
+            reset(node,{1.8,0});node.pz_=1.4;node.has_pose_=node.has_goal_=true;
+            node.homing_=false;node.poi_mode_=ExplorationNode::PoiMode::EXPLORE;
+            node.vision_queue_->enqueue({{1,{3,0},10,true,base-1,base},
+                {2,{4,1},10,true,base-.9,base},{3,{5,0},10,true,base-.8,base}},{1.8,0});
+            node.activate_visual_target(base);
+            double vx=0,vy=0,vz=0,wz=0;
+            unsigned sent=0; bool finished=false;
+            for(int tick=0;tick<9000;++tick) {
+                const double t=base+tick*.02;
+                if(!node.vision_queue_->active()) node.activate_visual_target(t);
+                if(!node.vision_queue_->active()) {
+                    finished=node.visual_drop_.completed()==3;break;
+                }
+                const auto v=node.visual_drop_velocity({},t);
+                require(std::isfinite(v.x)&&std::isfinite(v.y)&&std::isfinite(node.last_yaw_rate_),"closed loop produced NaN");
+                if(node.visual_drop_.phase()==Phase::Send) {
+                    ++sent;auto ack=std::make_shared<acfly_interfaces::msg::DropStatus>();
+                    ack->mission=goal->header;ack->release_index=sent;
+                    ack->target_id=node.visual_drop_.target_id();ack->success=true;
+                    std::shared_ptr<void> ack_msg=ack;node.drop_status_sub_->handle_message(ack_msg,rclcpp::MessageInfo{});
+                }
+                const double c=std::cos(node.yaw_),ss=std::sin(node.yaw_);
+                const Vec2 world{c*v.x-ss*v.y,ss*v.x+c*v.y};
+                const double zcmd=std::clamp(.6*(node.drop_command_altitude_-node.pz_)-.2*vz,
+                    -node.drop_command_speed_,node.drop_command_speed_);
+                vx+=(world.x+.018-vx)*.02/.25;vy+=(world.y-.013-vy)*.02/.25;
+                vz+=(zcmd-vz)*.02/.20;wz+=(node.last_yaw_rate_-wz)*.02/.20;
+                node.px_+=vx*.02;node.py_+=vy*.02;node.pz_+=vz*.02;node.yaw_+=wz*.02;
+                node.v_fwd_est_=std::cos(node.yaw_)*vx+std::sin(node.yaw_)*vy;
+                node.v_lat_est_=-std::sin(node.yaw_)*vx+std::cos(node.yaw_)*vy;
+                node.yaw_rate_est_=wz;node.last_command_world_=world;
+            }
+            require(finished&&sent==3&&node.vision_queue_->visited().size()==3,
+                    "closed-loop drift/response lag stalled, orbited, or repeated a release");
+            // Read the real SHM wire format into the active 1-second window.
+            goal->header.stamp.sec += 1;node.on_goal(goal);context->mission=goal->header;node.drop_context_=*context;
+            reset(node,{2,0});node.pz_=1.4;node.has_pose_=node.has_goal_=true;node.homing_=false;
+            const double sample_start=node.steady_seconds();
+            node.vision_queue_->enqueue({{1,{3,0},10,true,sample_start-1,sample_start}},{2,0});
+            node.activate_visual_target(sample_start);node.visual_drop_velocity({},sample_start);
+            const std::string sample_path="/tmp/acfly-drop-window-"+std::to_string(getpid())+".shm";
+            {
+                vision_shm::Writer writer(sample_path);
+                node.vision_reader_=std::make_unique<VisionShmReader>(sample_path,.5,.02);
+                writer.publish(vision_shm::monotonic_now(),{{1,3.1,0}});node.poll_vision_shm();
+                writer.publish(vision_shm::monotonic_now(),{});node.poll_vision_shm();
+                writer.publish(vision_shm::monotonic_now(),{{2,2.9,0}});node.poll_vision_shm();
+                require(node.visual_drop_.samples()==2,"SHM wiring dropped partial samples across empty frame");
+                node.visual_drop_velocity({},sample_start+1.001);
+                require(node.vision_queue_->active()->refined && node.vision_queue_->active()->class_id==0 &&
+                        std::abs(node.vision_queue_->active()->position.x-node.visual_drop_.object().x)<1e-12 &&
+                        node.visual_drop_.object().x>2.9 && node.visual_drop_.object().x<3,
+                        "SHM weighted coordinates failed to update queue when class votes tied");
+                node.vision_reader_.reset();
+            }
+            std::filesystem::remove(sample_path);
+            std::cout << "delivery node: context, three visits, fallback, offsets, holds, deadline, serial status and home handoff passed\n";
+        }
+        visual_sampling_brake_regression();
+        visual_sampling_brake_preserves_correction();
         std::cout << "required node: closed-loop and safety regressions passed\n";
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

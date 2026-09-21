@@ -92,10 +92,10 @@ bool VisionTargetQueue::activate_next(double now)
     return false;
 }
 
-bool VisionTargetQueue::refine_active(const VisionRefinement& result)
+bool VisionTargetQueue::refine_active(const VisionRefinement& result, bool allow_unknown_class)
 {
     if (!active_ || active_->refined || active_->track_id != result.track_id ||
-        result.class_id < 1 || result.class_id > 6 || !finite(result.position) ||
+        result.class_id < (allow_unknown_class ? 0 : 1) || result.class_id > 6 || !finite(result.position) ||
         result.samples < 1 || !std::isfinite(result.stamp) ||
         result.stamp <= active_->confirmed_stamp ||
         distance(result.position, active_->coarse_position) > cfg_.association_radius ||
@@ -121,9 +121,9 @@ bool VisionTargetQueue::defer_active(std::uint64_t track_id, double now)
     return true;
 }
 
-bool VisionTargetQueue::complete_active(std::uint64_t track_id, double now)
+bool VisionTargetQueue::complete_active(std::uint64_t track_id, double now, bool allow_coarse)
 {
-    if (!active_ || active_->track_id != track_id || !active_->refined || !std::isfinite(now)) return false;
+    if (!active_ || active_->track_id != track_id || (!active_->refined && !allow_coarse) || !std::isfinite(now)) return false;
     visited_.push_back({track_id, active_->position, active_->class_id, now});
     active_.reset();
     const auto suppressed = [&](const VisionVisitTarget& target) { return blacklisted(target.position); };

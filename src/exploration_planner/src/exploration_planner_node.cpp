@@ -59,6 +59,10 @@
 #include "exploration_planner/vision_near_confirmation.hpp"
 #include "exploration_planner/cloud_xyz.hpp"
 #include "exploration_planner/velocity_slew.hpp"
+#include "exploration_planner/visual_drop.hpp"
+#include <acfly_interfaces/msg/exploration_context.hpp>
+#include <acfly_interfaces/msg/exploration_command.hpp>
+#include <acfly_interfaces/msg/drop_status.hpp>
 
 using namespace std::chrono_literals;
 using namespace exploration;
@@ -94,6 +98,24 @@ public:
         if (!std::isfinite(vision_pose_timeout_) || vision_pose_timeout_ <= 0)
             throw std::invalid_argument("vision_pose_timeout_s must be positive");
         vision_candidates_ = std::make_unique<VisionCandidates>(vision_config);
+        visual_drop_enabled_ = declare_parameter<bool>("visual_drop_enabled", params::VISUAL_DROP_ENABLED);
+        VisualDropConfig dcfg;
+        dcfg.entry_distance = dd("visual_drop_entry_m", params::VISUAL_DROP_ENTRY_M);
+        dcfg.approach_slow_distance = dd("visual_drop_approach_slow_m", params::VISUAL_DROP_APPROACH_SLOW_M);
+        dcfg.entry_speed = dd("visual_drop_entry_speed_mps", params::VISUAL_DROP_ENTRY_SPEED_MPS);
+        dcfg.sample_seconds = dd("visual_drop_sample_s", params::VISUAL_DROP_SAMPLE_S);
+        dcfg.drop_height = dd("visual_drop_height_m", params::VISUAL_DROP_HEIGHT_M);
+        dcfg.xy_tolerance = dd("visual_drop_xy_tol_m", params::VISUAL_DROP_XY_TOL_M);
+        dcfg.stable_seconds = dd("visual_drop_stable_s", params::VISUAL_DROP_STABLE_S);
+        dcfg.timeout_seconds = dd("visual_drop_timeout_s", params::VISUAL_DROP_TIMEOUT_S);
+        dcfg.offset = dd("visual_drop_offset_m", params::VISUAL_DROP_OFFSET_M);
+        dcfg.descend_speed = dd("visual_drop_descend_mps", params::VISUAL_DROP_DESCEND_MPS);
+        dcfg.climb_speed = dd("visual_drop_climb_mps", params::VISUAL_DROP_CLIMB_MPS);
+        if (dcfg.descend_speed > .6 || dcfg.climb_speed > .6)
+            throw std::invalid_argument("visual drop vertical limits exceed main controller 0.6m/s");
+        dcfg.association_radius = vision_config.association_radius;
+        dcfg.weight_min_distance = vision_config.weight_min_distance;
+        visual_drop_ = VisualDrop(dcfg);
         VisionQueueConfig vision_queue_config;
         vision_queue_config.association_radius = vision_config.association_radius;
         vision_queue_config.blacklist_radius = dd("vision_blacklist_radius_m", params::VISION_BLACKLIST_RADIUS_M);
@@ -161,6 +183,8 @@ public:
         ccfg_.cloud_timeout = dd("corridor_cloud_timeout_s", params::CORRIDOR_CLOUD_TIMEOUT_S);
         ccfg_.cloud_window = dd("corridor_cloud_window_s", params::CORRIDOR_CLOUD_WINDOW_S);
         ccfg_.pose_timeout = dd("corridor_pose_timeout_s", params::CORRIDOR_POSE_TIMEOUT_S);
+        dcfg.observation_gap = ccfg_.pose_timeout;
+        visual_drop_ = VisualDrop(dcfg);
         corridor_z_below_ = dd("corridor_z_below", params::CORRIDOR_Z_BELOW);
         corridor_z_above_ = dd("corridor_z_above", params::CORRIDOR_Z_ABOVE);
         corridor_self_radius_ = dd("corridor_self_radius", params::CORRIDOR_SELF_RADIUS);
@@ -380,6 +404,26 @@ public:
         if (viz_) viz_obj_ = std::make_unique<Visualizer>(gcfg_, 1000);  // 1000px：小格(0.05m≈5px)能看清
 
         // ---- ROS 接口 ----
+        control_pub_ = create_publisher<acfly_interfaces::msg::ExplorationCommand>("/exploration/control", rclcpp::QoS(1));
+        context_sub_ = create_subscription<acfly_interfaces::msg::ExplorationContext>(
+            "/exploration/context", rclcpp::QoS(1).transient_local(),
+            [this](const acfly_interfaces::msg::ExplorationContext::SharedPtr msg) {
+                std::lock_guard<std::mutex> lk(mtx_);
+                if (!std::isfinite(msg->home_z) || !std::isfinite(msg->cruise_z) ||
+                    !std::isfinite(msg->height_tolerance) || msg->height_tolerance <= 0 ||
+                    msg->mission.frame_id != "camera_init") return;
+                // Don't replace the active mission's baseline with a late old context.
+                if (drop_context_ && rclcpp::Time(msg->mission.stamp) < rclcpp::Time(drop_context_->mission.stamp)) return;
+                drop_context_ = *msg;
+            });
+        drop_status_sub_ = create_subscription<acfly_interfaces::msg::DropStatus>(
+            "/exploration/drop_status", rclcpp::QoS(1).transient_local(),
+            [this](const acfly_interfaces::msg::DropStatus::SharedPtr msg) {
+                std::lock_guard<std::mutex> lk(mtx_);
+                if (msg->mission == goal_header_ && visual_drop_.phase() == VisualDrop::Phase::Send &&
+                    msg->target_id == visual_drop_.target_id() && msg->release_index == visual_drop_.release_index())
+                    drop_status_ = *msg;
+            });
         cmd_pub_ = create_publisher<geometry_msgs::msg::TwistStamped>("/exploration/cmd_vel", 10);
 
         rclcpp::QoS latched(1);
@@ -467,9 +511,17 @@ public:
         bool turning; int turn_dir;
         bool unreach_valid; Vec2 unreach_pos;
         CorridorVisualState corridor_visual;
+        DeliveryVisualState delivery_visual;
         {
             std::lock_guard<std::mutex> lk(mtx_);
             px = px_; py = py_; yaw = yaw_; pose_valid = has_pose_;
+            if (visual_drop_enabled_) {
+                delivery_visual.package_offset = visual_drop_.package_offset();
+                if (vision_queue_->active()) {
+                    delivery_visual.target_valid = true;
+                    delivery_visual.target = vision_queue_->active()->position;
+                }
+            }
             goal = goal_; goal_valid = has_goal_;
             traj = traj_;                 // 拷贝（轨迹只在收到 goal 时变，拷贝不频繁）
             look = last_look_; look_valid = look_valid_;
@@ -529,7 +581,7 @@ public:
         cv::Mat img = viz_obj_->render(grid_snap, traj, goal, goal_valid,
                                        px, py, yaw, pose_valid, look, look_valid,
                                        pois, obstacles,
-                                       turning, turn_dir, unreach_valid, unreach_pos, corridor_visual);
+                                       turning, turn_dir, unreach_valid, unreach_pos, corridor_visual, delivery_visual);
         cv::imshow("Exploration", img);
         const int key = cv::waitKey(params::VIZ_PERIOD_MS);
         if (key == 27 /*ESC*/) return false;
@@ -633,6 +685,11 @@ private:
                 RCLCPP_WARN(get_logger(), "[探索任务] 同一任务标识对应不同终点，忽略冲突消息；新任务需使用新时间戳");
             return;  // Re-delivery must not restart a turn, POI wait or completed mission.
         }
+        visual_drop_.reset();
+        coverage_closed_ = false;
+        drop_status_.reset();
+        drop_path_.clear(); drop_path_retry_ = -1;
+        drop_cruise_z_.reset(); drop_pause_z_.reset();
         vision_candidates_->reset();
         vision_queue_->reset();
         vision_near_->reset();
@@ -717,7 +774,7 @@ private:
         const bool release = (msg->point.z >= 0.5);   // z=1 放行
 
         std::lock_guard<std::mutex> lk(mtx_);
-        if (!exploration_enabled_) return;
+        if (!exploration_enabled_ || (visual_drop_enabled_ && visual_drop_.completed() >= 3)) return;
 
         if (release) {
             // 放行信号：只在正等待、且坐标匹配当前等待点(±POI_SAME_TOL)时接管继续探索
@@ -1700,7 +1757,8 @@ private:
 
     // Required points keep an exact, independently validated terminal segment.
     // Position errors affect speed only; heading always follows the checked path.
-    Vec2 pd_to_point_avoid(const Vec2& target, const Obstacles& obs)
+    Vec2 pd_to_point_avoid(const Vec2& target, const Obstacles& obs,
+                          double travel_speed_limit = std::numeric_limits<double>::infinity())
     {
         const Vec2 cur{px_, py_};
         const GlobalConfig required_cfg = required_config();
@@ -1830,13 +1888,14 @@ private:
                 // Remaining arc length limits forward travel, not the side
                 // correction needed to resist drift. Scaling both to zero near
                 // the endpoint can leave a moving aircraft unable to arrive.
-                const double cap = std::max(0.0, kp_goal_ * remaining -
-                    kd_goal_ * std::max(0.0, v_fwd_est_));
+                const double cap = std::min(travel_speed_limit, std::max(0.0, kp_goal_ * remaining -
+                    kd_goal_ * std::max(0.0, v_fwd_est_)));
                 command.v_fwd = std::min(command.v_fwd, cap);
             } else {
                 const double toward_speed = std::max(0.0,
                     (v_fwd_est_ * command.v_fwd + v_lat_est_ * command.v_lat) / speed);
-                const double cap = std::max(0.0, kp_goal_ * remaining - kd_goal_ * toward_speed);
+                const double cap = std::min(travel_speed_limit,
+                    std::max(0.0, kp_goal_ * remaining - kd_goal_ * toward_speed));
                 const double scale = std::min(1.0, cap / speed);
                 command.v_fwd *= scale;
                 command.v_lat *= scale;
@@ -2005,6 +2064,149 @@ private:
         tracker_->constrain_forward_command(command.v_fwd);
         tracker_->constrain_lateral_command(command.v_lat);
         return command;
+    }
+
+    bool drop_context_valid() const { return drop_context_ && drop_context_->mission == goal_header_; }
+
+    // Holonomic velocity tracking: the locked yaw never gates XY corrections.
+    // Every segment and the final command still pass the required-point obstacle checks.
+    Vec2 drop_xy_velocity(Vec2 target, const Obstacles& obs, double t, bool holding)
+    {
+        const Vec2 cur{px_, py_};
+        const auto cfg = required_config();
+        Path2 direct{cur, target};
+        if (required_path_clear(cur, direct, target, obs, cfg)) {
+            drop_path_ = direct;
+        } else {
+            if (!drop_path_.empty()) drop_path_.back() = target;
+            if (drop_path_.empty() || !required_path_clear(cur, drop_path_, target, obs, cfg)) {
+                drop_path_.clear();
+                if (t >= drop_path_retry_) {
+                    drop_path_retry_ = t + .20;
+                    const auto planned = plan_required_path(cur, target, obs, cfg);
+                    if (planned.ok) drop_path_ = planned.path;
+                }
+            }
+        }
+        global_failed_ = drop_path_.empty(); global_goal_blocked_ = false;
+        if (global_failed_) {
+            traj_.clear(); global_raw_.clear(); global_traj_.clear(); global_has_ = false;
+            last_yaw_rate_ = 0;
+            return recovery_velocity(obs, true);
+        }
+        global_target_ = target;
+        global_connector_start_ = drop_path_.size() > 1 ? drop_path_[drop_path_.size()-2] : cur;
+        global_raw_ = drop_path_; global_traj_ = make_polyline_trajectory(drop_path_);
+        traj_ = global_traj_; global_has_ = true;
+        Vec2 carrot = target;
+        // Furthest directly visible vertex on the checked route, without cutting an obstacle corner.
+        bool visible = false;
+        for (size_t i = drop_path_.size(); i-- > 0;) {
+            if (required_path_clear(cur, Path2{cur, drop_path_[i]}, drop_path_[i], obs, cfg)) {
+                carrot = drop_path_[i]; visible = true; break;
+            }
+        }
+        if (!visible) { global_failed_ = true; last_yaw_rate_ = 0; return recovery_velocity(obs, true); }
+        last_look_ = carrot; look_valid_ = true;
+        const double c = std::cos(yaw_), s = std::sin(yaw_);
+        const Vec2 measured{c*v_fwd_est_-s*v_lat_est_, s*v_fwd_est_+c*v_lat_est_};
+        Vec2 desired{kp_goal_*(carrot.x-px_)-kd_goal_*measured.x,
+                     kp_goal_*(carrot.y-py_)-kd_goal_*measured.y};
+        const double cap = std::min(v_goal_max_, holding ? .20 : .40);
+        const auto limit = [cap](Vec2& v) {
+            const double n = std::hypot(v.x,v.y);
+            if (n > cap) { v.x *= cap/n; v.y *= cap/n; }
+        };
+        limit(desired);
+        desired = slew_velocity(last_command_world_, desired, measured,
+            gains_.max_accel, xy_brake_accel_, gains_.dt);
+        limit(desired);
+        VelCmd command;
+        command.v_fwd = c*desired.x+s*desired.y; command.v_lat = -s*desired.x+c*desired.y;
+        command.holding_position = holding;
+        command.yaw_rate = std::clamp(gains_.kp_yaw*wrap_pi(visual_drop_.yaw()-yaw_) -
+            gains_.kd_yaw*yaw_rate_est_, -gains_.max_yaw_rate, gains_.max_yaw_rate);
+        return guard_required_command(command, obs, false);
+    }
+
+    Vec2 visual_drop_velocity(const Obstacles& obs, double t)
+    {
+        using Phase = VisualDrop::Phase;
+        const auto target = *vision_queue_->active();
+        if (visual_drop_.phase() == Phase::Idle) visual_drop_.begin(target);
+        if (!drop_context_valid()) {
+            vision_last_event_ = "drop_waiting_for_takeoff_context";
+            last_yaw_rate_ = 0;
+            RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                "[探索投放] 等待主控本次任务的起飞Z和高度容差，保持当前位置");
+            return recovery_velocity(obs, true);
+        }
+        auto before = visual_drop_.phase();
+        if (drop_status_) {
+            if (visual_drop_.serial_finished(drop_status_->release_index, drop_status_->target_id, {px_, py_})) {
+                RCLCPP_INFO(get_logger(), "[探索投放] 第%u次%s，锁XY(%.3f,%.3f)回升到Z=%.3f",
+                    drop_status_->release_index, drop_status_->success ? "写出完成" : "发送失败",
+                    px_, py_, visual_drop_.return_z());
+                drop_path_.clear(); drop_pause_z_.reset();
+                if (visual_drop_.completed() >= 3) { coverage_closed_ = true; vision_queue_->discard_waiting(); poi_queue_.clear(); }
+            }
+            drop_status_.reset();
+        }
+        visual_drop_.tick({px_, py_}, pz_, yaw_, t, drop_context_->home_z, drop_context_->height_tolerance);
+        auto phase = visual_drop_.phase();
+        if (phase != before) {
+            drop_path_.clear(); drop_path_retry_ = -1;
+            RCLCPP_INFO(get_logger(), "[探索投放] 区域#%llu %s -> %s；采样%d帧，坐标(%.3f,%.3f)，强制超时=%d",
+                static_cast<unsigned long long>(target.track_id), VisualDrop::name(before), VisualDrop::name(phase),
+                visual_drop_.samples(), visual_drop_.object().x, visual_drop_.object().y, visual_drop_.forced());
+            if (phase == Phase::Sample) {
+                RCLCPP_INFO(get_logger(), "[探索投放] 采样入口：锁XY(%.3f,%.3f)，距目标%.3fm，实测水平速度%.3fm/s",
+                    px_, py_, std::hypot(px_ - visual_drop_.object().x, py_ - visual_drop_.object().y),
+                    std::hypot(v_fwd_est_, v_lat_est_));
+            }
+            if (before == Phase::Sample && visual_drop_.refinement()) {
+                if (vision_queue_->refine_active(*visual_drop_.refinement(), true)) ++vision_near_confirmations_;
+                else visual_drop_.reject_refinement();
+            }
+        }
+        vision_last_event_ = std::string("drop_") + VisualDrop::name(phase);
+        if (phase == Phase::Approach) {
+            // Brake before the one-metre sample point, not at the object itself.
+            // The path/yaw controller, lateral drift correction and final safety
+            // checks retain ownership; the cap only reduces approach travel.
+            return pd_to_point_avoid(target.position, obs,
+                visual_drop_.approach_speed_limit({px_, py_}, v_goal_max_));
+        }
+        if (phase == Phase::Done) {
+            const Vec2 result = drop_xy_velocity(visual_drop_.lidar_target(yaw_), obs, t, true);
+            drop_cruise_z_ = visual_drop_.return_z();
+            drop_command_altitude_ = *drop_cruise_z_;
+            drop_command_speed_ = visual_drop_.vertical_limit(pz_, drop_context_->home_z, 0, 0);
+            if (vision_queue_->complete_active(target.track_id, t, true)) {
+                const auto& visited = vision_queue_->visited().back();
+                vision_candidates_->discard_visited(visited.track_id, visited.position, vision_queue_->blacklist_radius());
+                vision_applied_visits_ = vision_queue_->visited().size();
+                visual_drop_.finish_visit(); vision_near_->reset();
+                global_has_ = global_failed_ = false; global_tracker_->set_trajectory({});
+                plan_pending_ = true;
+            }
+            return result;
+        }
+        const Vec2 aim = visual_drop_.lidar_target(yaw_);
+        const Vec2 velocity = drop_xy_velocity(aim, obs, t, phase == Phase::Sample || phase == Phase::Climb);
+        drop_command_altitude_ = visual_drop_.altitude(drop_context_->home_z);
+        const double distance = std::hypot(aim.x-px_, aim.y-py_);
+        const double c = std::cos(yaw_), s = std::sin(yaw_);
+        const double towards = distance > 1e-6 ?
+            ((c*velocity.x-s*velocity.y)*(aim.x-px_) + (s*velocity.x+c*velocity.y)*(aim.y-py_))/distance : .4;
+        drop_command_speed_ = visual_drop_.vertical_limit(pz_, drop_context_->home_z, distance, towards);
+        // If no safe XY route exists, retain altitude until a path is available.
+        // The already-started four-second deadline remains irreversible.
+        if (phase == Phase::Descend && (global_failed_ || global_braking_blocked_)) {
+            if (!drop_pause_z_) drop_pause_z_ = pz_;
+            drop_command_altitude_ = *drop_pause_z_;
+        } else drop_pause_z_.reset();
+        return velocity;
     }
 
     void reset_visual_approach()
@@ -2223,7 +2425,7 @@ private:
     // ---------- 20Hz 主循环 ----------
     void activate_visual_target(double current_time)
     {
-        if (vision_queue_->active()) return;
+        if (vision_queue_->active() || (visual_drop_enabled_ && visual_drop_.completed() >= 3)) return;
         reset_visual_approach();
         if (!vision_queue_->activate_next(current_time)) { vision_near_->reset(); return; }
         const auto& active = *vision_queue_->active();
@@ -2238,6 +2440,7 @@ private:
         global_tracker_->set_trajectory({});
         global_raw_.clear();
         global_traj_.clear();
+        if (visual_drop_enabled_) visual_drop_.begin(active);
         vision_near_->begin(active, current_time, std::max(active.confirmed_stamp, vision_last_frame_.stamp));
         vision_near_->position({px_, py_}, current_time);
         vision_last_event_ = "active_target_selected";
@@ -2279,6 +2482,23 @@ private:
         if (!vision_collection_active_) { vision_candidates_->interrupt(); vision_near_->interrupt(); }
         if (!vision_reader_) return;
         vision_new_frame_ = vision_reader_->poll(current_time);
+        if (visual_drop_enabled_) {
+            if (vision_new_frame_) vision_last_frame_ = *vision_new_frame_;
+            if (vision_collection_active_) {
+                if (vision_new_frame_) {
+                    const auto filtered = vision_queue_->filter_blacklisted(*vision_new_frame_);
+                    vision_queue_->observe(filtered, current_time);
+                    if (!coverage_closed_ && visual_drop_.completed() < 3) {
+                        vision_new_confirmations_ = vision_candidates_->update(filtered, {px_, py_}, current_time);
+                        vision_queue_->enqueue(vision_candidates_->snapshot(), {px_, py_});
+                    }
+                    visual_drop_.sample(filtered, {px_, py_}, current_time,
+                        vision_queue_->other_positions(visual_drop_.target_id()));
+                }
+                activate_visual_target(current_time);
+            }
+            return;
+        }
         if (vision_new_frame_) {
             vision_last_frame_ = *vision_new_frame_;
             if (vision_reader_->statistics().frames == 1 || vision_new_frame_->restarted)
@@ -2339,6 +2559,8 @@ private:
 
     void on_timer()
     {
+        acfly_interfaces::msg::ExplorationCommand control;
+        bool publish_control = false;
         geometry_msgs::msg::TwistStamped cmd;
         cmd.header.stamp = now();
         cmd.header.frame_id = "base_link";   // 机体系
@@ -2354,12 +2576,16 @@ private:
         {
             std::lock_guard<std::mutex> lk(mtx_);
 
-            // Stages 3/4: data-only queue and near confirmation. These targets
-            // still do not change the navigation goal or flight commands.
+            // Read each new vision frame once; the active delivery owns its
+            // one-second refinement window and cannot be preempted by new targets.
             poll_vision_shm();
             recovery_requested_ = false;
+            drop_command_altitude_ = drop_cruise_z_.value_or(
+                drop_context_valid() ? drop_context_->cruise_z : pz_);
+            drop_command_speed_ = .10;
 
             if (!has_pose_) {
+                visual_drop_.pose_interrupted();
                 // 无位姿：发零速度占位
                 last_command_world_ = {};
                 recovery_holding_ = false;
@@ -2368,6 +2594,7 @@ private:
             }
 
             if (!corridor_->active() && !pose_freshness_.fresh(steady_seconds(), ccfg_.pose_timeout)) {
+                visual_drop_.pose_interrupted();
                 last_command_world_ = {};
                 recovery_holding_ = false;
                 // The same odometry requirement applies before the corridor:
@@ -2445,11 +2672,16 @@ private:
             //                  收到同点 z=1 放行 → 弹队、回 EXPLORE 继续探索。
             // 多插点：排队当前优先；放行后弹下一个。
             // ============================================================
+            if (visual_drop_enabled_ && has_goal_ && !homing_) {
+                if (grid_->coverage_ratio() >= done_coverage_) coverage_closed_ = true;
+                activate_visual_target(steady_seconds());
+            }
             bool poi_active = false;
             bool vision_target_active = false;
 
             // 空闲(EXPLORE)且队列有插点 → 取队首开始去飞（归航后不再接插点）
-            if (poi_mode_ == PoiMode::EXPLORE && !homing_ && !poi_queue_.empty()) {
+            if (poi_mode_ == PoiMode::EXPLORE && !homing_ && !poi_queue_.empty() &&
+                !(visual_drop_enabled_ && (vision_queue_->active() || visual_drop_.completed() >= 3))) {
                 poi_target_ = poi_queue_.front();
                 poi_mode_ = PoiMode::GOTO_POI;
                 reset_visual_approach();
@@ -2507,10 +2739,14 @@ private:
                 }
             }
 
-            // Visual target execution uses the same exact-goal A* and tracker
-            // as required POIs. Completion/hover is deliberately handled by a
-            // later stage; this branch only proves safe motion and near speed.
-            if (!poi_active && !homing_ && has_pose_ && vision_queue_->active()) {
+            // Delivery and the optional legacy visit executor have exclusive
+            // ownership of visual-target motion.
+            if (!poi_active && !homing_ && has_pose_ && visual_drop_enabled_ && vision_queue_->active()) {
+                vision_target_active = true;
+                const Vec2 vb = visual_drop_velocity(obstacles, steady_seconds());
+                cmd.twist.linear.x = vb.x; cmd.twist.linear.y = vb.y; cmd.twist.angular.z = last_yaw_rate_;
+            }
+            if (!visual_drop_enabled_ && !poi_active && !homing_ && has_pose_ && vision_queue_->active()) {
                 vision_target_active = true;
                 const auto target = *vision_queue_->active();
                 const Vec2 vb = visual_target_velocity(target, obstacles);
@@ -2583,7 +2819,8 @@ private:
             //   覆盖率只读一次并复用：判定与日志同源，日志里印的就是真正触发归航的那个值。
             if (!poi_active && !vision_target_active && has_goal_ && !homing_) {
                 const double cov = grid_->coverage_ratio();
-                if (cov >= done_coverage_) {
+                if (cov >= done_coverage_ || (visual_drop_enabled_ &&
+                    (coverage_closed_ || visual_drop_.completed() >= 3))) {
                     homing_ = true;
                     turning_for_solution_ = false;            // 转归航：打断探索的原地转身找解
                     tracker_->set_trajectory(Trajectory{});
@@ -2842,6 +3079,13 @@ private:
                     }
                 }
                 number("coverage_ratio", coverage.data);
+                number("visual_drop_count", visual_drop_.completed());
+                number("visual_drop_samples", visual_drop_.samples());
+                number("visual_drop_phase", static_cast<int>(visual_drop_.phase()));
+                number("visual_drop_xy_since", visual_drop_.xy_since());
+                number("visual_drop_forced", visual_drop_.forced());
+                number("visual_drop_altitude", drop_command_altitude_);
+                number("visual_drop_vertical_limit", drop_command_speed_);
                 number("replan_checks", replan_checks_);
                 number("candidate_skips", candidate_skips_);
                 number("active_band", cur_band_);
@@ -2905,12 +3149,19 @@ private:
                 diagnostics.status.push_back(status);
             }
             if (publish_finished) completed_goal = goal_header_;
+            if (has_goal_ && pose_freshness_.fresh(steady_seconds(), ccfg_.pose_timeout)) {
+                control.header = cmd.header; control.mission = goal_header_; control.velocity = cmd.twist;
+                control.altitude = drop_command_altitude_; control.vertical_speed_limit = drop_command_speed_;
+                control.release_index = visual_drop_.release_index(); control.target_id = visual_drop_.target_id();
+                publish_control = true;
+            }
         }
 
         std_msgs::msg::Bool active_msg;
         active_msg.data = corridor_active;
         corridor_active_pub_->publish(active_msg);
         cmd_pub_->publish(cmd);
+        if (publish_control) control_pub_->publish(control);
         if (publish_diagnostics) {
             coverage_pub_->publish(coverage);
             active_path_pub_->publish(active_path);
@@ -3002,6 +3253,16 @@ private:
     CorridorCommand corridor_command_;
     bool corridor_enabled_ = true;
     std::string corridor_cloud_topic_;
+    bool visual_drop_enabled_ = true, coverage_closed_ = false;
+    VisualDrop visual_drop_;
+    std::optional<acfly_interfaces::msg::ExplorationContext> drop_context_;
+    std::optional<acfly_interfaces::msg::DropStatus> drop_status_;
+    std::optional<double> drop_cruise_z_, drop_pause_z_;
+    double drop_command_altitude_ = 0, drop_command_speed_ = .10, drop_path_retry_ = -1;
+    Path2 drop_path_;
+    rclcpp::Publisher<acfly_interfaces::msg::ExplorationCommand>::SharedPtr control_pub_;
+    rclcpp::Subscription<acfly_interfaces::msg::ExplorationContext>::SharedPtr context_sub_;
+    rclcpp::Subscription<acfly_interfaces::msg::DropStatus>::SharedPtr drop_status_sub_;
     bool corridor_disabled_for_goal_ = false;
     bool corridor_route_received_ = false;
     nav_msgs::msg::Path pending_corridor_route_;

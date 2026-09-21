@@ -37,6 +37,10 @@
 #include "fly_mission/udp_cmd_link.hpp"  // 跨机命令(启动指令)UDP 读端，见 params::CMD_USE_UDP
 #include "fly_mission/udp_telemetry.hpp" // 遥测上报(飞机→监控端)，见 params::TLM_ENABLE
 #include "fly_mission/arduino_serial.hpp"
+#include "fly_mission/exploration_drop_sender.hpp"
+#include <acfly_interfaces/msg/exploration_context.hpp>
+#include <acfly_interfaces/msg/exploration_command.hpp>
+#include <acfly_interfaces/msg/drop_status.hpp>
 
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/twist_stamped.hpp>
@@ -272,6 +276,19 @@ private:
     rclcpp::Time lost_since_;
     bool         lost_since_valid_ = false;
 
+    void receive_exploration_control(const acfly_interfaces::msg::ExplorationCommand& msg);
+    void exploration_drop_tick();
+    static double exploration_steady_seconds() {
+        return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    }
+    rclcpp::Publisher<acfly_interfaces::msg::ExplorationContext>::SharedPtr exploration_context_pub_;
+    rclcpp::Publisher<acfly_interfaces::msg::DropStatus>::SharedPtr drop_status_pub_;
+    rclcpp::Subscription<acfly_interfaces::msg::ExplorationCommand>::SharedPtr exploration_control_sub_;
+    acfly_interfaces::msg::ExplorationCommand exploration_control_;
+    bool unified_control_ = false;
+    double control_received_ = -1;
+    ExplorationDropSender drop_sender_;
+    unsigned drop_logged_ = 0;
     // ---- 探索：算法速度转发 ----
     double ext_v_fwd_    = 0.0;
     double ext_v_lat_    = 0.0;

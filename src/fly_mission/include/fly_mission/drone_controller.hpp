@@ -84,7 +84,11 @@ public:
     //（收到首个速度命令前由看门狗保高悬停）
     void enter_exploration();
     // 算法每拍调用：缓存机体系速度命令（前进 / 横向纠偏 / yaw_rate）+ 时间戳
-    void set_velocity_body(double v_fwd, double v_lat, double yaw_rate);
+    void set_exploration_altitude(double absolute_z, double speed_limit);
+    // Stop a stale upstream command without waiting for a second watchdog timeout.
+    void expire_external_velocity();
+    // Forwarders pass the remaining upstream lifetime; caching cannot renew it.
+    void set_velocity_body(double v_fwd, double v_lat, double yaw_rate, double valid_for_seconds = .3);
     // ====================================================================
     //   状态查询
     // ====================================================================
@@ -116,6 +120,8 @@ public:
     }
     const std::string& mode_string() const { return current_state_.mode; }
     bool has_pose() const      { return has_pose_.load(); }
+    // External control requires advancing odometry and a fresh local receipt.
+    bool has_fresh_pose(double timeout = .30) const;
     // 当前 SLAM 高度 (m)：给"进某状态时锁定当前高度"的场合用(如追踪小车锁高)。
     //   无位姿时返回 0，调用方应先用 has_pose() 判过。
     double current_z() const   { return current_pose_.pose.position.z; }
@@ -192,6 +198,9 @@ private:
     double prev_pos_x_   = 0.0;
     double prev_pos_y_   = 0.0;
     double prev_pos_z_   = 0.0;
+    std::chrono::steady_clock::time_point pose_received_{};
+    std::int64_t pose_source_stamp_ = -1;
+    bool pose_receipt_valid_ = false;
     rclcpp::Time prev_pose_time_;
     bool         prev_pose_valid_ = false;
 
@@ -241,8 +250,13 @@ private:
     double       ext_v_fwd_    = 0.0;   // 机体前进 (m/s)
     double       ext_v_lat_    = 0.0;   // 机体横向纠偏 (m/s)
     double       ext_yaw_rate_ = 0.0;   // (rad/s)
+    std::chrono::steady_clock::time_point ext_received_{};
     rclcpp::Time ext_cmd_time_;         // 最近一次收到速度的时间（看门狗用）
+    double ext_cmd_timeout_ = .3;
     bool         ext_valid_    = false; // 是否已收到过速度命令
+    double explore_z_speed_ = .10;
+    bool ext_watchdog_holding_ = false;
+    double ext_hold_x_ = 0, ext_hold_y_ = 0;
     double       explore_z_    = 0.0;   // 进入探索时锁定的保持高度 (slam z)
 
     // ---- 圆周运动状态（description_circle_right）----
