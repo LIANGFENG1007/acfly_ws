@@ -17,7 +17,7 @@ public:
     void request(unsigned index, std::uint64_t target, double now, ArduinoSerial& serial, int repeats) {
         if (!index || index > 3 || !target || pending_ || index != completed_ + 1) return;
         pending_ = Result{index, target, false, ""}; started_ = now;
-        const std::string command = index == 1 ? "DIANCI ON" : index == 2 ? "DIANCI2 ON" : "DIANCI3 ON";
+        const std::string command = index == 1 ? "DIANCI" : index == 2 ? "DIANCI2" : "DIANCI3";
         // Previous unrelated traffic must not be mistaken for a successful batch.
         if (!serial.ok()) finish(false, "serial port is not open");
         else if (serial.pending() || !serial.queue(command, repeats)) finish(false, "serial queue unavailable");

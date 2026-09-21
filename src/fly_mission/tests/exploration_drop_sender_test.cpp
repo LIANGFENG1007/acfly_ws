@@ -35,7 +35,7 @@ int main(){try{
         for(int j=0;j<20;++j){serial.pump();sender.poll(10+j*.02,serial);}
         auto result=sender.result(i,100+i);check(result&&result->success,"partial writes failed batch");
         sender.request(i,100+i,11,serial,5);serial.pump();
-        std::string expected,line=i==1?"DIANCI ON\n":i==2?"DIANCI2 ON\n":"DIANCI3 ON\n";
+        std::string expected,line=i==1?"DIANCI\n":i==2?"DIANCI2\n":"DIANCI3\n";
         for(int n=0;n<5;++n) expected+=line;
         check(read_all(master)==expected,"wrong command or duplicate/missing five lines");
     }
@@ -57,6 +57,6 @@ int main(){try{
     ArduinoSerial absent("/tmp/acfly-no-such-serial",0);sender.reset(absent);sender.request(1,101,20,absent,5);
     check(sender.result(1,101)&&!sender.result(1,101)->success,"closed port counted as success");
     check(absent.queue(std::string(100,'x'),5),"capacity fixture");auto size=absent.pending();
-    check(!absent.queue("DIANCI ON",5)&&absent.pending()==size,"queue capacity failure left partial batch");
+    check(!absent.queue("DIANCI",5)&&absent.pending()==size,"queue capacity failure left partial batch");
     close(master);std::cout<<"Five-line serial batches, partial writes, deduplication, abort, timeout, closed port and failures passed\n";
 }catch(const std::exception&e){std::cerr<<e.what()<<'\n';return 1;}}
