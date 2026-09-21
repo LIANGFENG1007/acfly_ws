@@ -111,6 +111,7 @@ public:
         dcfg.offset = dd("visual_drop_offset_m", params::VISUAL_DROP_OFFSET_M);
         dcfg.descend_speed = dd("visual_drop_descend_mps", params::VISUAL_DROP_DESCEND_MPS);
         dcfg.climb_speed = dd("visual_drop_climb_mps", params::VISUAL_DROP_CLIMB_MPS);
+        dcfg.release_wait = dd("visual_drop_release_wait_s", params::VISUAL_DROP_RELEASE_WAIT_S);
         if (dcfg.descend_speed > .6 || dcfg.climb_speed > .6)
             throw std::invalid_argument("visual drop vertical limits exceed main controller 0.6m/s");
         dcfg.association_radius = vision_config.association_radius;
@@ -2143,10 +2144,10 @@ private:
         }
         auto before = visual_drop_.phase();
         if (drop_status_) {
-            if (visual_drop_.serial_finished(drop_status_->release_index, drop_status_->target_id, {px_, py_})) {
-                RCLCPP_INFO(get_logger(), "[探索投放] 第%u次%s，锁XY(%.3f,%.3f)回升到Z=%.3f",
+            if (visual_drop_.serial_finished(drop_status_->release_index, drop_status_->target_id, {px_, py_}, t)) {
+                RCLCPP_INFO(get_logger(), "[探索投放] 第%u次%s，锁XY(%.3f,%.3f)，保持投放高度等待%.1fs后回升到Z=%.3f",
                     drop_status_->release_index, drop_status_->success ? "写出完成" : "发送失败",
-                    px_, py_, visual_drop_.return_z());
+                    px_, py_, visual_drop_.release_wait(), visual_drop_.return_z());
                 drop_path_.clear(); drop_pause_z_.reset();
                 if (visual_drop_.completed() >= 3) { coverage_closed_ = true; vision_queue_->discard_waiting(); poi_queue_.clear(); }
             }
@@ -2193,7 +2194,8 @@ private:
             return result;
         }
         const Vec2 aim = visual_drop_.lidar_target(yaw_);
-        const Vec2 velocity = drop_xy_velocity(aim, obs, t, phase == Phase::Sample || phase == Phase::Climb);
+        const Vec2 velocity = drop_xy_velocity(aim, obs, t,
+            phase == Phase::Sample || phase == Phase::Wait || phase == Phase::Climb);
         drop_command_altitude_ = visual_drop_.altitude(drop_context_->home_z);
         const double distance = std::hypot(aim.x-px_, aim.y-py_);
         const double c = std::cos(yaw_), s = std::sin(yaw_);

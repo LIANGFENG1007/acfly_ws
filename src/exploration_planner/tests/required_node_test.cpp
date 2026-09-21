@@ -2166,17 +2166,28 @@ int main(int argc, char** argv)
                 std::shared_ptr<void> status_message=wrong;
                 node.drop_status_sub_->handle_message(status_message,rclcpp::MessageInfo{});
                 require(!node.drop_status_,"another target's acknowledgement accepted");
-                wrong->target_id=i;wrong->success=i!=2; // Send failure must also climb and count once.
+                wrong->target_id=i;wrong->success=i!=2; // Send failure must also wait, climb and count once.
                 node.drop_status_sub_->handle_message(status_message,rclcpp::MessageInfo{});
                 node.pz_=.7;
                 node.visual_drop_velocity({},t+6.02);
-                require(node.visual_drop_.phase()==Phase::Climb && node.visual_drop_.completed()==i &&
-                        node.drop_command_altitude_==1.4 && node.drop_command_speed_==.6,
-                        "serial outcome did not immediately begin climb");
+                require(node.visual_drop_.phase()==Phase::Wait && node.visual_drop_.completed()==i &&
+                        node.drop_command_altitude_==.7 && node.drop_command_speed_==.1 &&
+                        node.visual_drop_.release_index()==0,
+                        "serial outcome did not hold the drop altitude for the release wait");
                 node.drop_status_sub_->handle_message(status_message,rclcpp::MessageInfo{});
-                require(!node.drop_status_,"duplicate acknowledgement relatched climb XY");
+                require(!node.drop_status_,"duplicate acknowledgement relatched wait XY");
                 node.last_command_world_={};node.px_+=.1;node.py_+=.05;
                 correction=node.visual_drop_velocity({},t+6.04);
+                require(correction.x<0&&correction.y<0,"release wait did not correct both axes to fixed anchor");
+                node.visual_drop_velocity({},t+8.01);
+                require(node.visual_drop_.phase()==Phase::Wait && node.drop_command_altitude_==.7,
+                        "climb began before the configured two-second release wait");
+                node.visual_drop_velocity({},t+8.03);
+                require(node.visual_drop_.phase()==Phase::Climb &&
+                        node.drop_command_altitude_==1.4 && node.drop_command_speed_==.6,
+                        "release wait did not hand over to climb");
+                node.last_command_world_={};node.px_+=.1;node.py_+=.05;
+                correction=node.visual_drop_velocity({},t+8.05);
                 require(correction.x<0&&correction.y<0,"climb did not correct both axes to fixed anchor");
                 if(i==2) node.coverage_closed_=true; // Coverage finished, third already queued.
                 if(i==3) {
@@ -2185,7 +2196,7 @@ int main(int argc, char** argv)
                     late_poi->point.x=6;late_poi->point.y=1;
                     node.on_poi(late_poi); // Arrives after the third release, during climb.
                 }
-                node.pz_=1.31;node.visual_drop_velocity({},t+7);
+                node.pz_=1.31;node.visual_drop_velocity({},t+9);
                 require(node.vision_queue_->visited().size()==i && node.visual_drop_.phase()==Phase::Idle,
                         "coarse delivery/failure never completed visit after climb");
             }

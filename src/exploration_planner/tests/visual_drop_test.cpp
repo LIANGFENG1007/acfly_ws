@@ -61,27 +61,43 @@ void timers_and_offsets() {
         check(d.phase()==Phase::Descend,"released before four second deadline");
         d.tick({p.x+.3,p.y},1,0,16,.1,.1);
         check(d.phase()==Phase::Send && d.forced() && d.release_index()==index,"drift/height restarted irreversible timeout");
-        check(!d.serial_finished(index,99,{4,4}),"wrong target serial result accepted");
-        check(d.serial_finished(index,index,{2.4,2.2}),"current serial result rejected");
-        check(!d.serial_finished(index,index,{4,4}) && d.completed()==index,"duplicate result counted twice");
+        check(!d.serial_finished(index,99,{4,4},16),"wrong target serial result accepted");
+        check(d.serial_finished(index,index,{2.4,2.2},16),"current serial result rejected");
+        check(!d.serial_finished(index,index,{4,4},16.01) && d.completed()==index,"duplicate result counted twice");
         auto anchor=d.lidar_target(2);
-        check(anchor.x==2.4 && anchor.y==2.2 && d.phase()==Phase::Climb,"release failed to latch climb XY");
-        d.tick({2.5,2.3},1.19,1,16.1,.1,.1);
+        check(anchor.x==2.4 && anchor.y==2.2 && d.phase()==Phase::Wait && d.release_index()==0,
+              "release failed to latch wait XY or kept requesting the package");
+        check(std::abs(d.altitude(.1)-.6)<1e-9 && d.vertical_limit(.6,.1,0,0)==.1,
+              "release wait abandoned the drop altitude");
+        d.tick({2.5,2.3},1.21,1,17.99,.1,.1); d.pose_interrupted();
+        check(d.phase()==Phase::Wait && d.lidar_target(2).x==2.4,
+              "climb began before the configured release wait or the anchor moved");
+        d.tick({2.5,2.3},1.19,1,18,.1,.1);
+        check(d.phase()==Phase::Climb && std::abs(d.altitude(.1)-1.3)<1e-9 && d.vertical_limit(1.19,.1,0,0)==.6,
+              "release wait did not hand over to climb");
+        d.tick({2.5,2.3},1.19,1,18.1,.1,.1);
         check(d.phase()==Phase::Climb,"climb finished too low");
-        d.tick({2.5,2.3},1.21,1,16.2,.1,.1);
+        d.tick({2.5,2.3},1.21,1,18.2,.1,.1);
         check(d.phase()==Phase::Done,"climb waited for horizontal stability");
         d.finish_visit();
     }
     d.begin(target(4)); check(d.phase()==Phase::Idle && d.completed()==3,"fourth release permitted");
     d.reset(); check(d.completed()==0,"new mission retained counter");
-    VisualDropConfig slow_config; slow_config.descend_speed=.05; slow_config.climb_speed=.35;
+    VisualDropConfig slow_config; slow_config.descend_speed=.05; slow_config.climb_speed=.35; slow_config.release_wait=0;
     VisualDrop configured(slow_config);enter(configured);configured.tick({1,2},1.3,0,11,.1,.1);
     check(configured.vertical_limit(1.3,.1,.1,.3)==.05,"small configured descent cap inverted clamp bounds");
     auto cp=configured.lidar_target(0);configured.tick(cp,.6,0,12,.1,.1);
     for(int i=1;i<=20;++i) configured.tick(cp,.6,0,12+i*.1,.1,.1);
-    configured.serial_finished(1,1,cp);configured.tick(cp,1.3,0,15,.1,.1);
+    check(configured.serial_finished(1,1,cp,14) && configured.phase()==Phase::Climb,
+          "zero release wait did not climb immediately");
+    configured.tick(cp,1.3,0,15,.1,.1);
     check(configured.phase()==Phase::Done && configured.vertical_limit(1.3,.1,0,0)==.35,
           "done handoff ignored configured climb cap");
+    for (double invalid : {-.1,std::numeric_limits<double>::quiet_NaN(),std::numeric_limits<double>::infinity()}) {
+        VisualDropConfig bad; bad.release_wait=invalid; bool rejected=false;
+        try { VisualDrop unused(bad); } catch (const std::invalid_argument&) { rejected=true; }
+        check(rejected,"invalid release wait accepted");
+    }
     enter(d); d.tick({1,2},1.3,0,11,.1,.1); auto p=d.lidar_target(0);
     d.tick(p,.6,0,12,.1,.1);
     for(int i=1;i<=19;++i) d.tick(p,.6,0,12+i*.1,.1,.1);
@@ -145,5 +161,5 @@ void sampling_approach_limits() {
     }
 }
 int main() { try { samples_and_fallback();timers_and_offsets();queue_fallback_and_speed();sampling_approach_limits();
-    std::cout<<"Visual drop sampling, compensation, timeout/stability, serial dedup, climb, three-drop limit and fallback passed\n";
+    std::cout<<"Visual drop sampling, compensation, timeout/stability, serial dedup, release wait, climb, three-drop limit and fallback passed\n";
 } catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;} }

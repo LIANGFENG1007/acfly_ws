@@ -15,6 +15,9 @@ struct VisualDropConfig {
     double approach_slow_distance = 1.20, entry_speed = 0.08;
     double xy_tolerance = .10, stable_seconds = 2.0, timeout_seconds = 4.0;
     double offset = .23, descend_speed = .40, climb_speed = .60;
+    // Hold XY and the drop altitude for this long after the serial result
+    // before climbing. Zero climbs immediately (the previous behaviour).
+    double release_wait = 2.0;
     double association_radius = .60, weight_min_distance = .50, observation_gap = .30;
 };
 
@@ -22,7 +25,7 @@ struct VisualDropConfig {
 // owners. Every clock argument is local monotonic time, never a ROS wall clock.
 class VisualDrop {
 public:
-    enum class Phase { Idle, Approach, Sample, Descend, Send, Climb, Done };
+    enum class Phase { Idle, Approach, Sample, Descend, Send, Wait, Climb, Done };
     explicit VisualDrop(VisualDropConfig cfg = {}) : cfg_(cfg) {
         for (double v : {cfg.entry_distance, cfg.sample_seconds, cfg.drop_height,
                 cfg.xy_tolerance, cfg.stable_seconds, cfg.timeout_seconds, cfg.offset,
@@ -30,13 +33,15 @@ public:
                 cfg.approach_slow_distance, cfg.entry_speed})
             if (!std::isfinite(v) || v <= 0) throw std::invalid_argument("Invalid visual drop configuration");
         if (cfg.timeout_seconds < cfg.stable_seconds) throw std::invalid_argument("Drop timeout before stable interval");
+        if (!std::isfinite(cfg.release_wait) || cfg.release_wait < 0)
+            throw std::invalid_argument("Invalid visual drop release wait");
     }
     void reset() { *this = VisualDrop(cfg_); }
     void begin(const VisionVisitTarget& target) {
         if (completed_ >= 3 || phase_ != Phase::Idle || !target.track_id) return;
         target_id_ = target.track_id; object_ = coarse_ = target.position;
         phase_ = Phase::Approach; samples_ = 0; weight_ = 0; votes_ = {};
-        xy_since_ = stable_since_ = -1; have_frame_ = false; refinement_.reset();
+        xy_since_ = stable_since_ = wait_since_ = -1; have_frame_ = false; refinement_.reset();
         used_coarse_ = true; forced_ = false; last_tick_ = -1;
     }
     void sample(const VisionFrame& frame, Vec2 aircraft, double now, const std::vector<Vec2>& others) {
@@ -110,6 +115,9 @@ public:
             forced_ = xy_since_ >= 0 && now - xy_since_ >= cfg_.timeout_seconds;
             if (stable || forced_) phase_ = Phase::Send;
         }
+        // The release wait is a fixed physical delay for the package to leave.
+        // It does not depend on observation continuity and is never restarted.
+        if (phase_ == Phase::Wait && now - wait_since_ >= cfg_.release_wait) phase_ = Phase::Climb;
         if (phase_ == Phase::Climb && std::abs(z - return_z_) <= z_tolerance) phase_ = Phase::Done;
     }
     void reject_refinement() {
@@ -119,15 +127,18 @@ public:
         xy_since_ = stable_since_ = -1;
     }
     void pose_interrupted() { stable_since_ = -1; }
-    bool serial_finished(unsigned index, std::uint64_t target_id, Vec2 position) {
+    // now: local monotonic time of the serial result; starts the release wait.
+    bool serial_finished(unsigned index, std::uint64_t target_id, Vec2 position, double now) {
         if (phase_ != Phase::Send || index != completed_ + 1 || target_id != target_id_ ||
-            !std::isfinite(position.x) || !std::isfinite(position.y)) return false;
-        anchor_ = position; ++completed_; phase_ = Phase::Climb;
+            !std::isfinite(position.x) || !std::isfinite(position.y) || !std::isfinite(now)) return false;
+        anchor_ = position; ++completed_; wait_since_ = now;
+        phase_ = cfg_.release_wait > 0 ? Phase::Wait : Phase::Climb;
         return true;
     }
     void finish_visit() { if (phase_ == Phase::Done) { phase_ = Phase::Idle; target_id_ = 0; } }
     Vec2 lidar_target(double actual_yaw) const {
-        if (phase_ == Phase::Sample || phase_ == Phase::Climb || phase_ == Phase::Done) return anchor_;
+        if (phase_ == Phase::Sample || phase_ == Phase::Wait || phase_ == Phase::Climb || phase_ == Phase::Done)
+            return anchor_;
         if (phase_ == Phase::Approach) return object_;
         const unsigned index = completed_ + 1;
         const double forward = index == 1 ? cfg_.offset : 0;
@@ -136,7 +147,8 @@ public:
         return {object_.x - c * forward + s * left, object_.y - s * forward - c * left};
     }
     double altitude(double home_z) const {
-        return phase_ == Phase::Descend || phase_ == Phase::Send ? home_z + cfg_.drop_height : return_z_;
+        return phase_ == Phase::Descend || phase_ == Phase::Send || phase_ == Phase::Wait
+            ? home_z + cfg_.drop_height : return_z_;
     }
     // Slow down for the sampling circle, which is reached before the object.
     // A positive crossing speed avoids asymptotically stopping outside the
@@ -153,7 +165,7 @@ public:
     }
     double vertical_limit(double z, double home_z, double remaining_xy, double toward_speed) const {
         if (phase_ == Phase::Climb || phase_ == Phase::Done) return cfg_.climb_speed;
-        if (phase_ != Phase::Descend && phase_ != Phase::Send) return .10;
+        if (phase_ != Phase::Descend && phase_ != Phase::Send && phase_ != Phase::Wait) return .10;
         // Estimate the remaining horizontal flight time; speed up descent when
         // XY approaches its goal, but never exceed the old 0.40 m/s drop limit.
         const double seconds = std::max(.5, remaining_xy / std::clamp(toward_speed, .15, .40));
@@ -162,6 +174,8 @@ public:
     Phase phase() const { return phase_; }
     unsigned completed() const { return completed_; }
     double package_offset() const { return cfg_.offset; }
+    double release_wait() const { return cfg_.release_wait; }
+    double wait_since() const { return wait_since_; }
     unsigned release_index() const { return phase_ == Phase::Send ? completed_ + 1 : 0; }
     std::uint64_t target_id() const { return target_id_; }
     Vec2 object() const { return object_; }
@@ -176,8 +190,8 @@ public:
         switch (p) {
             case Phase::Idle: return "idle"; case Phase::Approach: return "approach";
             case Phase::Sample: return "sample_hold"; case Phase::Descend: return "descend_align";
-            case Phase::Send: return "serial_wait"; case Phase::Climb: return "climb_hold";
-            case Phase::Done: return "done";
+            case Phase::Send: return "serial_wait"; case Phase::Wait: return "release_wait";
+            case Phase::Climb: return "climb_hold"; case Phase::Done: return "done";
         }
         return "invalid";
     }
@@ -189,6 +203,7 @@ private:
     std::uint64_t target_id_ = 0, last_seq_ = 0, last_epoch_ = 0;
     Vec2 object_{}, coarse_{}, anchor_{}, mean_{};
     double return_z_ = 0, yaw_ = 0, sample_start_ = 0, xy_since_ = -1, stable_since_ = -1;
+    double wait_since_ = -1;
     double weight_ = 0, last_stamp_ = 0, accepted_stamp_ = 0, last_tick_ = -1;
     bool have_frame_ = false, used_coarse_ = true, forced_ = false;
     int samples_ = 0;

@@ -40,7 +40,7 @@ inline constexpr bool EXPLORATION_CARLIKE_MODE = true;
 
 // 视觉SHM目标确认、排队和投放流程。
 // 视觉投放：提前减速，到采样距离后锁XY/Z/yaw，按SAMPLE_S收帧；包裹XY到位起4s，XY+Z连续2s可提前投放。
-// 高度=主控起飞雷达Z+0.5m；Z容差直接使用主控起飞TOL_Z；释放后锁XY回原高度。
+// 高度=主控起飞雷达Z+0.5m；Z容差直接使用主控起飞TOL_Z；释放后锁XY、保持投放高度等RELEASE_WAIT_S再回原高度。
 inline constexpr bool VISUAL_DROP_ENABLED = true;        // true=启用三包裹投放；false=旧的视觉到点悬停流程，不执行投放
 inline constexpr double VISUAL_DROP_ENTRY_M = 1.0;       // 开始采样的水平距离(m)：雷达到视觉粗坐标距离≤此值时，锁定当时的XY/Z/yaw
 inline constexpr double VISUAL_DROP_APPROACH_SLOW_M = 1.20; // 采样圈外的提前减速距离(m)：默认距目标2.20m开始逐渐降速，到1.00m进入采样
@@ -53,6 +53,8 @@ inline constexpr double VISUAL_DROP_TIMEOUT_S = 4.0;     // 强制投放等待�
 inline constexpr double VISUAL_DROP_OFFSET_M = 0.23;     // 包裹距雷达的水平安装距离(m)：第1个正前、第2个正左、第3个正右，按实际yaw旋转补偿
 inline constexpr double VISUAL_DROP_DESCEND_MPS = 0.40;  // 投放下降速度上限(m/s)：根据剩余XY距离估计到达时间并调整限速，实际Z速度由主控PD计算
 inline constexpr double VISUAL_DROP_CLIMB_MPS = 0.60;    // 释放后回升速度上限(m/s)：锁定释放时XY，回到开始采样时的高度；持续输出XY纠偏速度
+inline constexpr double VISUAL_DROP_RELEASE_WAIT_S = 2.0; // 串口写出完成(或失败)后，锁XY并保持投放高度等待此时长(s)再回升：给电磁铁断电、包裹脱离留时间。
+                                                          //   计时从主控回报串口结果那一拍起算，是固定物理等待，漂移/定位中断都不重置。0=写出后立即回升(旧行为)
 // Z到位容差使用主控的params::TOL_Z；下降/回升速度上限当前均不得超过0.60m/s。
 
 inline constexpr bool VISION_SHM_ENABLED = true;
