@@ -2122,7 +2122,9 @@ private:
         // Furthest directly visible vertex on the checked route, without cutting an obstacle corner.
         bool visible = false;
         for (size_t i = drop_path_.size(); i-- > 0;) {
-            if (required_path_clear(cur, Path2{cur, drop_path_[i]}, drop_path_[i], obs, cfg)) {
+            // Same execution margin as the kept route: a body already inside the
+            // planning ring must still see its next waypoint.
+            if (required_path_clear(cur, Path2{cur, drop_path_[i]}, drop_path_[i], obs, exec_config())) {
                 carrot = drop_path_[i]; visible = true; break;
             }
         }
@@ -2187,17 +2189,17 @@ private:
         if (!stale) return *drop_entry_;
         const Vec2 cur{px_, py_};
         const GlobalConfig cfg = required_config();
-        Vec2 entry = object; const char* how = "object";
+        Vec2 entry = object; const char* how = "object"; bool found = false;
         if (std::hypot(object.x-cur.x, object.y-cur.y) <= arc) {
-            entry = cur; how = "already_inside";
+            entry = cur; how = "already_inside"; found = true;
         } else {
             GlobalResult gr = plan_required_path(cur, object, obs, cfg, yaw_);
             if (!gr.ok || gr.path.size() < 2) gr = plan_required_path(cur, object, obs, cfg);
             if (gr.ok && gr.path.size() >= 2 && !gr.goal_blocked) {
                 const Vec2 p = point_before_end(gr.path, arc, cur);
-                if (required_goal_admissible(p, obs, cfg)) { entry = p; how = "on_route"; }
+                if (required_goal_admissible(p, obs, cfg)) { entry = p; how = "on_route"; found = true; }
             }
-            if (how[0] == 'o' && how[1] == 'b') {
+            if (!found) {
                 // Object inside an inflation or unreachable head-on: take the
                 // admissible point of the entry circle with the shortest route.
                 double best = std::numeric_limits<double>::infinity();
@@ -2210,7 +2212,7 @@ private:
                     double len = 0;
                     for (size_t i = 1; i < r.path.size(); ++i)
                         len += std::hypot(r.path[i].x-r.path[i-1].x, r.path[i].y-r.path[i-1].y);
-                    if (len < best) { best = len; entry = p; how = "circle"; }
+                    if (len < best) { best = len; entry = p; how = "circle"; found = true; }
                 }
             }
         }
