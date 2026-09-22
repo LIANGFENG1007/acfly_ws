@@ -27,7 +27,7 @@ ros2 run 26_cup_cpp 26_cup_node
 
 
 自主探索
-ros2 run exploration_planner exploration_planner_node
+ 
 
 pcl 找圈
 ros2 run ring_detector ring_detector_node
