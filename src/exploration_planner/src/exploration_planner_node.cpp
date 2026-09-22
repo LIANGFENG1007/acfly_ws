@@ -101,6 +101,7 @@ public:
         visual_drop_enabled_ = declare_parameter<bool>("visual_drop_enabled", params::VISUAL_DROP_ENABLED);
         VisualDropConfig dcfg;
         dcfg.entry_distance = dd("visual_drop_entry_m", params::VISUAL_DROP_ENTRY_M);
+        drop_entry_inset_ = dd("visual_drop_entry_inset_m", params::VISUAL_DROP_ENTRY_INSET_M);
         dcfg.approach_slow_distance = dd("visual_drop_approach_slow_m", params::VISUAL_DROP_APPROACH_SLOW_M);
         dcfg.entry_speed = dd("visual_drop_entry_speed_mps", params::VISUAL_DROP_ENTRY_SPEED_MPS);
         dcfg.sample_seconds = dd("visual_drop_sample_s", params::VISUAL_DROP_SAMPLE_S);
@@ -374,6 +375,9 @@ public:
             dd("required_connector_length", params::REQUIRED_CONNECTOR_LENGTH_M));
         required_motion_inflate_ = std::clamp(
             dd("required_motion_inflate", params::REQUIRED_MOTION_INFLATE),
+            0.0, std::max(0.0, ggcfg_.inflate));
+        required_path_exec_inflate_ = std::clamp(
+            dd("required_path_exec_inflate", params::REQUIRED_PATH_EXEC_INFLATE),
             0.0, std::max(0.0, ggcfg_.inflate));
         required_blocked_replan_s_ = std::max(0.0,
             dd("required_blocked_replan_s", params::REQUIRED_BLOCKED_REPLAN_S));
@@ -689,7 +693,7 @@ private:
         visual_drop_.reset();
         coverage_closed_ = false;
         drop_status_.reset();
-        drop_path_.clear(); drop_path_retry_ = -1;
+        drop_path_.clear(); drop_path_retry_ = -1; drop_entry_.reset();
         drop_cruise_z_.reset(); drop_pause_z_.reset();
         vision_candidates_->reset();
         vision_queue_->reset();
@@ -1645,6 +1649,11 @@ private:
 
     void hold_required_path(const std::string& reason)
     {
+        // Holds used to be invisible in the logs; a stall beside an obstacle
+        // could only be reconstructed from velocity traces.
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+            "[必达路径] 保持零速: 原因=%s 位置(%.2f,%.2f) 目标(%.2f,%.2f)",
+            reason.c_str(), px_, py_, global_target_.x, global_target_.y);
         required_goal_holding_ = false;
         global_failed_ = true;
         global_has_ = global_at_goal_ = global_braking_blocked_ = false;
@@ -1665,6 +1674,16 @@ private:
     {
         GlobalConfig cfg = ggcfg_;
         if (homing_) cfg.required_goal_field_margin = home_goal_wall_margin_;
+        return cfg;
+    }
+
+    // Revalidation of a route already being flown. Planning and acceptance of
+    // a new route keep the full margin; a turn that cuts a few centimetres into
+    // that margin must not discard the route and latch a zero-velocity hold.
+    GlobalConfig exec_config() const
+    {
+        GlobalConfig cfg = required_config();
+        cfg.inflate = std::min(cfg.inflate, required_path_exec_inflate_);
         return cfg;
     }
 
@@ -1787,7 +1806,7 @@ private:
             if (command.needs_replan) global_has_ = false;
             Path2 remaining = global_tracker_->remaining_reference_path();
             if (remaining.size() == 1) remaining.push_back(target);
-            if (!required_path_clear(cur, remaining, target, obs, required_cfg)) global_has_ = false;
+            if (!required_path_clear(cur, remaining, target, obs, exec_config())) global_has_ = false;
         }
         if (!global_has_ || target_moved) {
             required_goal_holding_ = false;
@@ -2080,7 +2099,7 @@ private:
             drop_path_ = direct;
         } else {
             if (!drop_path_.empty()) drop_path_.back() = target;
-            if (drop_path_.empty() || !required_path_clear(cur, drop_path_, target, obs, cfg)) {
+            if (drop_path_.empty() || !required_path_clear(cur, drop_path_, target, obs, exec_config())) {
                 drop_path_.clear();
                 if (t >= drop_path_retry_) {
                     drop_path_retry_ = t + .20;
@@ -2130,6 +2149,81 @@ private:
         return guard_required_command(command, obs, false);
     }
 
+    bool required_goal_admissible(const Vec2& p, const Obstacles& obs, const GlobalConfig& cfg) const
+    {
+        const double margin = required_field_margin(cfg);
+        return path_clear(p, Path2{p, p}, obs, ggcfg_) &&
+            p.x >= ggcfg_.min_x + margin && p.x <= ggcfg_.max_x - margin &&
+            p.y >= ggcfg_.min_y + margin && p.y <= ggcfg_.max_y - margin;
+    }
+
+    // Point on the planned route lying `arc` metres before the object. Returns
+    // the current position when the remaining route is already shorter.
+    static Vec2 point_before_end(const Path2& path, double arc, Vec2 fallback)
+    {
+        double acc = 0;
+        for (size_t i = path.size(); i-- > 1;) {
+            const Vec2& a = path[i-1];
+            const Vec2& b = path[i];
+            const double seg = std::hypot(b.x-a.x, b.y-a.y);
+            if (acc + seg >= arc) {
+                const double u = seg > 1e-9 ? (arc - acc) / seg : 0.0;
+                return {b.x + (a.x-b.x)*u, b.y + (a.y-b.y)*u};
+            }
+            acc += seg;
+        }
+        return fallback;
+    }
+
+    // Sampling entry point for the approach phase, cached per target so the
+    // required-path controller is not replanned every tick. Recomputed when the
+    // object estimate moves or the route to the cached point keeps failing.
+    Vec2 drop_entry_point(std::uint64_t track_id, Vec2 object, const Obstacles& obs, double t)
+    {
+        const double arc = std::max(0.3, visual_drop_.entry_distance() - drop_entry_inset_);
+        const bool stale = !drop_entry_ || drop_entry_track_ != track_id ||
+            std::hypot(object.x-drop_entry_object_.x, object.y-drop_entry_object_.y) > .05 ||
+            ((global_failed_ || global_goal_blocked_) && t - drop_entry_time_ >= .5);
+        if (!stale) return *drop_entry_;
+        const Vec2 cur{px_, py_};
+        const GlobalConfig cfg = required_config();
+        Vec2 entry = object; const char* how = "object";
+        if (std::hypot(object.x-cur.x, object.y-cur.y) <= arc) {
+            entry = cur; how = "already_inside";
+        } else {
+            GlobalResult gr = plan_required_path(cur, object, obs, cfg, yaw_);
+            if (!gr.ok || gr.path.size() < 2) gr = plan_required_path(cur, object, obs, cfg);
+            if (gr.ok && gr.path.size() >= 2 && !gr.goal_blocked) {
+                const Vec2 p = point_before_end(gr.path, arc, cur);
+                if (required_goal_admissible(p, obs, cfg)) { entry = p; how = "on_route"; }
+            }
+            if (how[0] == 'o' && how[1] == 'b') {
+                // Object inside an inflation or unreachable head-on: take the
+                // admissible point of the entry circle with the shortest route.
+                double best = std::numeric_limits<double>::infinity();
+                for (int k = 0; k < 24; ++k) {
+                    const double a = 2.0 * M_PI * k / 24.0;
+                    const Vec2 p{object.x + arc*std::cos(a), object.y + arc*std::sin(a)};
+                    if (!required_goal_admissible(p, obs, cfg)) continue;
+                    const GlobalResult r = plan_required_path(cur, p, obs, cfg);
+                    if (!r.ok || r.path.size() < 2) continue;
+                    double len = 0;
+                    for (size_t i = 1; i < r.path.size(); ++i)
+                        len += std::hypot(r.path[i].x-r.path[i-1].x, r.path[i].y-r.path[i-1].y);
+                    if (len < best) { best = len; entry = p; how = "circle"; }
+                }
+            }
+        }
+        const bool changed = !drop_entry_ ||
+            std::hypot(entry.x-drop_entry_->x, entry.y-drop_entry_->y) > .05;
+        drop_entry_ = entry; drop_entry_track_ = track_id; drop_entry_object_ = object; drop_entry_time_ = t;
+        if (changed)
+            RCLCPP_INFO(get_logger(), "[探索投放] 区域#%llu 接近入口点(%.3f,%.3f) 来源=%s 距目标%.2fm 飞机(%.2f,%.2f)",
+                static_cast<unsigned long long>(track_id), entry.x, entry.y, how,
+                std::hypot(entry.x-object.x, entry.y-object.y), px_, py_);
+        return entry;
+    }
+
     Vec2 visual_drop_velocity(const Obstacles& obs, double t)
     {
         using Phase = VisualDrop::Phase;
@@ -2156,7 +2250,7 @@ private:
         visual_drop_.tick({px_, py_}, pz_, yaw_, t, drop_context_->home_z, drop_context_->height_tolerance);
         auto phase = visual_drop_.phase();
         if (phase != before) {
-            drop_path_.clear(); drop_path_retry_ = -1;
+            drop_path_.clear(); drop_path_retry_ = -1; drop_entry_.reset();
             RCLCPP_INFO(get_logger(), "[探索投放] 区域#%llu %s -> %s；采样%d帧，坐标(%.3f,%.3f)，强制超时=%d",
                 static_cast<unsigned long long>(target.track_id), VisualDrop::name(before), VisualDrop::name(phase),
                 visual_drop_.samples(), visual_drop_.object().x, visual_drop_.object().y, visual_drop_.forced());
@@ -2172,10 +2266,13 @@ private:
         }
         vision_last_event_ = std::string("drop_") + VisualDrop::name(phase);
         if (phase == Phase::Approach) {
-            // Brake before the one-metre sample point, not at the object itself.
-            // The path/yaw controller, lateral drift correction and final safety
-            // checks retain ownership; the cap only reduces approach travel.
-            return pd_to_point_avoid(target.position, obs,
+            // The tracker decelerates towards the sampling entry point on the
+            // validated route, not towards the object: crossing the sampling
+            // circle keeps drop_entry_inset_ of travel in hand, so the speed there
+            // is set by the entry cap instead of the endpoint braking curve. An
+            // object sitting inside an obstacle inflation is still approachable.
+            const Vec2 entry = drop_entry_point(target.track_id, visual_drop_.object(), obs, t);
+            return pd_to_point_avoid(entry, obs,
                 visual_drop_.approach_speed_limit({px_, py_}, v_goal_max_));
         }
         if (phase == Phase::Done) {
@@ -3109,6 +3206,7 @@ private:
                 number("command_projection_blocked", command_projection_blocked_);
                 number("measured_projection_blocked", measured_projection_blocked_);
                 number("required_motion_inflate", required_motion_inflate_);
+                number("required_path_exec_inflate", required_path_exec_inflate_);
                 number("required_blocked_replans", required_blocked_replans_);
                 value("required_block_reason", global_block_reason_);
                 number("required_path_searches", global_path_searches_);
@@ -3262,6 +3360,10 @@ private:
     std::optional<double> drop_cruise_z_, drop_pause_z_;
     double drop_command_altitude_ = 0, drop_command_speed_ = .10, drop_path_retry_ = -1;
     Path2 drop_path_;
+    double drop_entry_inset_ = params::VISUAL_DROP_ENTRY_INSET_M, drop_entry_time_ = -1;
+    std::optional<Vec2> drop_entry_;
+    Vec2 drop_entry_object_{};
+    std::uint64_t drop_entry_track_ = 0;
     rclcpp::Publisher<acfly_interfaces::msg::ExplorationCommand>::SharedPtr control_pub_;
     rclcpp::Subscription<acfly_interfaces::msg::ExplorationContext>::SharedPtr context_sub_;
     rclcpp::Subscription<acfly_interfaces::msg::DropStatus>::SharedPtr drop_status_sub_;
@@ -3419,6 +3521,7 @@ private:
     bool         global_braking_blocked_ = false;
     bool         command_projection_blocked_ = false, measured_projection_blocked_ = false;
     double       required_motion_inflate_ = params::REQUIRED_MOTION_INFLATE;
+    double       required_path_exec_inflate_ = params::REQUIRED_PATH_EXEC_INFLATE;
     double       required_blocked_replan_s_ = params::REQUIRED_BLOCKED_REPLAN_S;
     double       required_blocked_since_ = 0.0;
     bool         required_blocked_time_valid_ = false;

@@ -173,6 +173,7 @@ public:
     }
     Phase phase() const { return phase_; }
     unsigned completed() const { return completed_; }
+    double entry_distance() const { return cfg_.entry_distance; }
     double package_offset() const { return cfg_.offset; }
     double release_wait() const { return cfg_.release_wait; }
     double wait_since() const { return wait_since_; }

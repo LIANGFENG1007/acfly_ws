@@ -1869,6 +1869,83 @@ void visual_sampling_brake_regression()
     require(smooth, "visual approach reached the sampling circle too fast and pulled back");
 }
 
+// An object sitting inside an obstacle inflation (about one metre from a
+// pillar is common) must still be approached: the tracker aims at a sampling
+// entry point on a validated route instead of the blocked object itself.
+void visual_drop_entry_point_avoids_blocked_object()
+{
+    ExplorationNode node;
+    node.visual_drop_enabled_ = true;
+    node.vision_reader_.reset();
+    reset(node, {1, 0});
+    node.has_pose_ = node.has_goal_ = true;
+    node.goal_ = {7, 4};
+    acfly_interfaces::msg::ExplorationContext context;
+    context.mission = node.goal_header_; context.home_z = .2; context.cruise_z = 1.4; context.height_tolerance = .1;
+    node.drop_context_ = context;
+    node.pz_ = 1.4;
+    const Vec2 object{3.0, 0.0};
+    const Obstacles pillar{{3.45, 0.0, .15}};   // object 0.45m from the pillar: inside r+robot+inflate
+    const double base = node.steady_seconds();
+    node.vision_queue_->enqueue({{1, object, 10, true, base-1, base}}, {1, 0});
+    node.activate_visual_target(base);
+    double forward = 0;   // commands ramp from rest under the acceleration slew
+    for (int tick = 0; tick < 50; ++tick) {
+        const Vec2 body = node.visual_drop_velocity(pillar, base + tick * .02);
+        node.last_command_world_ = {std::cos(node.yaw_)*body.x - std::sin(node.yaw_)*body.y,
+                                    std::sin(node.yaw_)*body.x + std::cos(node.yaw_)*body.y};
+        forward = std::max(forward, body.x);
+    }
+    require(node.visual_drop_.phase() == VisualDrop::Phase::Approach, "drop approach did not start");
+    require(node.drop_entry_ && !node.global_goal_blocked_ && !node.global_failed_,
+            "blocked object still stalled the approach instead of using an entry point");
+    const double to_object = std::hypot(node.drop_entry_->x-object.x, node.drop_entry_->y-object.y);
+    require(to_object <= node.visual_drop_.entry_distance() - node.drop_entry_inset_ + 1e-6 &&
+            std::hypot(node.drop_entry_->x-3.45, node.drop_entry_->y) >= .15+.30+node.ggcfg_.inflate-1e-6,
+            "entry point is not on the sampling circle or lies inside the pillar inflation");
+    require(forward > 0.05, "approach towards the entry point produced no forward motion");
+    // Straight, unobstructed case keeps the entry point on the direct route.
+    ExplorationNode plain;
+    plain.visual_drop_enabled_ = true; plain.vision_reader_.reset();
+    reset(plain, {1, 0}); plain.has_pose_ = plain.has_goal_ = true; plain.goal_ = {7, 4};
+    plain.drop_context_ = context; plain.pz_ = 1.4;
+    plain.vision_queue_->enqueue({{1, object, 10, true, base-1, base}}, {1, 0});
+    plain.activate_visual_target(base);
+    plain.visual_drop_velocity({}, base);
+    require(plain.drop_entry_ && std::abs(plain.drop_entry_->y) < 1e-6 &&
+            std::abs(plain.drop_entry_->x - (object.x - (plain.visual_drop_.entry_distance()-plain.drop_entry_inset_))) < .02,
+            "entry point left the straight route in an empty field");
+}
+
+// A route being flown is revalidated with the inner execution margin: cutting
+// a corner a few centimetres into the planning margin keeps the route, while
+// entering the inner ring still discards it.
+void executing_route_tolerates_turn_deviation()
+{
+    ExplorationNode node;
+    node.vision_reader_.reset();
+    reset(node, {2, 0});
+    node.ggcfg_.inflate = .30; node.required_path_exec_inflate_ = .15;   // fixed rings for the numbers below
+    const Vec2 goal{4, 0};
+    const Obstacles pillar{{3.5, 0.85, .10}};   // no-go ring 0.70m, inner execution ring 0.55m
+    node.pd_to_point_avoid(goal, pillar);
+    require(node.global_has_ && !node.global_failed_, "straight required route beside the pillar was not accepted");
+    // 0.63m from the pillar centre and rejoining towards it: inside the planning
+    // ring, outside the execution ring. The old full-margin check rejected this.
+    node.px_ = 3.2; node.py_ = 0.3;
+    auto searches = node.global_path_searches_;
+    node.pd_to_point_avoid(goal, pillar);
+    require(node.global_has_ && !node.global_failed_ && node.global_path_searches_ == searches,
+            "turn deviation inside the planning margin discarded the executing route");
+    // 0.50m from the centre: inside the execution ring, the old route is
+    // discarded and a fresh one is searched from the current position.
+    node.py_ = 0.45;
+    searches = node.global_path_searches_;
+    node.pd_to_point_avoid(goal, pillar);
+    require(node.global_path_searches_ > searches,
+            "route inside the inner execution ring was kept without a new search");
+}
+
 void visual_sampling_brake_preserves_correction()
 {
     ExplorationNode node;
@@ -2293,6 +2370,8 @@ int main(int argc, char** argv)
         }
         visual_sampling_brake_regression();
         visual_sampling_brake_preserves_correction();
+        visual_drop_entry_point_avoids_blocked_object();
+        executing_route_tolerates_turn_deviation();
         std::cout << "required node: closed-loop and safety regressions passed\n";
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

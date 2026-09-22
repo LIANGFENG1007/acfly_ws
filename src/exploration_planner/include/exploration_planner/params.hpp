@@ -43,6 +43,10 @@ inline constexpr bool EXPLORATION_CARLIKE_MODE = true;
 // 高度=主控起飞雷达Z+0.5m；Z容差直接使用主控起飞TOL_Z；释放后锁XY、保持投放高度等RELEASE_WAIT_S再回原高度。
 inline constexpr bool VISUAL_DROP_ENABLED = true;        // true=启用三包裹投放；false=旧的视觉到点悬停流程，不执行投放
 inline constexpr double VISUAL_DROP_ENTRY_M = 1.0;       // 开始采样的水平距离(m)：雷达到视觉粗坐标距离≤此值时，锁定当时的XY/Z/yaw
+inline constexpr double VISUAL_DROP_ENTRY_INSET_M = 0.40; // 接近段的终点不是目标物，而是A*路径上距目标(ENTRY_M-此值)处的入口点(m)：
+                                                          //   跟踪器的末段减速在入口点结束而不是在目标物上结束，跨过1m采样圈时仍有0.4m余量、
+                                                          //   速度由ENTRY_SPEED封顶而不是被减速曲线压到爬行；目标贴障碍时入口点仍在可通行路径上，
+                                                          //   不会因目标物本身落在禁入区而被判 goal blocked 永远保持
 inline constexpr double VISUAL_DROP_APPROACH_SLOW_M = 1.20; // 采样圈外的提前减速距离(m)：默认距目标2.20m开始逐渐降速，到1.00m进入采样
 inline constexpr double VISUAL_DROP_ENTRY_SPEED_MPS = 0.15; // 采样入口的接近速度上限(m/s)：保留小幅前进以穿过1m阈值，不用速度达标来阻塞采样；XY纠偏仍有效
 inline constexpr double VISUAL_DROP_SAMPLE_S = 1.0;      // 锁定位置后的采样时长(s)：新帧能收多少收多少，加权平均；无有效帧则用粗坐标
@@ -314,7 +318,10 @@ inline constexpr double KP_GOAL     = 1.20;   // 位置误差 → 速度的 P (1
 inline constexpr double KD_GOAL     = 0.80;   // 速度阻尼 D（越大刹得越稳、越不冲）
 inline constexpr double V_GOAL_MAX  = 0.60;   // 归航段速度上限 (m/s)，末段按剩余距离刹停
 inline constexpr double REQUIRED_CONNECTOR_LENGTH_M = 1.00; // 归航/POI到真目标的显式末端直线最大长度(m)，不放松障碍余量
-inline constexpr double REQUIRED_MOTION_INFLATE = 0.15; // 仅速度刹停投影的内层余量(m)，限制到[0,global_margin]；规划保持原余量
+inline constexpr double REQUIRED_MOTION_INFLATE = 0.0;  // 仅速度刹停投影的内层余量(m)，限制到[0,global_margin]；规划保持原余量。0=只留拟合充气+机体半径(0.4m)
+inline constexpr double REQUIRED_PATH_EXEC_INFLATE = 0.0;  // 【正在执行】的必达路径复核用的内层余量(m)，限制到[0,global_margin]。0=执行圈0.4m，比规划圈小0.1m
+                                                          //   规划、新路验收仍用 GLOBAL_MARGIN；执行中转弯切外偏进规划圈但没进执行圈时
+                                                          //   不再把整条路作废→不会 hold 零速+反复重规划卡在障碍旁；真进执行圈才按原规则处理
 inline constexpr double REQUIRED_BLOCKED_REPLAN_S = 0.50; // 速度安全检查连续阻挡此时长后重搜(s)，漂移不重置；0关闭
 
 // ---------------------------------------------------------------------------
@@ -382,9 +389,11 @@ inline constexpr int OBS_GHOST_CLEAR_FRAMES = 25;    // 视野内连续无命中
 //         过不去(被围死)直接返回无解 → 探索放弃该区跳带；POI/终点(必达)报警+悬停。
 // ===========================================================================
 inline constexpr double GLOBAL_CELL      = 0.04;  // A* 搜索栅格分辨率(m)：越小越贴墙/钻窄缝但越慢
-inline constexpr double GLOBAL_MARGIN    = 0.30;  // 障碍额外安全余量(m)：禁入半径 = 障碍r + ROBOT_RADIUS + 此值。
-                                                  //   飞机中心到障碍物外表面的实际最小距离
-                                                  //   = ROBOT_RADIUS(0.30) + GLOBAL_MARGIN(0.30) = 0.60m。
+inline constexpr double GLOBAL_MARGIN    = 0.10;  // 障碍额外安全余量(m)：禁入半径 = 障碍r + ROBOT_RADIUS + 此值。
+                                                  //   飞机中心到障碍物外表面的规划最小距离
+                                                  //   = OBS_R_INFLATE(0.10) + ROBOT_RADIUS(0.30) + GLOBAL_MARGIN(0.10) = 0.50m。
+                                                  //   2026-09-22 由 0.30 降到 0.10(外圈 0.7→0.5)：目标物常距障碍约 1m，0.7 会把目标物
+                                                  //   本身吃进禁入区；执行/刹停内层余量同时改 0(见 REQUIRED_*_INFLATE)，执行圈 0.4m。
                                                   //   ★越大越早远绕越不贴障碍,但太大会把"柱墙之间的缝"吃掉→墙边柱子绕不过去★。
                                                   //   真机杆间距若不足则宁可卡死报警也不贴撞；墙边柱风险靠 RETREAT_* + relax 兜底。
 inline constexpr double GLOBAL_WALL_MARGIN = 0.60;// 离墙安全距离(m)：cell 中心距任一场地边界<此值即禁入。
