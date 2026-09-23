@@ -39,6 +39,12 @@ inline constexpr double FIELD_MAX_Y = 4.6;
 //   false = 保留旧的全向跟踪方式（允许 v_lat 横向纠偏）。
 inline constexpr bool EXPLORATION_CARLIKE_MODE = true;
 
+// ★视觉目标 ID 黑名单★：SHM 里这些类别 ID 的目标一读到就丢弃，不参与确认/排队/投放，飞机不会飞过去。
+//   SHM 里 ID 是 int32 整数(有效 1~6)，视觉端显示的 "005" 就是整数 5。这里必须写十进制 5、2，
+//   不要写 005/002(C++ 以 0 开头是八进制，008 会编译失败、010 会变成 8)。
+//   运行期可覆盖：-p vision_id_blacklist:="[2,5]"；清空黑名单：-p vision_id_blacklist:="[0]"。
+inline constexpr int VISION_ID_BLACKLIST[] = {3, 4, 5};
+
 // 视觉SHM目标确认、排队和投放流程。
 // 视觉投放：提前减速，到采样距离后锁XY/Z/yaw，按SAMPLE_S收帧；包裹XY到位起4s，XY+Z连续2s可提前投放。
 // 高度=主控起飞雷达Z+0.5m；Z容差直接使用主控起飞TOL_Z；释放后锁XY、保持投放高度等RELEASE_WAIT_S再回原高度。

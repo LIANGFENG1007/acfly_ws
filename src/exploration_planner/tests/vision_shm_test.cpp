@@ -201,9 +201,31 @@ void concurrent_writer_snapshots()
 }
 }  // namespace
 
+void id_blacklist_filter()
+{
+    exploration::VisionFrame frame;
+    frame.count = 4;
+    frame.targets[0] = {2, 1.0, 1.0};
+    frame.targets[1] = {3, 2.0, 2.0};
+    frame.targets[2] = {5, 3.0, 3.0};
+    frame.targets[3] = {6, 4.0, 4.0};
+    const auto dropped = exploration::drop_blacklisted_ids(frame, {2, 5});
+    if (dropped != 2 || frame.count != 2 || frame.targets[0].id != 3 || frame.targets[1].id != 6 ||
+        frame.targets[1].x != 4.0)
+        throw std::runtime_error("ID blacklist must drop ids 2 and 5 and keep the others in order");
+    exploration::VisionFrame only_blocked;
+    only_blocked.count = 1;
+    only_blocked.targets[0] = {5, 1.0, 1.0};
+    if (exploration::drop_blacklisted_ids(only_blocked, {2, 5}) != 1 || only_blocked.count != 0)
+        throw std::runtime_error("a frame with only blacklisted targets becomes an empty frame");
+    if (exploration::drop_blacklisted_ids(frame, {}) != 0 || frame.count != 2)
+        throw std::runtime_error("empty blacklist must not change the frame");
+}
+
 int main()
 {
     try {
+        id_blacklist_filter();
         protocol_and_frame_identity();
         malformed_input_and_restarts();
         supplied_writer_interoperability();

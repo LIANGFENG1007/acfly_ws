@@ -97,6 +97,15 @@ public:
         if (vision_max_candidates < 1) throw std::invalid_argument("vision_max_candidates must be positive");
         vision_config.max_tracks = static_cast<size_t>(vision_max_candidates);
         vision_pose_timeout_ = dd("vision_pose_timeout_s", params::VISION_POSE_TIMEOUT_S);
+        {
+            std::vector<int64_t> defaults(std::begin(params::VISION_ID_BLACKLIST), std::end(params::VISION_ID_BLACKLIST));
+            for (const auto id : declare_parameter<std::vector<int64_t>>("vision_id_blacklist", defaults))
+                if (id >= 1 && id <= 6) vision_id_blacklist_.push_back(static_cast<int>(id));
+            std::string listed;
+            for (int id : vision_id_blacklist_) listed += (listed.empty() ? "" : ",") + std::to_string(id);
+            RCLCPP_INFO(get_logger(), "[视觉] ID 黑名单: [%s]（这些类别的目标直接忽略，不会飞过去）",
+                listed.empty() ? "空" : listed.c_str());
+        }
         if (!std::isfinite(vision_pose_timeout_) || vision_pose_timeout_ <= 0)
             throw std::invalid_argument("vision_pose_timeout_s must be positive");
         vision_candidates_ = std::make_unique<VisionCandidates>(vision_config);
@@ -2906,6 +2915,8 @@ private:
         if (!vision_collection_active_) { vision_candidates_->interrupt(); vision_near_->interrupt(); }
         if (!vision_reader_) return;
         vision_new_frame_ = vision_reader_->poll(current_time);
+        // ID 黑名单：在所有下游(远距确认/排队/近距投票/投放采样)之前剔除，飞机不会飞向这些目标。
+        if (vision_new_frame_) vision_ids_dropped_ += drop_blacklisted_ids(*vision_new_frame_, vision_id_blacklist_);
         if (visual_drop_enabled_) {
             if (vision_new_frame_) vision_last_frame_ = *vision_new_frame_;
             if (vision_collection_active_) {
@@ -3511,6 +3522,7 @@ private:
                 number("vision_duplicate_detections", vision_stats.suppressed_duplicates);
                 number("vision_capacity_drops", vision_stats.capacity_drops);
                 number("vision_invalid_detections", vision_stats.invalid_detections);
+                number("vision_id_blacklist_dropped", vision_ids_dropped_);
                 for (const auto& candidate : vision_candidates_->snapshot()) {
                     const auto prefix = "vision_region_" + std::to_string(candidate.track_id) + "_";
                     number(prefix + "count", candidate.consecutive_frames);
@@ -3713,6 +3725,8 @@ private:
     std::vector<VisionCandidate> vision_new_confirmations_;
     bool vision_collection_active_ = false;
     double vision_pose_timeout_ = params::VISION_POSE_TIMEOUT_S;
+    std::vector<int> vision_id_blacklist_;
+    std::uint64_t vision_ids_dropped_ = 0;
     double vision_hover_s_ = params::VISION_HOVER_S;
     double vision_straight_approach_m_ = params::VISION_STRAIGHT_APPROACH_M;
     std::uint64_t vision_straight_track_ = 0;

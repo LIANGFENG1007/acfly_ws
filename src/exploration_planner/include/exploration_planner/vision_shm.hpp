@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace exploration {
 
@@ -25,6 +26,20 @@ struct VisionFrame {
     std::uint64_t epoch = 0;
     bool restarted = false;
 };
+
+// 从帧中剔除黑名单类别 ID 的目标(保持其余目标顺序)，返回剔除个数。帧本身仍有效。
+inline std::size_t drop_blacklisted_ids(VisionFrame& frame, const std::vector<int>& blacklist)
+{
+    std::size_t kept = 0;
+    for (std::size_t i = 0; i < frame.count && i < frame.targets.size(); ++i) {
+        bool blocked = false;
+        for (int id : blacklist) blocked = blocked || frame.targets[i].id == id;
+        if (!blocked) frame.targets[kept++] = frame.targets[i];
+    }
+    const std::size_t dropped = frame.count - kept;
+    frame.count = kept;
+    return dropped;
+}
 
 class VisionShmReader {
 public:
