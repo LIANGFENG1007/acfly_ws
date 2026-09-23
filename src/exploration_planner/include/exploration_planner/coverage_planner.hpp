@@ -68,6 +68,12 @@ struct FrontierConfig {
     double clearance_weight = 2.0;
     double observation_min_distance = 0.80;
     double continuity_turn_penalty = 1.0; // Soft cost per radian away from a safe active route.
+    // ★收尾顺路★：覆盖率 ≥ goal_detour_start 后，代价加 goal_detour_weight ×(d(当前→候选)+d(候选→终点)−d(当前→终点))，
+    //   即"去这个观察点让回红点的路多绕多少"，只挑顺路的收尾点，不扭曲前期路线。0 或 goal_valid=false 关闭。
+    double goal_detour_weight = 0.0;
+    double goal_detour_start = 0.75;
+    bool   goal_valid = false;
+    Vec2   goal{};
 };
 
 // unreachable/block_r: explore give-up blacklist. Skip candidate cells within

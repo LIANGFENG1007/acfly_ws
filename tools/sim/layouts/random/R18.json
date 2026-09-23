@@ -1,0 +1,1 @@
+{"name": "R18", "description": "randomize_arena 规则随机 6 柱 seed18", "obstacles": [{"x": 2.264, "y": 1.45}, {"x": 3.8, "y": -3.148}, {"x": 5.384, "y": -1.853}, {"x": 5.957, "y": 2.93}, {"x": 0.924, "y": -2.879}, {"x": 4.274, "y": 2.839}], "gates": {"gate_wall_A": "center", "gate_wall_B": "center"}}

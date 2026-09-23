@@ -60,6 +60,8 @@ def parser():
     result.add_argument("--abort-crash-z", type=float, default=0.18,
                         help="Unexpected world altitude after confirmed takeoff (metres).")
     result.add_argument("--airborne-z", type=float, default=0.45)
+    result.add_argument("--layout", type=Path,
+                        help="Fixed obstacle/gate layout JSON (SLAM coordinates) instead of randomize_arena.py.")
     result.add_argument("--planner-params", type=Path, help="ROS parameter YAML override.")
     result.add_argument("--mission-params", type=Path, help="ROS parameter YAML override.")
     result.add_argument("--planner-binary", type=Path,
@@ -474,13 +476,22 @@ class Trial:
                 raise RuntimeError("Installed competition_sim.launch.py lacks snapshot arguments; rebuild exploration_planner")
         self.save()
         self.snapshot()
-        randomizer = self.start("randomize", [self.args.python,
-                               str(self.sim_root / "randomize_arena.py"), "4", str(self.args.seed)],
-                                cwd=self.sim_root, critical=False)
+        if self.args.layout:
+            layout = self.args.layout.resolve()
+            shutil.copy2(layout, self.output / "snapshots/layout.json")
+            self.metadata["layout"] = str(layout)
+            self.save()
+            randomizer = self.start("randomize", [self.args.python,
+                                   str(Path(__file__).with_name("custom_arena.py")), str(layout),
+                                   "--sim-root", str(self.sim_root)], cwd=self.sim_root, critical=False)
+        else:
+            randomizer = self.start("randomize", [self.args.python,
+                                   str(self.sim_root / "randomize_arena.py"), "4", str(self.args.seed)],
+                                    cwd=self.sim_root, critical=False)
         self.wait(randomizer, 20)
         world = self.px4_root / "Tools/simulation/gz/worlds/edc_arena.sdf"
         shutil.copy2(world, self.output / "world.sdf")
-        self.log(f"Saved randomized world, seed {self.args.seed}; starting simulation")
+        self.log(f"Saved world ({'layout ' + self.args.layout.name if self.args.layout else 'seed ' + str(self.args.seed)}); starting simulation")
 
     def run(self):
         self.prepare()

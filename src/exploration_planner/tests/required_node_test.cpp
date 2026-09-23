@@ -185,8 +185,19 @@ void seed26_motion_regression(ExplorationNode& node)
     seed26_reference(node);
     node.required_motion_inflate_ = planning_margin;
     const Vec2 old_command = node.pd_to_point_avoid(goal, obstacles);
-    require(old_command.x == 0 && old_command.y == 0 && node.command_projection_blocked_,
-            "seed26 reproduction must block the inward pursuit chord with the planning margin");
+    // 196b3cd 起，被投影拦截的命令不再整机清零，而是二分缩到刚好通过同一投影校验的比例
+    // (避免满速/零速反复)。测试意图不变：不安全的 pursuit chord 不得原样放行——
+    // 要么拦截为零，要么输出的是经 required_velocity_clear 校验的缩放命令。
+    {
+        const double c = std::cos(node.yaw_), s = std::sin(node.yaw_);
+        const Vec2 world{c * old_command.x - s * old_command.y, s * old_command.x + c * old_command.y};
+        const bool blocked_zero = old_command.x == 0 && old_command.y == 0 && node.command_projection_blocked_;
+        const bool scaled_safe = std::hypot(old_command.x, old_command.y) > 0 &&
+            std::hypot(old_command.x, old_command.y) < node.v_goal_max_ * .5 &&
+            node.required_velocity_clear(world, obstacles);
+        require(blocked_zero || scaled_safe,
+                "seed26 reproduction must block or safely scale the inward pursuit chord with the planning margin");
+    }
     require(!node.required_velocity_clear({.001 * std::cos(node.yaw_), .001 * std::sin(node.yaw_)}, obstacles),
             "low-speed desired motion must still be checked");
     node.required_motion_inflate_ = motion_margin;

@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <deque>
 #include <limits>
 
 #include "exploration_planner/types.hpp"
@@ -35,7 +36,41 @@ struct TrackerGains {
     //   之后再改 TIMER_PERIOD_MS，阻尼会跟着正确变化，不再隐性跳变。
     double dt;
     double max_accel = 0.30;
+    // 巡航前进指令的减速斜坡上限(m/s²)。弯道/终点减速由前瞻速度剖面提前开始，
+    // 不再让前进指令一拍内从巡航速跌到近零(2026-09-23 仿真：真值加速度 RMS 0.38 的主因)。
+    double max_decel = 0.60;
+    // 弯道角速度前馈增益(0=关闭，1=完全按 v·κ 前馈)。
+    double curvature_feedforward = 1.0;
+    // 终点/尖角减速段的最低爬行速度(m/s)，防止 sqrt 停车律与曲率门叠加后趴窝。
+    double creep_speed = 0.08;
+    // 停车转向锚点的滑停估计：减速度(m/s²)与前移上限(m)。
+    double stop_anchor_decel = 0.80;
+    double stop_anchor_max_m = 0.20;
+    // 滑停估计中"指令到实际减速"的等效延迟(s)。原写死 0.10；定点改为从已发指令斜坡刹停后，
+    //   PX4 约 0.4 s 延迟 + 0.3 s 时间常数使实际滑行 ~0.26 m@0.3 m/s，锚点低估会被 0.2 m/s 回拉(r49 点头 -2.9°)。
+    double stop_anchor_latency = 0.10;
+    // 定点保持是否跟随惯性滑行(不反推)。必达点 tracker 关闭，保持原行为。
+    bool hold_slide = true;
     double max_yaw_accel = 1.20;
+    // 航向预测/阻尼所用角速度中"上一拍指令"的权重(0=全用实测，1=全用指令)。
+    // PX4 已闭环跟踪角速度指令，指令→实测有约 0.4 s 滞后；对滞后的实测再做阻尼会与飞控内环
+    // 形成振荡环(台架：实机级滞后下直线增幅振荡)。指令本身无噪声、无滞后(Smith 预估思想)。
+    double yaw_damping_command_weight = 0.0;
+    // 巡航期望角速度与横漂补偿目标的一阶低通时间常数(s)，0=关闭。SLAM 位置噪声经前瞻几何
+    // 进入航向误差、每帧(10~20 Hz)阶跃一次；不滤波时指令只受角加速度限幅，呈满幅锯齿。
+    double command_filter_tau = 0.0;
+    // ★Smith 预估★(s，0=关闭，沿用 prediction_time/lateral_prediction_time 的实测速度外推)。
+    //   预测位置 = 当前位置 + 最近 smith_time 内【已发出】速度指令的积分；预测航向同理用角速度指令。
+    //   指令无噪声，且正是飞机在控制滞后期内将要执行的运动。实测速度外推(旧)在 1.5 cm SLAM 噪声下
+    //   是航向指令最大的高频源(台架：每拍跳变 0.049 rad，为几何误差的 2 倍)。
+    // 横向滑移减速：v *= 1/(1 + gain·max(0, |横向速度| - deadband))，横向速度先经 lateral_slow_tau 低通。
+    //   旧版 gain=3、无死区、不滤波：仿真 69% 时间是它在限前进速度(均值压 9%)，实机横向速度估计的
+    //   噪声会直接调制前进指令(前后点头)。默认值保持旧行为。
+    double lateral_slow_gain = 3.0;
+    double lateral_slow_deadband = 0.0;
+    double lateral_slow_tau = 0.0;
+    double smith_time = 0.0;
+    double smith_yaw_time = 0.0;
     double yaw_filter_tau = 0.12;
     double prediction_time = 0.20;
     double lateral_prediction_time = 0.50;
@@ -76,6 +111,27 @@ public:
                   double v_fwd_est, double v_lat_est,
                   double goal_tol,
                   double measured_yaw_rate = std::numeric_limits<double>::quiet_NaN());
+    // 换用另一个 tracker 继续飞(探索→归航/插点/视觉目标)时继承其指令与滤波状态，
+    //   使新轨迹的第一拍从当前已发出的指令按斜坡过渡，而不是从零起步(r01：交接时前进指令一拍 0.34→0)。
+    void inherit_motion(const TrajectoryTracker& other);
+    // 调用方对本拍指令做了安全裁剪/置零后，把最终发出的指令告知 tracker(Smith 预估用)。
+    // 同时同步 tracker 自身的斜坡状态与定点保持速度(审查发现：只改历史时，守卫置零的角速度在约束解除后会一拍跳回旧值)。
+    void set_last_command(double v_fwd, double v_lat, double yaw_rate)
+    {
+        previous_yaw_command_ = yaw_rate;
+        previous_forward_command_ = std::max(0.0, v_fwd);
+        previous_lateral_command_ = v_lat;
+        if (history_.empty()) return;
+        auto& h = history_.back();
+        h.fwd = v_fwd; h.lat = v_lat; h.rate = yaw_rate;
+        if (aligning_ || holonomic_hold_active_) {
+            const double c = std::cos(h.yaw), s = std::sin(h.yaw);
+            alignment_hold_.set_velocity({c * v_fwd - s * v_lat, s * v_fwd + c * v_lat});
+        }
+    }
+    // 实测滑行方向不安全时由调用方结束定点滑行(恢复反推)。
+    void end_hold_slide() { alignment_hold_.end_slide(); }
+    bool hold_sliding() const { return (aligning_ || holonomic_hold_active_) && alignment_hold_.sliding(); }
 
     bool reorienting() const { return aligning_; }
     double progress_distance() const { return progress_s_; }
@@ -103,12 +159,26 @@ public:
     void constrain_forward_command(double maximum)
     {
         previous_forward_command_ = std::clamp(previous_forward_command_, 0.0, std::max(0.0, maximum));
+        if (!history_.empty()) history_.back().fwd = std::min(history_.back().fwd, maximum);
     }
 
-    void constrain_lateral_command(double accepted) { previous_lateral_command_ = accepted; }
+    void constrain_lateral_command(double accepted)
+    {
+        previous_lateral_command_ = accepted;
+        if (!history_.empty()) history_.back().lat = accepted;
+    }
+    double forward_command() const { return previous_forward_command_; }
 
     // 最近一次用到的前瞻参考点（给可视化）
     Vec2 last_lookahead() const { return last_look_; }
+    // 最近一拍航向律各分量(诊断/离线台架用，不参与控制)
+    // limiter：本拍前进限速的主导约束 1=前瞻窗曲率 2=前瞻速度剖面 3=终点/尖角停车律 4=航向门
+    //   5=横向加速度(曲率) 6=实测角速度 7=横向速度因子；0=非巡航分支。
+    struct Debug {
+        double geo_error = 0, lead_error = 0, p_term = 0, d_term = 0, ff_term = 0, desired = 0;
+        int limiter = 0; double gate = 1, lat_factor = 1, v_target = 0;
+    };
+    const Debug& debug() const { return debug_; }
 
     // 最近一次 update 时，飞机到轨迹最近点的距离（m）——给"偏航就重规划"用
     double last_nearest_dist() const { return last_nearest_dist_; }
@@ -133,6 +203,7 @@ private:
     double previous_yaw_command_ = 0.0;
     double previous_forward_command_ = 0.0;
     double previous_lateral_command_ = 0.0;
+    double filtered_desired_rate_ = 0.0, filtered_lateral_target_ = 0.0, filtered_slip_ = 0.0;
     double last_heading_error_ = 0.0, last_curvature_ = 0.0;
     bool aligning_ = false;
     bool alignment_heading_valid_ = false;
@@ -143,6 +214,14 @@ private:
     bool holonomic_hold_active_ = false;
 
     Vec2   last_look_;
+    Debug  debug_;
+    struct Sent { double fwd, lat, rate, yaw; };
+    std::deque<Sent> history_;             // 最近发出的指令(Smith 预估)
+    VelCmd compute(double px, double py, double yaw, double v_fwd_est, double v_lat_est,
+                   double goal_tol, double measured_yaw_rate);
+    Vec2 smith_displacement() const;
+    Vec2 issued_world_velocity(double yaw) const;
+    double smith_heading() const;
     double handoff_heading_ = 0.0;
     double handoff_remaining_ = 0.0;
     bool handoff_valid_ = false;
@@ -152,6 +231,7 @@ private:
     double projected_progress(double px, double py) const;
     TrajPoint sample_at(double s) const;
     size_t next_corner() const;
+    Vec2 stop_anchor(const Vec2& cur, double yaw, double v_fwd_est, double v_lat_est) const;
 };
 
 }  // namespace exploration

@@ -1,0 +1,1 @@
+{"name": "R15", "description": "randomize_arena 规则随机 6 柱 seed15", "obstacles": [{"x": 4.648, "y": -1.521}, {"x": 4.197, "y": 2.698}, {"x": 5.698, "y": -3.045}, {"x": 1.076, "y": 0.719}, {"x": 5.854, "y": 1.528}, {"x": 1.584, "y": -2.291}], "gates": {"gate_wall_A": "center", "gate_wall_B": "center"}}

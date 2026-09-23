@@ -486,6 +486,9 @@ FrontierSelection select_observation_target(
         return false;
     };
     struct Evaluation { bool valid = false; double distance = 0, turn = 0, clearance = 0; int gain = 0; };
+    const bool detour_active = cfg.goal_valid && cfg.goal_detour_weight > 0.0 &&
+        grid.coverage_ratio() >= cfg.goal_detour_start;
+    const double home_direct = std::hypot(cfg.goal.x - cur.x, cfg.goal.y - cur.y);
     std::map<std::pair<long long, long long>, Evaluation> cache;
     double best_cost = std::numeric_limits<double>::infinity();
     int selected_band = active_band;
@@ -555,7 +558,9 @@ FrontierSelection select_observation_target(
                     cfg.turn_penalty * evaluation.turn - cfg.along_bonus * along -
                     cfg.cluster_weight * neighbors - cfg.gain_weight * gain +
                     cfg.clearance_weight * clearance_deficit + cfg.small_region_penalty * small_deficit +
-                    band_penalty + std::max(0.0, cfg.continuity_turn_penalty) * route_turn;
+                    band_penalty + std::max(0.0, cfg.continuity_turn_penalty) * route_turn +
+                    (detour_active ? cfg.goal_detour_weight * (evaluation.distance +
+                        std::hypot(cfg.goal.x - point.x, cfg.goal.y - point.y) - home_direct) : 0.0);
                 if (cost >= best_cost) continue;
                 best_cost = cost;
                 result = {true, point, gain, evaluation.clearance, region_size,

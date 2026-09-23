@@ -1,0 +1,1 @@
+{"name": "R13", "description": "randomize_arena 规则随机 6 柱 seed13", "obstacles": [{"x": 3.271, "y": -1.08}, {"x": 3.661, "y": 2.57}, {"x": 2.717, "y": 0.458}, {"x": 5.563, "y": -2.861}, {"x": 3.107, "y": -2.643}, {"x": 1.169, "y": 0.733}], "gates": {"gate_wall_A": "center", "gate_wall_B": "center"}}

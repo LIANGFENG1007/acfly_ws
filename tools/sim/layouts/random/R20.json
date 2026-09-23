@@ -1,0 +1,1 @@
+{"name": "R20", "description": "randomize_arena 规则随机 6 柱 seed20", "obstacles": [{"x": 1.956, "y": 1.053}, {"x": 4.404, "y": -2.061}, {"x": 2.201, "y": 2.84}, {"x": 1.371, "y": -2.418}, {"x": 4.7, "y": 3.22}, {"x": 5.785, "y": 1.335}], "gates": {"gate_wall_A": "center", "gate_wall_B": "center"}}

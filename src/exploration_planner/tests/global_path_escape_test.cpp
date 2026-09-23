@@ -54,6 +54,26 @@ void monotonic_escape()
         "old path remains valid while progressing through escape");
 }
 
+void retreat_escape_from_overlap()
+{
+    // 仅用于贴障后退：机身与拟合圆物理重叠时，只允许严格远离该障碍中心；路径校验(path_clear)不放宽。
+    const auto cfg = config();
+    const Obstacles obstacle{{0.0, 0.0, 0.2}};
+    const Vec2 start{0.45, 0.0};  // Surface distance .25m < robot radius .30m.
+    require(!obstacle_segment_clear(start, {0.95, 0.0}, obstacle, cfg),
+        "fixture must be rejected by the ordinary segment check");
+    require(obstacle_escape_clear(start, {0.95, 0.0}, obstacle, cfg),
+        "strict radial retreat from an overlapped obstacle must be allowed");
+    require(!obstacle_escape_clear(start, {0.45, 0.5}, obstacle, cfg),
+        "tangential motion inside the overlap must stay rejected");
+    require(!obstacle_escape_clear(start, {0.20, 0.0}, obstacle, cfg),
+        "inward motion must stay rejected");
+    require(!obstacle_escape_clear(start, {1.5, 0.0}, {{0, 0, .2}, {1.3, 0, .1}}, cfg),
+        "retreating from one obstacle cannot approach another");
+    require(!path_clear(start, {start, {1.5, 0.0}}, obstacle, cfg),
+        "planning validation keeps rejecting physical overlap");
+}
+
 void analytic_intersections()
 {
     auto cfg = config();
@@ -107,6 +127,7 @@ void field_entry()
 
 int main()
 {
+    retreat_escape_from_overlap();
     try {
         normal_safety();
         monotonic_escape();

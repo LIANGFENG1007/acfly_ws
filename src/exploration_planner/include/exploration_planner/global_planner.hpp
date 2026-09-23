@@ -92,6 +92,12 @@ bool required_path_clear(const Vec2& cur, const Path2& path, const Vec2& goal,
 bool obstacle_segment_clear(const Vec2& start, const Vec2& end,
                             const Obstacles& obs, const GlobalConfig& cfg);
 
+// ★仅用于贴障后退脱困★：与 obstacle_segment_clear 相同，唯一区别是起点已与某障碍"物理重叠"
+//   (拟合半径+机身半径以内)时，允许【严格远离该障碍中心】的线段——远离只会减少重叠。
+//   拟合圆含 OBS_R_INFLATE 充气，规划器眼中的重叠常常离真实柱面还有 5~12 cm；原规则下此时任何运动都被禁止，
+//   飞机只能贴着柱子悬停(r57：悬停 30 s 后原地转向，桨尖扫到柱子)。路径规划/校验仍用原规则，不放宽。
+bool obstacle_escape_clear(const Vec2& start, const Vec2& end,
+                           const Obstacles& obs, const GlobalConfig& cfg);
 // A short correction may enter the field margin monotonically over several
 // control ticks. This does not validate a complete mission path.
 bool field_motion_clear(const Vec2& start, const Vec2& end, const GlobalConfig& cfg);

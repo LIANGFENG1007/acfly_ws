@@ -29,10 +29,11 @@ inline constexpr double HOME_GOAL_WALL_MARGIN = 0.0;
 //   例：起飞点世界 (-4,0)，10x10 场地世界 x,y ∈ [-5,5]
 //       → SLAM x ∈ [-5-(-4), 5-(-4)] = [-1, 9]，y ∈ [-5, 5]
 // ---------------------------------------------------------------------------
-inline constexpr double FIELD_MIN_X = -0.3;                //-0.3;   //-0.5
-inline constexpr double FIELD_MIN_Y = -2.7;                //-0.8;   //-2.1
-inline constexpr double FIELD_MAX_X = 4.86;               // 2.0;   // 4.8
-inline constexpr double FIELD_MAX_Y = 2.4;               // 4.43;   // 2.3
+// 10x10 比赛场地(与提交 f2484b7「最新版本」一致)。实机小场地为 x∈[-0.3,4.86]、y∈[-2.7,2.4]。
+inline constexpr double FIELD_MIN_X = 0.0;
+inline constexpr double FIELD_MIN_Y = -5.0;
+inline constexpr double FIELD_MAX_X = 7.5;
+inline constexpr double FIELD_MAX_Y = 5.0;
 // ★自主探索·车式前进模式★（仅影响 exploration_planner 的轨迹跟踪）
 //   true  = 巡航以前进/yaw跟踪为主，允许受避障检查的横漂补偿；转向时保持XY。
 //   false = 保留旧的全向跟踪方式（允许 v_lat 横向纠偏）。
@@ -122,7 +123,9 @@ inline constexpr double CORRIDOR_CONTINUOUS_CENTER_RESERVE = 0.15; // 机体前�
 inline constexpr double CORRIDOR_CONTINUOUS_TIME_MARGIN = 0.50; // 横向对中时间估计的附加余量(s)
 inline constexpr double CORRIDOR_MOVING_LOOKAHEAD = 0.80; // 穿门后接力用的移动前瞻(m)，避免追到临时点刹停
 inline constexpr double CORRIDOR_CENTER_PREDICTION_S = 0.40; // 对中放行同时检查预测横向漂移(s)
-inline constexpr double CORRIDOR_EXIT_M = 1.00; // 门后沿当前门中心直行此距离(m)再向下一门/H偏移；空间不足时缩短
+inline constexpr double CORRIDOR_EXIT_M = 0.50; // 门后沿当前门中心直行此距离(m)再向下一门/H偏移；空间不足时缩短。
+                                                // 1.0→0.5(2026-09-23)：开口靠墙时(0.75m 开口/0.64m 机宽)出门段贴墙，r01 实测机身离墙 2.7cm 飞了 1m；
+                                                // 机身完整越过门板只需 半机宽+栅格≈0.36m，0.5m 仍是完整直线出门
 inline constexpr double CORRIDOR_CENTER_TOL = 0.015; // 穿越前对门中心横向误差(m)
 inline constexpr double CORRIDOR_GATE_ASSOC_M = 0.15;
 inline constexpr int CORRIDOR_CONFIRM_FRAMES = 3;
@@ -193,7 +196,8 @@ inline constexpr double REPLAN_PERIOD_S    = 0.20;  // 周期性重规划间隔 
 inline constexpr double REPLAN_DEV_M       = 0.10;  // 偏离超此距离(m)且剩余执行路线不安全时立即重规划；安全偏离由tracker纠正
 inline constexpr double REPLAN_CANDIDATE_PERIOD_S = 0.60; // 安全旧路仍有收益时的候选搜索间隔(s)；0关闭，紧急换路/末端接力不等待
 inline constexpr double FRONTIER_NEAR_W    = 1.40;  // ★邻近系数★：距离项权重，越大越优先去【最近】的未扫区域
-inline constexpr double FRONTIER_TURN_PEN  = 1.70;  // 选目标的转向代价 (m/rad)，越大越爱直行少掉头
+inline constexpr double FRONTIER_TURN_PEN  = 3.50;  // 选目标的转向代价 (m/rad)，越大越爱直行少掉头。1.7→3.5(2026-09-23 离线探索台架 24 布局：
+                                                    //   用时 -8%、停车转向 35→11、最慢布局 72→52s；18 个变快，最多慢 3.8s)
 inline constexpr double FRONTIER_CLUSTER_W = 1.80;  // 未扫邻居加成 (m/个)，越大越优先大片未知区(别追孤格)
 inline constexpr bool FRONTIER_OBSERVATION_ENABLED = true; // 优先宽敞观察点；轨迹仍由连续曲线跟踪
 inline constexpr int FRONTIER_SMALL_REGION_CELLS = 8; // 少于此格数的未知连通块按碎片处理，仍允许最后补扫
@@ -203,6 +207,10 @@ inline constexpr double FRONTIER_PREFERRED_CLEARANCE = 0.95; // 观察点到障�
 inline constexpr double FRONTIER_GAIN_WEIGHT = 0.15; // 可见未扫大格收益权重
 inline constexpr double FRONTIER_CLEARANCE_WEIGHT = 2.0; // 观察点空间不足的软惩罚权重
 inline constexpr double FRONTIER_OBSERVATION_MIN_DISTANCE = 1.50; // 正常观察航点最小推进距离(m)，减少短段反复刹停
+// ★收尾顺路★：覆盖率 ≥ START 后选点代价加 W×(去候选点让回红点多绕的路程)。离线台架 24 布局：各档都不变差，
+//   W=1/START=0.7 总用时 -1.8%、归航路程 -6%；更强的"终点引导/先远后近"都对参数敏感，未采用。
+inline constexpr double FRONTIER_GOAL_DETOUR_W = 1.0;
+inline constexpr double FRONTIER_GOAL_DETOUR_START = 0.70;
 inline constexpr double FRONTIER_CONTINUITY_TURN_PEN = 1.00; // 安全原路线换向的软代价(m/rad)，减少目标扫完后突然横切换区；0关闭此附加项
 inline constexpr double FRONTIER_CONTINUITY_LOOKAHEAD_M = 1.00; // 从原执行轨迹前方取方向的距离(m)，兼顾已规划弯道而非只看当前机头
 inline constexpr double EXPLORE_GUIDE_MIN_SEGMENT_M = 0.10; // 合并短于此长度的冗余引导段，合并后的直线仍须完整验障(m)
@@ -226,7 +234,7 @@ inline constexpr double CHAIN_GAP_M        = 1.00;  // 链路相邻目标点最�
 inline constexpr double BAND_WIDTH      = 4.00;  // 条带宽度 (m)，≈视野单侧覆盖，取 LANE_SPACING
 inline constexpr double BAND_TOL        = 0.40;  // 当前条带上下容差 (m)，略出带的格也纳入选点
 inline constexpr double ALONG_BONUS     = 1.00;  // 沿条带主方向推进加成 (m/m)，越大越坚定横扫少犹豫
-inline constexpr int    BAND_CLEAR_CNT  = 6;     // 剩余未扫格 ≤ 此数才推进下一带(迟滞)，放宽免为残角折返
+inline constexpr int    BAND_CLEAR_CNT  = 12;    // 剩余未扫格 ≤ 此数才推进下一带(迟滞)，放宽免为残角折返。6→12 与 FRONTIER_TURN_PEN 同批调整(台架)
 
 // ★目标失效检测(2026-08)★：解决"明明已覆盖了未探索部分、再往前走也不增加进度，却还在往前走"。
 //   根因：路径承诺/迟滞只看【目标动没动、路撞不撞】，从不问【这个目标还值不值得去】。
@@ -254,7 +262,7 @@ inline constexpr double V_MIN        = 0.00;   // 前进速度下限 (m/s)，防
                                                //   ★当前为 0 = 该下限保护是空操作★(tracker 里那段 if 恒不生效)。
                                                //   若实测出现"过弯降速到几乎不动"，调到 0.05~0.10 即可启用兜底。
 inline constexpr double K_CURV       = 0.40;   // 曲率降速系数（越大过弯越慢）。1.0→0.4:绕障弧κ≈2时 v 从0.167提到0.28,过弯快约1.7倍;偏切外就往回调
-inline constexpr double CARLIKE_K_CURV = 0.80; // 车式模式曲率降速：弯道先减速，给转向和障碍留余量
+inline constexpr double CARLIKE_K_CURV = 0.50; // 车式模式曲率降速。0.8→0.5(2026-09-23 仿真 seed42/43)：配合前瞻速度剖面+减速斜坡+曲率前馈后，κ=2 弯道 0.19→0.28 m/s，探索用时 103→76 s，贴线 p95 仍 ≤7 cm；再降会放大弯道外切
 inline constexpr double LOOKAHEAD    = 0.40;   // pure-pursuit 前瞻距离 (m)
 inline constexpr double CARLIKE_LOOKAHEAD = 0.50; // 0.6m/s探索前瞻(m)：再收紧5cm，减少弯道偏离，保留连续转弯
 inline constexpr double ENDPOINT_SLOW_R = 0.50;// 距终点此半径内开始线性降速 (m)
@@ -271,6 +279,11 @@ inline constexpr double MAX_YAW_RATE = 1.80;   // yaw_rate 限幅 (rad/s)
 inline constexpr double CARLIKE_KD_YAW = 0.50; // 车式纠偏使用实测角速度阻尼，不对跳动的目标角求导
 inline constexpr double CARLIKE_MAX_YAW_RATE = 0.80; // 大角度纠偏的转向速度上限(rad/s)
 inline constexpr double CARLIKE_MAX_ACCEL = 0.30; // 纠偏完成后的前进加速度上限(m/s²)
+inline constexpr double CARLIKE_MAX_DECEL = 0.60; // 巡航前进指令减速斜坡上限(m/s²)；弯道/终点减速由前瞻速度剖面提前开始，避免一拍跌到近零
+inline constexpr double CARLIKE_CURVATURE_FF = 1.00; // 弯道角速度前馈 v·κ 的增益(0关闭)；纯P跟踪在弯道必然滞后切外侧
+inline constexpr double CARLIKE_CREEP_SPEED = 0.12; // 终点/尖角前线性停车律(v=V_MAX·d/ENDPOINT_SLOW_R)的最低爬行速度(m/s)，防止与曲率门叠加后趴窝(基线仿真曾以 0.02 m/s 爬 14 s)
+inline constexpr double CARLIKE_HANDOFF_BRAKE_SPEED = 0.15; // 需要停车转向的换路(掉头/观察点换向)先沿旧路减到此速度以下再采纳(m/s)，防止惯性冲离新路线
+inline constexpr double CARLIKE_HANDOFF_BRAKE_ANGLE_DEG = 45.0; // 巡航中换路，新路线前瞻方位误差超过此角即先预减速再采纳(度)；预演一拍常低估 10° 左右，故低于停车线 75°
 inline constexpr double CARLIKE_MAX_YAW_ACCEL = 1.20; // 转向角加速度上限(rad/s²)
 inline constexpr double CARLIKE_YAW_FILTER_S = 0.12; // 无外部角速度测量时的航向差分低通(s)
 inline constexpr double CARLIKE_PREDICTION_S = 0.20; // 根据惯性速度提前修正前瞻方位(s)
@@ -292,6 +305,12 @@ inline constexpr double CARLIKE_HEADING_GATE_DEG = 18.0; // 普通纠偏的减�
 inline constexpr double CARLIKE_TURN_BLEND_M = 0.80; // 换线过渡长度(m)：当前方向到下一条线用 Bézier 丝滑衔接
 inline constexpr double CARLIKE_TURN_BLEND_ANGLE_DEG = 15.0; // 转角小于此值不额外插入过渡段
 inline constexpr double TURN_BLEND_MAX_ANGLE_DEG = 120.0; // 超此夹角不构造短Bezier过渡，用已校验原路径交tracker对齐
+// ★锥内钩子判定(2026-09-23)★：机头锥内的 A* 解若在起步 CONE_HOOK_WINDOW_M 内就要偏离机头 ≥ CONE_HOOK_DEG 且执行曲率 ≥ CONE_HOOK_KAPPA，
+//   说明是锥约束硬凑出的"先直走再直角急拐"(r01：观察点掉头时沿钩子以 0.07 m/s 爬 7 s)。视为锥内无解，
+//   交给无锥路径(≤TURN_BLEND_MAX_ANGLE_DEG 由 tracker 停车转向)或原地转身找解，决策明确。0=关闭。
+inline constexpr double CARLIKE_CONE_HOOK_DEG = 70.0;
+inline constexpr double CARLIKE_CONE_HOOK_WINDOW_M = 1.20;
+inline constexpr double CARLIKE_CONE_HOOK_KAPPA = 4.0; // 且执行曲线起步段最大曲率 ≥ 此值(1/m，半径≤0.25m)才算钩子；正常绕障弧 κ≈1~3，r01 钩子 κ=12
 inline constexpr double TURN_ROUND_MIN_M = 0.25; // 圆角切点距离下限(m)，更小则保留明确折点
 inline constexpr double TURN_ROUND_MAX_CURVATURE = 5.0; // 圆角最大允许曲率(1/m)，不靠微小急弯假装平滑
 inline constexpr int    CARLIKE_TURN_BLEND_SAMPLES = 12; // Bézier 过渡段采样点数
@@ -299,7 +318,32 @@ inline constexpr int    CARLIKE_TURN_BLEND_SAMPLES = 12; // Bézier 过渡段采
 inline constexpr double KP_LAT       = 0.80;   // 横向偏差 → v_lat 的 P
 inline constexpr double KD_LAT       = 0.04;   // v_lat 的 D（口径修正后的真实值，等价于旧 0.10@dt=0.05，见上方 KD_YAW 说明）
 inline constexpr double MAX_V_LAT    = 0.20;   // 横向纠偏速度上限 (m/s)，压很低
-inline constexpr double CARLIKE_DRIFT_KD = 0.80; // 普通前进时实测横漂速度的阻尼（不改旧全向KD_LAT）
+inline constexpr double CARLIKE_DRIFT_KD = 0.60; // 普通前进时实测横漂速度的阻尼（不改旧全向KD_LAT）。0.8→0.6(2026-09-23 台架)：
+                                                 //   0.4 时实机噪声下横向指令翻转最少，但滞后×2 时纠偏不足、误差比旧版大 5 cm；0.6 兼顾
+// ★跟踪平稳性(2026-09-23，离线台架 tools/sim/bench + 仿真验证)★
+//   实机"总有点晃"的机理：SLAM 厘米级位置噪声经"实测速度外推 + 前瞻几何"进入航向误差，每帧阶跃，
+//   KP_YAW 放大后期望角速度每拍跳 0.1 rad/s，指令只受角加速度限幅 → 满幅锯齿；滞后 0.5 s 时直线上增幅振荡。
+inline constexpr double CARLIKE_SMITH_S = 0.30;     // Smith 预估：用最近此时长【已发出】速度指令的积分预测位置(s)；0=回到实测速度外推
+inline constexpr double CARLIKE_SMITH_YAW_S = 0.20; // Smith 预估：用最近此时长已发出角速度指令预测机头朝向(s)
+inline constexpr double CARLIKE_COMMAND_FILTER_S = 0.20; // 巡航期望角速度/横漂补偿目标的一阶低通(s)；0=关闭
+// 横向滑移减速 v *= 1/(1+GAIN·max(0,|横向速度|低通-DEADBAND))。旧版无死区无滤波：仿真 69% 时间由它限速，
+//   实机横向速度估计噪声直接调制前进指令(前后点头)。台架实机模型：前进反复 -70%、jerk -24%、用时 -8%，贴线均值 +1 cm。
+inline constexpr double CARLIKE_LATERAL_SLOW_GAIN = 3.0;
+inline constexpr double CARLIKE_LATERAL_SLOW_DEADBAND = 0.02; // m/s。0.05 时滞后×2 下滑移减速反应迟、误差大；0.02 在×1 下贴线与旧版持平
+inline constexpr double CARLIKE_LATERAL_SLOW_TAU = 0.30;      // s
+// 停车转向/原地找解/观察点定点的锚点 = 预计滑停点：v²/(2·decel) + LATENCY·v，上限 MAX_M。
+//   原 LATENCY 写死 0.10、MAX 0.20：定点从已发指令斜坡刹停后低估滑行，飞过锚点被回拉(r49 反向 -0.19 m/s、点头 -2.9°)。
+inline constexpr double CARLIKE_STOP_ANCHOR_LATENCY_S = 0.35;
+inline constexpr double CARLIKE_STOP_ANCHOR_MAX_M = 0.35;
+// 航向角速度优先用飞控 IMU 陀螺(差分 SLAM 航向在 0.6° 噪声下是航向阻尼的第二噪声源)；速度仍用差分+EMA。
+inline constexpr const char* IMU_TOPIC = "/mavros/imu/data"; // 机体系陀螺(FLU)；空字符串=不用陀螺
+inline constexpr double IMU_TIMEOUT_S = 0.10;       // 陀螺超过此时长未更新即退回航向滤波
+inline constexpr double REQUIRED_PLAN_RESERVE_M = 0.08; // 必达点(归航/插点/视觉)规划先加此预留余量(m)，找不到再退回标准余量。
+                                                    //   最短路折点紧贴禁入圈，平滑与圆角都会切进去→退回纯折线逐点停车爬行(r65 两柱间 16 s)；
+                                                    //   离线复现：预留 ≥0.05 后平滑曲线即可通过标准余量验收。验收余量不变。
+inline constexpr double REQUIRED_SLOW_RADIUS_M = 1.20; // 必达点线性减速半径下限(m)：覆盖 1.0m 末端批准直线+余量。
+                                                    //   原约 0.72m：进末端直线时仍 0.45m/s、航向差 0.3rad，刹停投影(0.43m)偏出 0.1m 胶囊→急刹反推(r11)
+inline constexpr double REQUIRED_DRIFT_KD = 0.80; // 必达点(归航/插点/视觉)跟踪的横漂阻尼，保持探索改 0.4 之前的值
 inline constexpr double XY_BRAKE_ACCEL = 0.80; // 刹车/反向纠偏的指令变化上限(m/s²)，普通加速仍用CARLIKE_MAX_ACCEL
 
 inline constexpr double V_EST_ALPHA  = 0.30;   // 位置差分估速度低通系数（同主控思路）
@@ -390,6 +434,7 @@ inline constexpr int OBS_GHOST_CLEAR_FRAMES = 25;    // 视野内连续无命中
 // ===========================================================================
 inline constexpr double GLOBAL_CELL      = 0.04;  // A* 搜索栅格分辨率(m)：越小越贴墙/钻窄缝但越慢
 inline constexpr double GLOBAL_MARGIN    = 0.10;  // 障碍额外安全余量(m)：禁入半径 = 障碍r + ROBOT_RADIUS + 此值。
+inline constexpr double EXPLORE_GUARD_INFLATE = 0.03; // 探索段速度守卫/定点纠偏短投影的执行余量(m)：规划仍用 GLOBAL_MARGIN，执行时允许跟踪误差吃掉规划余量的一部分，物理半径不可侵入
                                                   //   飞机中心到障碍物外表面的规划最小距离
                                                   //   = OBS_R_INFLATE(0.10) + ROBOT_RADIUS(0.30) + GLOBAL_MARGIN(0.10) = 0.50m。
                                                   //   2026-09-22 由 0.30 降到 0.10(外圈 0.7→0.5)：目标物常距障碍约 1m，0.7 会把目标物
@@ -404,6 +449,9 @@ inline constexpr double COMMIT_TARGET_TOL = 0.60; // ★路径承诺★目标移
                                                   //   核心防"绕障左右翻边"：旧路径仍无碰撞就续用,不因左右绕代价 near-tie 每拍翻边→撞柱。
                                                   //   仅【目标大幅移动】或【旧路径被挡(会撞)】才重算。调大→更"咬死"旧路径(更稳但换区迟钝);调小→更易换路。
 inline constexpr double GLOBAL_LOOKAHEAD = 0.60;  // 沿绕障轨迹取 carrot 的前瞻距离(m)：越大越平顺但贴角余量小
+// 探索路线剩余不足此距离即接力下一观察点(原与 GLOBAL_LOOKAHEAD 共用 0.6)。1.2(2026-09-23 仿真 L1~L4)：
+//   总用时 567.7→524.6 s(-7.6%)，真值均速 0.33→0.38，到点停车再选明显减少；L1 单项慢 7 s(路线稍长)。
+inline constexpr double EXPLORE_HANDOFF_M = 1.20;
 inline constexpr double EXPLORE_TARGET_MIN_DIST = 1.50; // 探索挑 A* 终点的最小距离(m)：取覆盖路径上第一个
                                                   //   距当前≥此值的点当 A* 目标(而非最远点)——只绕近处障碍,路径短不易过期,到了周期重规划接力。
 

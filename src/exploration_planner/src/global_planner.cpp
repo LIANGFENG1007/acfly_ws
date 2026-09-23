@@ -671,6 +671,28 @@ bool obstacle_segment_clear(const Vec2& start, const Vec2& end,
     return segment_free(start, end, obs, cfg.robot_radius + cfg.inflate, cfg.robot_radius);
 }
 
+bool obstacle_escape_clear(const Vec2& start, const Vec2& end,
+                           const Obstacles& obs, const GlobalConfig& cfg)
+{
+    if (!std::isfinite(cfg.robot_radius) || cfg.robot_radius <= 0.0 ||
+        !std::isfinite(cfg.inflate) || cfg.inflate < 0.0 ||
+        !std::isfinite(start.x) || !std::isfinite(start.y) ||
+        !std::isfinite(end.x) || !std::isfinite(end.y)) return false;
+    const double rr = cfg.robot_radius + cfg.inflate;
+    for (const auto& obstacle : obs) {
+        const double ax = start.x - obstacle.cx, ay = start.y - obstacle.cy;
+        const double start_distance2 = ax * ax + ay * ay;
+        const double radius = obstacle.r + rr;
+        if (start_distance2 < radius * radius) {
+            // 直线上到圆心距离是凸函数：起点处径向导数 > 0 即全程单调增大。
+            if (ax * (end.x - start.x) + ay * (end.y - start.y) <= 1e-12) return false;
+        } else if (segment_distance2({obstacle.cx, obstacle.cy}, start, end) < radius * radius) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool path_clear(const Vec2& cur, const Path2& path,
                 const Obstacles& obs, const GlobalConfig& cfg)
 {

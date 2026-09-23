@@ -1,0 +1,17 @@
+# edc_arena 仿真场地覆盖：仓库 params.hpp 目前是实机小场地，仿真需覆盖回 10x10 场地。
+# 视觉 SHM 在仿真里没有数据源，关闭以免等待视觉目标。
+/**:
+  ros__parameters:
+    field_min_x: 0.0
+    field_min_y: -5.0
+    field_max_x: 7.5
+    field_max_y: 5.0
+    vision_shm_enabled: false
+    visual_drop_enabled: false
+    corridor_robot_width: 0.64
+    corridor_center_tol: 0.015
+    corridor_gate_speed: 0.30
+    corridor_continuous_approach: true
+    corridor_continuous_center_reserve: 0.15
+    corridor_continuous_time_margin: 0.50
+    corridor_center_prediction_s: 0.40
