@@ -30,10 +30,10 @@ inline constexpr double HOME_GOAL_WALL_MARGIN = 0.0;
 //       → SLAM x ∈ [-5-(-4), 5-(-4)] = [-1, 9]，y ∈ [-5, 5]
 // ---------------------------------------------------------------------------
 // 10x10 比赛场地(与提交 f2484b7「最新版本」一致)。实机小场地为 x∈[-0.3,4.86]、y∈[-2.7,2.4]。
-inline constexpr double FIELD_MIN_X = 0.0;
-inline constexpr double FIELD_MIN_Y = -5.0;
-inline constexpr double FIELD_MAX_X = 7.5;
-inline constexpr double FIELD_MAX_Y = 5.0;
+inline constexpr double FIELD_MIN_X = -0.5;
+inline constexpr double FIELD_MIN_Y = -3.8;
+inline constexpr double FIELD_MAX_X = 9.0;
+inline constexpr double FIELD_MAX_Y = 4.6;
 // ★自主探索·车式前进模式★（仅影响 exploration_planner 的轨迹跟踪）
 //   true  = 巡航以前进/yaw跟踪为主，允许受避障检查的横漂补偿；转向时保持XY。
 //   false = 保留旧的全向跟踪方式（允许 v_lat 横向纠偏）。
@@ -257,7 +257,8 @@ inline constexpr double ARC_SAMPLE_DS = 0.05;  // 沿弧长采样步长 (m)
 //   v_fwd 上限 0.6，跟随曲率动态降：v_fwd = V_MAX / (1 + K_CURV*|κ|)
 //   全向模式横向做低限纠偏；车式模式巡航关闭横移，原地转向允许XY定点补偿。
 // ---------------------------------------------------------------------------
-inline constexpr double V_MAX        = 0.50;   // 探索前进速度上限 (m/s)，弯道按曲率和航向误差平滑降速
+inline constexpr double V_MAX        = 0.8
+;   // 探索前进速度上限 (m/s)，弯道按曲率和航向误差平滑降速
 inline constexpr double V_MIN        = 0.00;   // 前进速度下限 (m/s)，防止过弯停死。
                                                //   ★当前为 0 = 该下限保护是空操作★(tracker 里那段 if 恒不生效)。
                                                //   若实测出现"过弯降速到几乎不动"，调到 0.05~0.10 即可启用兜底。
