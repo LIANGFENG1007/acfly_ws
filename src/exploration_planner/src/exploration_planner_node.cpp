@@ -34,6 +34,7 @@
 
 #include <opencv2/opencv.hpp>
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <deque>
@@ -270,7 +271,6 @@ public:
             gains_.stop_anchor_latency = std::max(0.0, dd("carlike_stop_anchor_latency_s", params::CARLIKE_STOP_ANCHOR_LATENCY_S));
             gains_.stop_anchor_max_m = std::max(0.0, dd("carlike_stop_anchor_max_m", params::CARLIKE_STOP_ANCHOR_MAX_M));
         }
-        imu_timeout_ = std::max(1e-3, dd("imu_timeout_s", params::IMU_TIMEOUT_S));
         turn_blend_m_ = dd("carlike_turn_blend_m", params::CARLIKE_TURN_BLEND_M);
         turn_blend_min_angle_rad_ =
             dd("carlike_turn_blend_angle_deg", params::CARLIKE_TURN_BLEND_ANGLE_DEG) * M_PI / 180.0;
@@ -494,17 +494,30 @@ public:
         obs_cloud_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>("/exploration/obstacle_cloud", 5);
         boundary_pub_  = create_publisher<visualization_msgs::msg::Marker>("/exploration/field_boundary", latched);
 
+        imu_timeout_ = std::max(1e-3, dd("imu_timeout_s", params::IMU_TIMEOUT_S));
         imu_topic_ = declare_parameter<std::string>("imu_topic", params::IMU_TOPIC);
+        if (imu_topic_.find("mavros") != std::string::npos) {
+            // 实机 /mavros/imu/data 数据不正确：即便被参数误配也拒绝订阅。
+            RCLCPP_ERROR(get_logger(), "[雷达IMU] 拒绝订阅 %s(飞控 IMU 数据不可信)，角速度改用 SLAM 航向差分", imu_topic_.c_str());
+            imu_topic_.clear();
+        }
         if (!imu_topic_.empty()) {
             imu_sub_ = create_subscription<sensor_msgs::msg::Imu>(
                 imu_topic_, rclcpp::SensorDataQoS(),
                 [this](const sensor_msgs::msg::Imu::SharedPtr msg) {
-                    const double wz = msg->angular_velocity.z;
-                    if (!std::isfinite(wz)) return;
+                    const auto& w = msg->angular_velocity;
+                    if (!std::isfinite(w.x) || !std::isfinite(w.y) || !std::isfinite(w.z)) return;
                     std::lock_guard<std::mutex> lk(mtx_);
-                    gyro_z_ = wz;
+                    if (!has_pose_) return;
+                    // IMU 系角速度经 SLAM 姿态(即 IMU 系在 camera_init 下的姿态)转到世界系，取 z = 航向角速度。
+                    const auto& q = imu_attitude_;
+                    const double r20 = 2.0 * (q[1] * q[3] - q[0] * q[2]);
+                    const double r21 = 2.0 * (q[2] * q[3] + q[0] * q[1]);
+                    const double r22 = 1.0 - 2.0 * (q[1] * q[1] + q[2] * q[2]);
+                    gyro_z_ = r20 * w.x + r21 * w.y + r22 * w.z;
                     gyro_at_ = steady_seconds();
                 });
+            RCLCPP_INFO(get_logger(), "[雷达IMU] 航向角速度取自 %s(自检不通过或断流时自动退回 SLAM 航向差分)", imu_topic_.c_str());
         }
         odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(
             "/aft_mapped_to_init", rclcpp::SensorDataQoS(),
@@ -697,13 +710,15 @@ private:
                 v_lat_est_ = v_est_alpha_ * vl + (1.0 - v_est_alpha_) * v_lat_est_;
                 const double wz = wrap_pi(yaw - prev_yaw_) / dt;
                 yaw_rate_diff_ = v_est_alpha_ * wz + (1.0 - v_est_alpha_) * yaw_rate_diff_;
-                // 陀螺符号自检：雷达倒装/坐标镜像时陀螺 z 与 SLAM 航向变化反号，直接用会让阻尼变成正反馈。
+                // 雷达 IMU 自检：与 SLAM 航向差分长期反号，或幅值比偏离 [0.5,2](单位/坐标错误)，停用并退回差分。
                 if (!gyro_disabled_ && gyro_fresh(received_at) && std::abs(yaw_rate_diff_) > 0.3 && std::abs(gyro_z_) > 0.3) {
                     gyro_agreement_ = 0.97 * gyro_agreement_ + 0.03 * ((yaw_rate_diff_ > 0) == (gyro_z_ > 0) ? 1.0 : 0.0);
-                    if (++gyro_agreement_samples_ >= 40 && gyro_agreement_ < 0.3) {
+                    gyro_ratio_ = 0.97 * gyro_ratio_ + 0.03 * std::clamp(std::abs(gyro_z_ / yaw_rate_diff_), 0.0, 5.0);
+                    if (++gyro_agreement_samples_ >= 40 &&
+                        (gyro_agreement_ < 0.3 || gyro_ratio_ < 0.5 || gyro_ratio_ > 2.0)) {
                         gyro_disabled_ = true;
-                        RCLCPP_ERROR(get_logger(), "[陀螺] %s 的 z 角速度与 SLAM 航向变化长期反号(一致率 %.2f)，已停用陀螺，退回航向差分。检查雷达/飞控安装方向",
-                            imu_topic_.c_str(), gyro_agreement_);
+                        RCLCPP_ERROR(get_logger(), "[雷达IMU] %s 与 SLAM 航向变化不一致(同号率 %.2f，幅值比 %.2f)，已停用，退回 SLAM 航向差分",
+                            imu_topic_.c_str(), gyro_agreement_, gyro_ratio_);
                     }
                 }
             } else if (dt == 0.0) {
@@ -714,6 +729,8 @@ private:
         prev_x_ = p.x; prev_y_ = p.y; prev_yaw_ = yaw; has_prev_pose_ = true;
 
         px_ = p.x; py_ = p.y; pz_ = p.z; yaw_ = yaw;
+        const double qn_sqrt = std::sqrt(qn);
+        imu_attitude_ = {q.w / qn_sqrt, q.x / qn_sqrt, q.y / qn_sqrt, q.z / qn_sqrt};
         has_pose_ = true;
     }
 
@@ -3569,9 +3586,6 @@ private:
                 number("explore_guard_rejections", explore_guard_rejections_);
                 number("cone_bypass_adoptions", cone_bypass_adoptions_);
                 number("cone_hook_rejections", cone_hook_rejections_);
-                number("imu_gyro_fresh", gyro_fresh(steady_seconds()));
-                number("imu_gyro_disabled", gyro_disabled_);
-                number("imu_gyro_agreement", gyro_agreement_);
                 number("required_retreats", required_retreats_);
                 number("explore_guard_lateral_trims", explore_guard_lateral_trims_);
                 number("target_x", explore_target_.x);
@@ -3584,6 +3598,10 @@ private:
                 number("reference_curvature", tracker_->reference_curvature());
                 number("next_corner_distance", tracker_->next_corner_distance());
                 number("handoff_brake", explore_handoff_deferred_ && handoff_brake_);
+                number("imu_gyro_fresh", gyro_fresh(steady_seconds()));
+                number("imu_gyro_disabled", gyro_disabled_);
+                number("imu_gyro_agreement", gyro_agreement_);
+                number("imu_gyro_ratio", gyro_ratio_);
                 number("tracker_limiter", tracker_->debug().limiter);
                 number("tracker_gate", tracker_->debug().gate);
                 number("tracker_lat_factor", tracker_->debug().lat_factor);
@@ -3951,19 +3969,21 @@ private:
     double v_fwd_est_ = 0.0, v_lat_est_ = 0.0;
     double yaw_rate_est_ = 0.0;                   // 航向角速度(rad/s)：陀螺优先，否则航向卡尔曼
     // 航向角速度：陀螺(物理测量、无差分噪声与滞后)新鲜时用陀螺，否则退回航向差分 EMA。
+    // 航向角速度：雷达 IMU(世界系 z)新鲜且自检通过时用它，否则 SLAM 航向差分 + EMA。严禁订阅 /mavros/imu/data。
     double gyro_z_ = 0.0, gyro_at_ = -1e9, imu_timeout_ = params::IMU_TIMEOUT_S, yaw_rate_diff_ = 0.0;
-    bool gyro_fresh(double now) const { return now - gyro_at_ >= 0.0 && now - gyro_at_ <= imu_timeout_; }
-    double current_yaw_rate(double now) const { return !gyro_disabled_ && gyro_fresh(now) ? gyro_z_ : yaw_rate_diff_; }
+    std::array<double, 4> imu_attitude_{1.0, 0.0, 0.0, 0.0};   // w,x,y,z：最新 SLAM 姿态
+    double gyro_agreement_ = 1.0, gyro_ratio_ = 1.0;
+    int gyro_agreement_samples_ = 0;
+    bool gyro_disabled_ = false;
     std::string imu_topic_;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
+    bool gyro_fresh(double now) const { return now - gyro_at_ >= 0.0 && now - gyro_at_ <= imu_timeout_; }
+    double current_yaw_rate(double now) const { return !gyro_disabled_ && gyro_fresh(now) ? gyro_z_ : yaw_rate_diff_; }
     bool explore_tracker_ticked_ = false, global_tracker_ticked_ = false;
     double cone_hook_deg_ = params::CARLIKE_CONE_HOOK_DEG, cone_hook_window_ = params::CARLIKE_CONE_HOOK_WINDOW_M;
     double cone_hook_kappa_ = params::CARLIKE_CONE_HOOK_KAPPA;
     static constexpr int kMaxRequiredRetreats = 3;
     int required_retreats_ = 0;
-    double gyro_agreement_ = 1.0;
-    int gyro_agreement_samples_ = 0;
-    bool gyro_disabled_ = false;
     unsigned long cone_hook_rejections_ = 0;
 };
 

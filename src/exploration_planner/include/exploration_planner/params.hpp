@@ -335,9 +335,11 @@ inline constexpr double CARLIKE_LATERAL_SLOW_TAU = 0.30;      // s
 //   原 LATENCY 写死 0.10、MAX 0.20：定点从已发指令斜坡刹停后低估滑行，飞过锚点被回拉(r49 反向 -0.19 m/s、点头 -2.9°)。
 inline constexpr double CARLIKE_STOP_ANCHOR_LATENCY_S = 0.35;
 inline constexpr double CARLIKE_STOP_ANCHOR_MAX_M = 0.35;
-// 航向角速度优先用飞控 IMU 陀螺(差分 SLAM 航向在 0.6° 噪声下是航向阻尼的第二噪声源)；速度仍用差分+EMA。
-inline constexpr const char* IMU_TOPIC = "/mavros/imu/data"; // 机体系陀螺(FLU)；空字符串=不用陀螺
-inline constexpr double IMU_TIMEOUT_S = 0.10;       // 陀螺超过此时长未更新即退回航向滤波
+// 航向角速度来源：雷达(MID360S)内置 IMU。实机不是 PX4 飞控，★严禁订阅 /mavros/imu/data★(话题存在但数据不正确，用户确认 2026-09-23)。
+//   与实机 Point-LIO(mid360.yaml)同一话题。三轴角速度用 SLAM 姿态转到世界系取 z，雷达倾斜/倒装也正确；
+//   与 SLAM 航向差分长期反号或幅值比偏离 [0.5,2] 时自动停用；断流超过 IMU_TIMEOUT_S 退回航向差分+EMA。空字符串=不订阅。
+inline constexpr const char* IMU_TOPIC = "/livox/imu";
+inline constexpr double IMU_TIMEOUT_S = 0.10;
 inline constexpr double REQUIRED_PLAN_RESERVE_M = 0.08; // 必达点(归航/插点/视觉)规划先加此预留余量(m)，找不到再退回标准余量。
                                                     //   最短路折点紧贴禁入圈，平滑与圆角都会切进去→退回纯折线逐点停车爬行(r65 两柱间 16 s)；
                                                     //   离线复现：预留 ≥0.05 后平滑曲线即可通过标准余量验收。验收余量不变。
