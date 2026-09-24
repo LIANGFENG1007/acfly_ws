@@ -109,6 +109,16 @@ inline constexpr bool   TAKEOFF_POSITION_MODE = false;
 inline constexpr bool   USE_SHM_CV           = true;
 
 // ---------------------------------------------------------------------------
+// ★发给视觉的高度矫正(信箱B /dev/shm/uav_pose_out 的 z)★(2026-09-24 实测包 z_drift_0924_1941)
+//   雷达贴地、物理高度不变拖遍全场：SLAM 的 Z 读数随位置线性偏低 err = X·x + Y·y(相对起飞点，残差 RMS 0.4 cm)，
+//   x 方向每米低 3.4 cm，8.5 m 处低约 0.29 m。视觉用 z 算相机高度把像素投影到地面，z 偏低会把远处目标的地面坐标算近。
+//   写入信箱B的 z = SLAM z − err(x,y)(即真实相对高度)。★只改发给视觉的这一个 z★；主控自身定高/起降/判定用的高度不变。
+//   ★须与 exploration_planner params.hpp 的 VISUAL_DROP_Z_SLOPE_X/Y 保持一致★(同一次实测)。前提：起飞点与起飞朝向同实测。全置 0 = 不矫正
+inline constexpr double VISION_Z_SLOPE_X = -0.0338;   // 每米 x 的 SLAM Z 误差(m/m)
+inline constexpr double VISION_Z_SLOPE_Y = 0.0016;    // 每米 y 的 SLAM Z 误差(m/m)
+inline constexpr double VISION_Z_COMP_MAX = 0.40;     // 矫正量限幅(m)
+
+// ---------------------------------------------------------------------------
 // ★ 视觉找图（FindFigure）★  ← 找图调参都在这一段
 //   起飞稳定后后台监听 /cv/target_info：同色+同形+坐标接近的检测连续累计满
 //   FF_CONFIRM_FRAMES 帧 → 算术平均出图形中心 → 打断走线飞过去 → 悬停 → 拉黑 →

@@ -160,6 +160,22 @@ void sampling_approach_limits() {
         }
     }
 }
-int main() { try { samples_and_fallback();timers_and_offsets();queue_fallback_and_speed();sampling_approach_limits();
+// 投掷高度补偿：只改下降/释放阶段的目标高度与到位判定，按目标位置算一次；回升仍回原采样高度。
+void drop_height_compensation() {
+    VisualDropConfig cfg; cfg.z_slope_x=-.0338; cfg.z_slope_y=.0016; cfg.z_comp_max=.4;
+    VisualDrop d(cfg); d.begin(target()); d.tick({1,2},1.3,0,10,.1,.1);
+    check(d.phase()==Phase::Sample && std::abs(d.altitude(.1)-1.3)<1e-9,"sampling height was compensated");
+    d.tick({1,2},1.3,0,11,.1,.1);
+    const double comp=-.0338*2+.0016*2;
+    check(d.phase()==Phase::Descend && std::abs(d.z_compensation()-comp)<1e-12 &&
+          std::abs(d.altitude(.1)-(.1+.5+comp))<1e-12,"drop height not compensated at the target position");
+    const Vec2 p=d.lidar_target(0);
+    for(int i=0;i<=21;++i) d.tick(p,.1+.5+comp,0,11+i*.1,.1,.1);
+    check(d.phase()==Phase::Send,"compensated drop height not accepted as on target");
+    VisualDropConfig far=cfg; VisualDrop e(far); VisionVisitTarget t=target(); t.position=t.coarse_position={30,0};
+    e.begin(t); e.tick({29,0},1.3,0,10,.1,.1); e.tick({29,0},1.3,0,11,.1,.1);
+    check(std::abs(e.z_compensation()+.4)<1e-12,"compensation not limited");
+}
+int main() { try { samples_and_fallback();timers_and_offsets();queue_fallback_and_speed();sampling_approach_limits();drop_height_compensation();
     std::cout<<"Visual drop sampling, compensation, timeout/stability, serial dedup, release wait, climb, three-drop limit and fallback passed\n";
 } catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;} }

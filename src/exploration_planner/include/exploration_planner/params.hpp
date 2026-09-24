@@ -59,6 +59,15 @@ inline constexpr double VISUAL_DROP_ENTRY_SPEED_MPS = 0.15; // 采样入口的�
 inline constexpr double VISUAL_DROP_SAMPLE_S = 1.0;      // 锁定位置后的采样时长(s)：新帧能收多少收多少，加权平均；无有效帧则用粗坐标
 inline constexpr double VISUAL_DROP_SAMPLE_SLIDE_S = 0.60; // 采样锁点 = 越圈点 + 实测速度×此时长(上限 0.2 m)：按响应滞后自然滑停，不回拉(去掉采样→下降交接的前后点头)。0=锁在越圈点(旧)
 inline constexpr double VISUAL_DROP_HEIGHT_M = 0.15;     // 投放时雷达相对起飞位置的高度(m)：目标Z=起飞雷达Z+此值，不是离目标物表面高度
+// ★投掷高度 SLAM Z 误差补偿★(2026-09-24 实测包 z_drift_0924_1941：雷达贴地、物理高度不变拖遍全场)
+//   SLAM 的 Z 读数随位置线性偏移 err = X·x + Y·y(相对起飞点，拟合残差 RMS 0.4 cm)；x 方向每米低 3.4 cm，8.5 m 处低约 29 cm。
+//   投掷目标 Z = 起飞Z + VISUAL_DROP_HEIGHT_M + err(目标位置)，让远处投掷的真实离地高度也是 0.15 m。
+//   ★只作用于投掷这一个高度★(下降对准/释放)；巡航、采样、回升等其他高度一律不矫正(用户要求)。
+//   前提：起飞点与起飞机头朝向与实测时一致(SLAM 坐标系随起飞位姿建立)。换场地/换起飞朝向要重新录包拟合。全置 0 = 不补偿
+//   ★fly_mission params.hpp 的 VISION_Z_SLOPE_X/Y(发给视觉的 z 矫正)用的是同一组值，改这里要一起改★
+inline constexpr double VISUAL_DROP_Z_SLOPE_X = -0.0338;  // 每米 x 的 SLAM Z 误差(m/m)
+inline constexpr double VISUAL_DROP_Z_SLOPE_Y = 0.0016;   // 每米 y 的 SLAM Z 误差(m/m)
+inline constexpr double VISUAL_DROP_Z_COMP_MAX = 0.40;    // 补偿量限幅(m)，防坐标异常时下降过猛；场地内最大约 0.31 m
 inline constexpr double VISUAL_DROP_XY_TOL_M = 0.10;     // 包裹水平到位容差(m)：经安装偏移补偿后的包裹XY距视觉目标≤此值即到位，不要求速度降到零
 inline constexpr double VISUAL_DROP_STABLE_S = 2.0;      // 提前投放所需连续稳定时间(s)：包裹XY和雷达Z均到位；超出任一容差则重新计这段时间
 inline constexpr double VISUAL_DROP_TIMEOUT_S = 4.0;      // 强制投放等待上限(s)：包裹XY首次到位即开始，漂移不重置；到时即发送，不再等待Z/稳定

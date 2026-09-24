@@ -20,6 +20,9 @@ struct VisualDropConfig {
     double release_wait = 2.0;
     // 回升到离返回高度不足此值(m)即结束本次投放、恢复探索，剩余高度由高度指令继续爬完。0=等高度进容差(旧行为)。
     double climb_release = 0.0;
+    // 投掷高度的 SLAM Z 误差补偿：实测(雷达贴地拖动全场)SLAM 的 Z 读数随位置线性偏移，err = z_slope_x·x + z_slope_y·y(相对起飞点)。
+    //   投掷目标 = 起飞Z + drop_height + err(目标位置)，使远处投掷的真实离地高度也是 drop_height。只作用于投掷这一个高度。
+    double z_slope_x = 0.0, z_slope_y = 0.0, z_comp_max = 0.0;
     double association_radius = .60, weight_min_distance = .50, observation_gap = .30;
 };
 
@@ -35,6 +38,9 @@ public:
                 cfg.approach_slow_distance, cfg.entry_speed})
             if (!std::isfinite(v) || v <= 0) throw std::invalid_argument("Invalid visual drop configuration");
         if (cfg.timeout_seconds < cfg.stable_seconds) throw std::invalid_argument("Drop timeout before stable interval");
+        if (!std::isfinite(cfg.z_slope_x) || !std::isfinite(cfg.z_slope_y) ||
+            !std::isfinite(cfg.z_comp_max) || cfg.z_comp_max < 0)
+            throw std::invalid_argument("Invalid visual drop height compensation");
         if (!std::isfinite(cfg.release_wait) || cfg.release_wait < 0 ||
             !std::isfinite(cfg.climb_release) || cfg.climb_release < 0)
             throw std::invalid_argument("Invalid visual drop release wait");
@@ -45,7 +51,7 @@ public:
         target_id_ = target.track_id; object_ = coarse_ = target.position;
         phase_ = Phase::Approach; samples_ = 0; weight_ = 0; votes_ = {};
         xy_since_ = stable_since_ = wait_since_ = -1; have_frame_ = false; refinement_.reset();
-        used_coarse_ = true; forced_ = false; last_tick_ = -1;
+        used_coarse_ = true; forced_ = false; last_tick_ = -1; z_comp_ = 0.0;
     }
     void sample(const VisionFrame& frame, Vec2 aircraft, double now, const std::vector<Vec2>& others) {
         if (phase_ != Phase::Sample || !std::isfinite(aircraft.x) || !std::isfinite(aircraft.y) ||
@@ -105,11 +111,14 @@ public:
                 }
                 refinement_ = VisionRefinement{target_id_, object_, tie ? 0 : id, samples_, accepted_stamp_};
             }
+            // 目标位置已定：按位置算一次投掷高度补偿，整个下降/释放期间保持不变。
+            z_comp_ = std::clamp(cfg_.z_slope_x * object_.x + cfg_.z_slope_y * object_.y,
+                                 -cfg_.z_comp_max, cfg_.z_comp_max);
             phase_ = Phase::Descend;
         }
         if (phase_ == Phase::Descend) {
             const bool xy_ok = norm(position, lidar_target(yaw)) <= cfg_.xy_tolerance;
-            const bool z_ok = std::abs(z - (home_z + cfg_.drop_height)) <= z_tolerance;
+            const bool z_ok = std::abs(z - (home_z + cfg_.drop_height + z_comp_)) <= z_tolerance;
             // XY alone starts the irreversible four-second release deadline.
             if (xy_ok && xy_since_ < 0) xy_since_ = now;
             if (xy_ok && z_ok) { if (stable_since_ < 0) stable_since_ = now; }
@@ -159,8 +168,10 @@ public:
     }
     double altitude(double home_z) const {
         return phase_ == Phase::Descend || phase_ == Phase::Send || phase_ == Phase::Wait
-            ? home_z + cfg_.drop_height : return_z_;
+            ? home_z + cfg_.drop_height + z_comp_ : return_z_;
     }
+    double z_compensation() const { return z_comp_; }
+    double drop_height() const { return cfg_.drop_height; }
     // Slow down for the sampling circle, which is reached before the object.
     // A positive crossing speed avoids asymptotically stopping outside the
     // distance-only phase transition. This is a command cap, not an arrival gate.
@@ -220,6 +231,7 @@ private:
     unsigned completed_ = 0;
     std::uint64_t target_id_ = 0, last_seq_ = 0, last_epoch_ = 0;
     Vec2 object_{}, coarse_{}, anchor_{}, mean_{};
+    double z_comp_ = 0;   // 本次投掷的 SLAM Z 误差补偿(m)
     double return_z_ = 0, yaw_ = 0, sample_start_ = 0, xy_since_ = -1, stable_since_ = -1;
     double wait_since_ = -1;
     double weight_ = 0, last_stamp_ = 0, accepted_stamp_ = 0, last_tick_ = -1;

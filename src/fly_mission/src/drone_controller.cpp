@@ -108,9 +108,13 @@ DroneController::DroneController(rclcpp::Node* node)
                     tf2::Matrix3x3 m(tf2::Quaternion(q.x, q.y, q.z, q.w));
                     m.getRPY(roll, pitch, yaw);           // ZYX，与 fly_mission_node 同款
                 }
-                pose_shm_.write(msg->pose.pose.position.x,
-                                msg->pose.pose.position.y,
-                                msg->pose.pose.position.z,
+                // 发给视觉的 z 做 SLAM Z 位置误差矫正(见 params::VISION_Z_SLOPE_X)；只影响信箱B，主控自身高度不变。
+                const double px = msg->pose.pose.position.x, py = msg->pose.pose.position.y;
+                const double z_err = std::clamp(params::VISION_Z_SLOPE_X * px + params::VISION_Z_SLOPE_Y * py,
+                                                -params::VISION_Z_COMP_MAX, params::VISION_Z_COMP_MAX);
+                pose_shm_.write(px,
+                                py,
+                                msg->pose.pose.position.z - z_err,
                                 yaw,
                                 roll  * 180.0 / M_PI,
                                 pitch * 180.0 / M_PI);

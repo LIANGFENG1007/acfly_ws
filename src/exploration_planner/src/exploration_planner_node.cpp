@@ -117,6 +117,9 @@ public:
         dcfg.entry_speed = dd("visual_drop_entry_speed_mps", params::VISUAL_DROP_ENTRY_SPEED_MPS);
         dcfg.sample_seconds = dd("visual_drop_sample_s", params::VISUAL_DROP_SAMPLE_S);
         dcfg.drop_height = dd("visual_drop_height_m", params::VISUAL_DROP_HEIGHT_M);
+        dcfg.z_slope_x = dd("visual_drop_z_slope_x", params::VISUAL_DROP_Z_SLOPE_X);
+        dcfg.z_slope_y = dd("visual_drop_z_slope_y", params::VISUAL_DROP_Z_SLOPE_Y);
+        dcfg.z_comp_max = std::max(0.0, dd("visual_drop_z_comp_max", params::VISUAL_DROP_Z_COMP_MAX));
         dcfg.xy_tolerance = dd("visual_drop_xy_tol_m", params::VISUAL_DROP_XY_TOL_M);
         dcfg.stable_seconds = dd("visual_drop_stable_s", params::VISUAL_DROP_STABLE_S);
         dcfg.timeout_seconds = dd("visual_drop_timeout_s", params::VISUAL_DROP_TIMEOUT_S);
@@ -2646,6 +2649,10 @@ private:
                     px_ + velocity.x * lead, py_ + velocity.y * lead, speed * lead,
                     std::hypot(px_ - visual_drop_.object().x, py_ - visual_drop_.object().y), speed);
             }
+            if (phase == Phase::Descend)
+                RCLCPP_INFO(get_logger(), "[探索投放] 投掷高度：目标(%.2f,%.2f) 处 SLAM Z 误差补偿 %+.3fm → 目标 Z=%.3f(起飞Z %.3f + %.2f %+.3f)",
+                    visual_drop_.object().x, visual_drop_.object().y, visual_drop_.z_compensation(),
+                    visual_drop_.altitude(drop_context_->home_z), drop_context_->home_z, visual_drop_.drop_height(), visual_drop_.z_compensation());
             if (before == Phase::Sample && visual_drop_.refinement()) {
                 if (vision_queue_->refine_active(*visual_drop_.refinement(), true)) ++vision_near_confirmations_;
                 else visual_drop_.reject_refinement();
