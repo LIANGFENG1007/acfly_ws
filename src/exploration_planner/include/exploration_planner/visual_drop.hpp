@@ -18,6 +18,8 @@ struct VisualDropConfig {
     // Hold XY and the drop altitude for this long after the serial result
     // before climbing. Zero climbs immediately (the previous behaviour).
     double release_wait = 2.0;
+    // 回升到离返回高度不足此值(m)即结束本次投放、恢复探索，剩余高度由高度指令继续爬完。0=等高度进容差(旧行为)。
+    double climb_release = 0.0;
     double association_radius = .60, weight_min_distance = .50, observation_gap = .30;
 };
 
@@ -33,7 +35,8 @@ public:
                 cfg.approach_slow_distance, cfg.entry_speed})
             if (!std::isfinite(v) || v <= 0) throw std::invalid_argument("Invalid visual drop configuration");
         if (cfg.timeout_seconds < cfg.stable_seconds) throw std::invalid_argument("Drop timeout before stable interval");
-        if (!std::isfinite(cfg.release_wait) || cfg.release_wait < 0)
+        if (!std::isfinite(cfg.release_wait) || cfg.release_wait < 0 ||
+            !std::isfinite(cfg.climb_release) || cfg.climb_release < 0)
             throw std::invalid_argument("Invalid visual drop release wait");
     }
     void reset() { *this = VisualDrop(cfg_); }
@@ -118,7 +121,8 @@ public:
         // The release wait is a fixed physical delay for the package to leave.
         // It does not depend on observation continuity and is never restarted.
         if (phase_ == Phase::Wait && now - wait_since_ >= cfg_.release_wait) phase_ = Phase::Climb;
-        if (phase_ == Phase::Climb && std::abs(z - return_z_) <= z_tolerance) phase_ = Phase::Done;
+        if (phase_ == Phase::Climb && (std::abs(z - return_z_) <= z_tolerance ||
+            (cfg_.climb_release > 0.0 && z >= return_z_ - cfg_.climb_release))) phase_ = Phase::Done;
     }
     void reject_refinement() {
         object_ = coarse_; used_coarse_ = true; refinement_.reset();
@@ -127,6 +131,13 @@ public:
         xy_since_ = stable_since_ = -1;
     }
     void pose_interrupted() { stable_since_ = -1; }
+    // 采样锁点前移到预计滑停点(节点按实测速度估算)：越圈时锁在越圈点，惯性冲过 7 cm 后被 -0.17 m/s 回拉，
+    //   1 s 后下降对准又向前 +0.4 m/s(投放点本就在前方)——多余的一次前后点头(r115)。
+    void shift_sample_anchor(Vec2 delta) {
+        if (phase_ == Phase::Sample && std::isfinite(delta.x) && std::isfinite(delta.y)) {
+            anchor_.x += delta.x; anchor_.y += delta.y;
+        }
+    }
     // now: local monotonic time of the serial result; starts the release wait.
     bool serial_finished(unsigned index, std::uint64_t target_id, Vec2 position, double now) {
         if (phase_ != Phase::Send || index != completed_ + 1 || target_id != target_id_ ||
@@ -153,6 +164,12 @@ public:
     // Slow down for the sampling circle, which is reached before the object.
     // A positive crossing speed avoids asymptotically stopping outside the
     // distance-only phase transition. This is a command cap, not an arrival gate.
+    // 接管前预判：距目标 distance 处接近段允许的速度(与 approach_speed_limit 同一曲线，目标尚未激活时用)。
+    double approach_limit_at(double distance, double cruise_speed) const {
+        const double entry = std::min(cfg_.entry_speed, cruise_speed);
+        const double fraction = std::clamp((distance - cfg_.entry_distance) / cfg_.approach_slow_distance, 0.0, 1.0);
+        return entry + (cruise_speed - entry) * fraction * fraction;
+    }
     double approach_speed_limit(Vec2 position, double cruise_speed) const {
         if (!std::isfinite(position.x) || !std::isfinite(position.y) ||
             !std::isfinite(cruise_speed) || cruise_speed <= 0.0) return 0.0;

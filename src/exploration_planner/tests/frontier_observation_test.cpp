@@ -227,8 +227,42 @@ void selected_gain_keeps_its_observation_heading()
 }
 }  // namespace
 
+// 在视证据：远处半额、视觉线索区恢复未扫后只认近处证据。
+void scan_evidence_and_vision_hint()
+{
+    GridConfig config{0, -5, 7.5, 5, .5, .05, .9, 100, 3};
+    config.scan_dwell_ticks = 25;       // 0.5 s @ 50 Hz
+    config.scan_near_range = 2.0;
+    GridMap map(config);
+    int gi, gj;
+    map.world_to_small(2.5, 0.0, gi, gj);
+    for (int i = 0; i < 49; ++i) map.mark_scan(0, 0, 0);
+    require(!map.small_scanned(gi, gj), "far cell counted before one second of half evidence");
+    map.mark_scan(0, 0, 0);
+    require(map.small_scanned(gi, gj), "far cell not counted after one second in view");
+    const double covered = map.coverage_ratio();
+    require(map.unmark_disk(2.5, 0.0, 0.5) > 0 && !map.small_scanned(gi, gj) && map.coverage_ratio() < covered,
+            "vision hint did not restore unknown cells");
+    for (int i = 0; i < 200; ++i) map.mark_scan(0, 0, 0);
+    require(!map.small_scanned(gi, gj), "far view re-marked a vision hint before a close look");
+    for (int i = 0; i < 25; ++i) map.mark_scan(1.0, 0, 0);
+    require(map.small_scanned(gi, gj), "close look did not clear a vision hint");
+
+    // 擦边回退：已探索大格只被恢复 1 个小格时仍 ≥90%，必须保持已探索(big_count 不能被多减)。
+    GridConfig plain{0, -5, 7.5, 5, .5, .05, .9, 100, 3};
+    GridMap full(plain);
+    full.mark_scan(0.5, 0.0, 0.0);
+    const double before = full.coverage_ratio();
+    int bi, bj;
+    full.world_to_small(1.525, 0.025, bi, bj);
+    require(full.small_scanned(bi, bj), "test cell was not scanned");
+    require(full.unmark_disk(1.525, 0.025, 0.02) == 1 && full.coverage_ratio() == before,
+            "grazing a fully scanned big cell demoted it");
+}
+
 int main()
 {
+    scan_evidence_and_vision_hint();
     prefer_regions_without_losing_fragments();
     observe_narrow_wall_pocket_from_outside();
     visibility_uses_physical_occlusion_and_real_unscanned_cells();

@@ -31,6 +31,14 @@ struct GridConfig {
     double coverage_thresh;              // 大格完成阈值 (占比)
     double fov_deg;                      // 可视总开角 (度)
     double fov_range;                    // 可视半径 (m)
+    // 小格累计在视野内满此拍数才算已扫(1=扫到一拍即算，旧行为)。视觉远距确认要连续 10 帧，
+    //   一拍(20 ms)的掠视不可能确认目标，却会让规划器以为那片已看过(r105：柱后目标只被看到 1.5 s 且断续)。
+    int scan_dwell_ticks = 1;
+    // 此距离内的在视时间按全额计，更远只按一半计(远处检测断续、易认错类别，r111 目标只在 2.6 m 外被看到)。0=不区分
+    double scan_near_range = 0.0;
+    // 视觉线索区(unmark_disk 恢复的格)要近处累计看满 hint_dwell_factor 倍的在视时长才算扫过：
+    //   相机近处检出率 0.8 时连续 10 帧概率只有约 11%，看一眼就走凑不满确认帧(r223 漏投)。
+    int hint_dwell_factor = 1;
 };
 
 // ---------------------------------------------------------------------------
@@ -102,6 +110,10 @@ public:
     //   因点云衰减而消失，填充也不消失(障碍圆会变，栅格记忆不变)。每拍调用幂等(已标的跳过)。
     void fill_obstacle_cells(const Obstacles& obstacles);
 
+    // 把圆内小格恢复为"未扫"(清在视证据、回退大格计数)，并标为只认近处证据，返回恢复的小格数。
+    //   视觉在远处断续看到疑似目标却没能确认时调用：让选点逻辑安排一次近处观察(远处再看多久都不算)。障碍内的格下一拍会被重新填满。
+    int unmark_disk(double x, double y, double r);
+
     // 在锁内一次性拷出只读副本，供【其他线程】渲染。跨线程读栅格只走这条路。
     GridSnapshot snapshot() const;
 
@@ -135,6 +147,8 @@ private:
     int big_total_;                // 大格总数
 
     // ---- 以下四项由 mtx_ 保护（写方=50Hz 主循环，读方=可视化线程/规划）----
+    std::vector<uint8_t> small_dwell_;     // 未扫小格已累计的在视拍数(见 scan_dwell_ticks)
+    std::vector<uint8_t> small_near_only_; // 视觉线索区：只认 scan_near_range 内的在视证据(远看不算)
     std::vector<uint8_t> small_scanned_;   // small_nx_ * small_ny_ ，行优先 idx=gi*ny+gj
     std::vector<int>     big_count_;        // big_nx_ * big_ny_
     std::vector<uint8_t> big_explored_;     // big_nx_ * big_ny_

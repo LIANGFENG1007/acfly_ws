@@ -43,6 +43,12 @@ struct TrackerGains {
     double curvature_feedforward = 1.0;
     // 终点/尖角减速段的最低爬行速度(m/s)，防止 sqrt 停车律与曲率门叠加后趴窝。
     double creep_speed = 0.08;
+    // 随速度的前瞻：lookahead_time·上一拍前进指令，限在 [lookahead, lookahead_max]；lookahead_time=0 为固定前瞻(旧行为)。
+    //   高速直线前瞻长(稳、航向不抖)，急弯本就低速、前瞻回到 lookahead，不切弯贴柱。
+    double lookahead_time = 0.0, lookahead_max = 0.0;
+    // 减速半径 endpoint_slow_r 处的速度(m/s)：半径内按 slow_speed·d/R 线性停车，半径外按 max_decel 反推。
+    //   旧律斜率 v_max/R 随 V_MAX 变陡：0.8 m/s 时要 1.3 m/s² 才刹得住(斜坡只给 0.6)，到尖角/终点仍 0.38 m/s。0=用 v_max(旧行为)。
+    double endpoint_slow_speed = 0.50;
     // 停车转向锚点的滑停估计：减速度(m/s²)与前移上限(m)。
     double stop_anchor_decel = 0.80;
     double stop_anchor_max_m = 0.20;
@@ -102,6 +108,8 @@ public:
     explicit TrajectoryTracker(const TrackerGains& g) : g_(g) {}
 
     void set_trajectory(const Trajectory& traj);
+    // 运行期切换末端停车律(减速半径/半径处速度)：同一个必达 tracker 归航时要更早减速，投放接近保持原律。
+    void set_endpoint_slow(double radius, double speed) { g_.endpoint_slow_r = radius; g_.endpoint_slow_speed = speed; }
     bool has_trajectory() const { return !traj_.empty(); }
     const Trajectory& trajectory() const { return traj_; }
 

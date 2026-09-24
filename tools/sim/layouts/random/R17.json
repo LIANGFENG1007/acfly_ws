@@ -1,1 +1,0 @@
-{"name": "R17", "description": "randomize_arena 规则随机 6 柱 seed17", "obstacles": [{"x": 2.991, "y": 1.333}, {"x": 5.656, "y": -1.49}, {"x": 1.993, "y": 3.061}, {"x": 5.466, "y": 3.053}, {"x": 2.921, "y": -0.698}, {"x": 4.93, "y": 1.278}], "gates": {"gate_wall_A": "center", "gate_wall_B": "center"}}

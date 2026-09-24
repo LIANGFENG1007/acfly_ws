@@ -57,6 +57,8 @@ GridMap::GridMap(const GridConfig& cfg)
     big_total_ = big_nx_ * big_ny_;
 
     small_scanned_.assign(static_cast<size_t>(small_nx_) * small_ny_, 0);
+    small_dwell_.assign(static_cast<size_t>(small_nx_) * small_ny_, 0);
+    small_near_only_.assign(static_cast<size_t>(small_nx_) * small_ny_, 0);
     big_count_.assign(static_cast<size_t>(big_total_), 0);
     big_explored_.assign(static_cast<size_t>(big_total_), 0);
 }
@@ -116,7 +118,16 @@ void GridMap::mark_scan(double px, double py, double yaw, const Obstacles& obsta
             // 模拟摄像头：被障碍挡住的格(障碍背后/内部)看不到，不标记
             if (!near_obs.empty() && los_blocked(px, py, cx, cy, near_obs)) continue;
 
-            // 命中：标记小格 + 更新所属大格
+            // 命中：累计在视时长，够了才标记小格 + 更新所属大格
+            if (cfg_.scan_dwell_ticks > 1) {
+                // 证据以半拍为单位累计：近处每拍 +2，远处每拍 +1；满 2×scan_dwell_ticks 才算扫过。
+                const bool near = cfg_.scan_near_range <= 0.0 ||
+                    dist2 <= cfg_.scan_near_range * cfg_.scan_near_range;
+                const int weight = near ? 2 : (small_near_only_[idx] ? 0 : 1);
+                small_dwell_[idx] = static_cast<uint8_t>(std::min(255, small_dwell_[idx] + weight));
+                const int need = 2 * cfg_.scan_dwell_ticks * (small_near_only_[idx] ? std::max(1, cfg_.hint_dwell_factor) : 1);
+                if (small_dwell_[idx] < std::min(255, need)) continue;
+            }
             mark_small_cell(gi, gj);
         }
     }
@@ -160,8 +171,8 @@ void GridMap::mark_small_cell(int gi, int gj)
     const int bi = gi / cells_per_big_;
     const int bj = gj / cells_per_big_;
     const int bidx = b_idx(bi, bj);
+    ++big_count_[bidx];   // 始终计数(含已探索大格)：unmark_disk 回退时才不会多减、误把擦边大格降级(审查发现)
     if (big_explored_[bidx]) return;
-    ++big_count_[bidx];
     // 大格阈值：该大格内小格总数 * thresh（边缘大格小格数可能不足满格）
     const int gi_lo = bi * cells_per_big_;
     const int gj_lo = bj * cells_per_big_;
@@ -172,6 +183,48 @@ void GridMap::mark_small_cell(int gi, int gj)
         big_explored_[bidx] = 1;
         ++explored_total_;
     }
+}
+
+int GridMap::unmark_disk(double x, double y, double r)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    int gi0, gj0, gi1, gj1;
+    world_to_small(x - r, y - r, gi0, gj0);
+    world_to_small(x + r, y + r, gi1, gj1);
+    gi0 = std::max(gi0, 0); gj0 = std::max(gj0, 0);
+    gi1 = std::min(gi1, small_nx_ - 1); gj1 = std::min(gj1, small_ny_ - 1);
+    int restored = 0;
+    for (int gi = gi0; gi <= gi1; ++gi) {
+        const double cx = cfg_.min_x + (gi + 0.5) * cfg_.small_cell;
+        for (int gj = gj0; gj <= gj1; ++gj) {
+            const double cy = cfg_.min_y + (gj + 0.5) * cfg_.small_cell;
+            if ((cx - x) * (cx - x) + (cy - y) * (cy - y) > r * r) continue;
+            const int idx = s_idx(gi, gj);
+            small_dwell_[idx] = 0;
+            small_near_only_[idx] = 1;
+            if (!small_scanned_[idx]) continue;
+            small_scanned_[idx] = 0;
+            ++restored;
+            const int bidx = b_idx(gi / cells_per_big_, gj / cells_per_big_);
+            --big_count_[bidx];
+            if (big_explored_[bidx]) { big_explored_[bidx] = 0; --explored_total_; }
+        }
+    }
+    // 回退后仍达阈值的大格恢复"已探索"(只有圆边缘擦到的大格)。
+    for (int bi = gi0 / cells_per_big_; bi <= gi1 / cells_per_big_; ++bi) {
+        for (int bj = gj0 / cells_per_big_; bj <= gj1 / cells_per_big_; ++bj) {
+            const int bidx = b_idx(bi, bj);
+            if (big_explored_[bidx]) continue;
+            const int gi_lo = bi * cells_per_big_, gj_lo = bj * cells_per_big_;
+            const int cells_in_big = (std::min(gi_lo + cells_per_big_, small_nx_) - gi_lo) *
+                                     (std::min(gj_lo + cells_per_big_, small_ny_) - gj_lo);
+            if (big_count_[bidx] >= static_cast<int>(std::ceil(cells_in_big * cfg_.coverage_thresh))) {
+                big_explored_[bidx] = 1;
+                ++explored_total_;
+            }
+        }
+    }
+    return restored;
 }
 
 // 锁内一次性拷出只读副本：可视化线程渲染整帧期间不再触碰活地图，竞态根除。

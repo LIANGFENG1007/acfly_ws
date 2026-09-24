@@ -1,1 +1,0 @@
-{"name": "R19", "description": "randomize_arena 规则随机 6 柱 seed19", "obstacles": [{"x": 2.683, "y": 0.737}, {"x": 4.403, "y": 3.167}, {"x": 5.586, "y": -3.435}, {"x": 3.457, "y": -3.074}, {"x": 1.635, "y": -2.056}, {"x": 1.031, "y": -0.383}], "gates": {"gate_wall_A": "center", "gate_wall_B": "center"}}

@@ -74,6 +74,10 @@ struct FrontierConfig {
     double goal_detour_start = 0.75;
     bool   goal_valid = false;
     Vec2   goal{};
+    // 视觉线索优先：远处断续看到疑似目标的位置，其 0.8 m 内的未扫格选点代价减 priority_bonus(m)，优先去近看确认。
+    bool   priority_valid = false;
+    Vec2   priority{};
+    double priority_bonus = 0.0;
 };
 
 // unreachable/block_r: explore give-up blacklist. Skip candidate cells within

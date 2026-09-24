@@ -1,1 +1,0 @@
-{"name": "R11", "description": "randomize_arena 规则随机 6 柱 seed11", "obstacles": [{"x": 3.675, "y": 1.607}, {"x": 2.716, "y": -0.323}, {"x": 0.568, "y": 1.089}, {"x": 3.15, "y": -3.486}, {"x": 2.173, "y": 1.229}, {"x": 3.418, "y": -1.876}], "gates": {"gate_wall_A": "center", "gate_wall_B": "center"}}

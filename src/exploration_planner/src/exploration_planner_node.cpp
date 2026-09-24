@@ -123,6 +123,8 @@ public:
         dcfg.offset = dd("visual_drop_offset_m", params::VISUAL_DROP_OFFSET_M);
         dcfg.descend_speed = dd("visual_drop_descend_mps", params::VISUAL_DROP_DESCEND_MPS);
         dcfg.climb_speed = dd("visual_drop_climb_mps", params::VISUAL_DROP_CLIMB_MPS);
+        dcfg.climb_release = std::max(0.0, dd("visual_drop_climb_release_m", params::VISUAL_DROP_CLIMB_RELEASE_M));
+        drop_sample_slide_s_ = std::max(0.0, dd("visual_drop_sample_slide_s", params::VISUAL_DROP_SAMPLE_SLIDE_S));
         dcfg.release_wait = dd("visual_drop_release_wait_s", params::VISUAL_DROP_RELEASE_WAIT_S);
         if (dcfg.descend_speed > .6 || dcfg.climb_speed > .6)
             throw std::invalid_argument("visual drop vertical limits exceed main controller 0.6m/s");
@@ -229,6 +231,10 @@ public:
         gcfg_.coverage_thresh = dd("coverage_thresh", params::COVERAGE_THRESH);
         gcfg_.fov_deg         = dd("fov_deg", params::FOV_DEG);
         gcfg_.fov_range       = dd("fov_range", params::FOV_RANGE);
+        gcfg_.scan_dwell_ticks = static_cast<int>(std::clamp(std::round(
+            dd("scan_dwell_s", params::SCAN_DWELL_S) * 1000.0 / params::TIMER_PERIOD_MS), 1.0, 127.0));
+        gcfg_.scan_near_range = std::max(0.0, dd("scan_near_range_m", params::SCAN_NEAR_RANGE_M));
+        gcfg_.hint_dwell_factor = std::max(1, static_cast<int>(declare_parameter<int>("scan_hint_dwell_factor", params::SCAN_HINT_DWELL_FACTOR)));
 
         // lane_spacing：旧静态牛耕(plan_boustrophedon)的车道间距。动态前沿覆盖已不用它，
         //   此处仍 declare 只为保持 ROS 参数表兼容(外部脚本/launch 可能仍在传)。读了不用是有意的。
@@ -240,6 +246,9 @@ public:
         gains_.k_curv          = dd("k_curv", carlike_mode_ ? params::CARLIKE_K_CURV : params::K_CURV);
         gains_.lookahead       = dd("lookahead", carlike_mode_ ? params::CARLIKE_LOOKAHEAD : params::LOOKAHEAD);
         gains_.endpoint_slow_r = dd("endpoint_slow_r", params::ENDPOINT_SLOW_R);
+        gains_.endpoint_slow_speed = std::max(0.0, dd("endpoint_slow_speed", params::ENDPOINT_SLOW_V));
+        gains_.lookahead_time = carlike_mode_ ? std::max(0.0, dd("carlike_lookahead_time", params::CARLIKE_LOOKAHEAD_TIME)) : 0.0;
+        gains_.lookahead_max = std::max(gains_.lookahead, dd("carlike_lookahead_max", params::CARLIKE_LOOKAHEAD_MAX));
         gains_.kp_yaw          = dd("kp_yaw", params::KP_YAW);
         gains_.kd_yaw          = dd("kd_yaw", carlike_mode_ ? params::CARLIKE_KD_YAW : params::KD_YAW);
         gains_.max_yaw_rate    = dd("max_yaw_rate", carlike_mode_ ? params::CARLIKE_MAX_YAW_RATE : params::MAX_YAW_RATE);
@@ -297,6 +306,11 @@ public:
         gains_.dt = params::TIMER_PERIOD_MS / 1000.0;
 
         done_coverage_ = dd("done_coverage", params::DONE_COVERAGE);
+        search_coverage_ = std::max(done_coverage_, dd("search_coverage", params::SEARCH_COVERAGE));
+        backtrack_after_s_ = std::max(0.0, dd("explore_backtrack_after_s", params::EXPLORE_BACKTRACK_AFTER_S));
+        backtrack_distance_ = std::max(0.3, dd("explore_backtrack_m", params::EXPLORE_BACKTRACK_M));
+        vision_hint_limit_ = std::max(0, static_cast<int>(declare_parameter<int>("vision_hint_limit", params::VISION_HINT_LIMIT)));
+        fcfg_.priority_bonus = std::max(0.0, dd("vision_hint_priority_m", params::VISION_HINT_PRIORITY_M));
         goal_tol_      = dd("goal_tol_xy", params::GOAL_TOL_XY);
         goal_stop_v_   = dd("goal_stop_v", params::GOAL_STOP_V);
         kp_goal_       = dd("kp_goal",    params::KP_GOAL);
@@ -449,12 +463,18 @@ public:
         global_gains_.lateral_slow_deadband = global_gains_.lateral_slow_tau = 0.0;
         global_gains_.drift_velocity_gain = std::max(0.0, dd("required_drift_kd", params::REQUIRED_DRIFT_KD));
         global_gains_.v_max = v_goal_max_;
+        // 必达点停车律同样与限速解耦：减速半径处速度固定为 REQUIRED_SLOW_V(0.6 时代验证过的末端手感)，半径外按减速度提前平滑减速。
+        //   V_GOAL_MAX 0.6→0.75 时旧律(斜率 v_goal_max/R)让离终点 0.5~1.5 m 的刹停段倾角高频升到 1.1~1.3°(r137/r138/r140)。
+        global_gains_.endpoint_slow_speed = std::min(v_goal_max_, std::max(0.05, dd("required_slow_speed", params::REQUIRED_SLOW_V)));
+        global_gains_.lookahead_time = 0.0;      // 必达点保持固定前瞻
         global_gains_.v_min = std::min(global_gains_.v_min, v_goal_max_);
         global_gains_.lookahead = global_lookahead_;
         global_gains_.endpoint_slow_r = std::max({global_gains_.endpoint_slow_r,
             std::max(0.0, gains_.prediction_time) * v_goal_max_ +
             v_goal_max_ * v_goal_max_ / (2.0 * std::max(1e-3, gains_.max_accel)),
             dd("required_slow_radius_m", params::REQUIRED_SLOW_RADIUS_M)});
+        home_slow_radius_ = std::max(global_gains_.endpoint_slow_r, dd("home_slow_radius_m", params::HOME_SLOW_RADIUS_M));
+        home_slow_speed_ = std::min(v_goal_max_, std::max(0.05, dd("home_slow_speed", params::HOME_SLOW_V)));
         global_tracker_ = std::make_unique<TrajectoryTracker>(global_gains_);
         obs_map_ = std::make_unique<ObstacleMap>(ocfg_);
         if (viz_) viz_obj_ = std::make_unique<Visualizer>(gcfg_, 1000);  // 1000px：小格(0.05m≈5px)能看清
@@ -782,6 +802,11 @@ private:
         }
         visual_drop_.reset();
         coverage_closed_ = false;
+        trail_.clear(); backtracking_ = false; backtrack_path_.clear();
+        no_route_since_ = last_explore_tick_ = -1.0;
+        vision_hints_.clear();
+        vision_hint_times_.clear();
+        vision_hint_unmarks_.clear();
         drop_status_.reset();
         drop_path_.clear(); drop_path_retry_ = -1; drop_entry_.reset();
         drop_cruise_z_.reset(); drop_pause_z_.reset();
@@ -807,6 +832,9 @@ private:
         // fly_mission sends this goal after takeoff. Reuse the exact-goal
         // navigation and corridor handoff without waiting for coverage.
         homing_ = !exploration_enabled_;
+        if (global_tracker_)   // 新任务：投放接近用默认末端停车律；不探索直接归航时用归航专用
+            global_tracker_->set_endpoint_slow(homing_ ? home_slow_radius_ : global_gains_.endpoint_slow_r,
+                                               homing_ ? home_slow_speed_ : global_gains_.endpoint_slow_speed);
         // Execution state belongs to this goal in both exploration modes.
         tracker_->set_trajectory({});
         traj_.clear();
@@ -1658,6 +1686,14 @@ private:
                 if (std::hypot(ahead.x - cur.x, ahead.y - cur.y) > goal_tol_)
                     route_heading = std::atan2(ahead.y - cur.y, ahead.x - cur.x);
             }
+            // 视觉线索优先：最早的、线索格仍未被近处看清的那条线索。
+            fcfg_.priority_valid = false;
+            for (size_t i = 0; i < vision_hints_.size(); ++i) {
+                if (steady_seconds() - vision_hint_times_[i] < 30.0 && !vision_hint_resolved(vision_hints_[i])) {
+                    fcfg_.priority = vision_hints_[i]; fcfg_.priority_valid = true;
+                    break;
+                }
+            }
             observation = select_observation_target(gsnap, fcfg_, cur, yaw_, candidate_band,
                                                    obs, &unreachable_, unreach_block_r_, route_heading);
             wp.push_back(cur);
@@ -1734,6 +1770,36 @@ private:
                 }
             }
         }
+        // ★锥内绕远检测★：锥内路为了不掉头可能先顺着机头走再绕一大圈(r116：机头朝北，去西南角的锥内路
+        //   先北后西绕柱，14 s 覆盖率不涨)。只在明显绕远时才补算一次无锥路，按时间比较"原地转向+直达"与"锥内绕行"。
+        std::optional<GlobalResult> detour_probe;
+        if (gr.ok && gr.path.size() >= 2 && carlike_mode_) {
+            const auto length = [](const Path2& path) {
+                double total = 0.0;
+                for (size_t i = 1; i < path.size(); ++i)
+                    total += std::hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y);
+                return total;
+            };
+            const double direct = std::hypot(scan_target.x - cur.x, scan_target.y - cur.y);
+            const double cone_length = length(gr.path);
+            if (cone_length > 1.5 * direct + 1.0) {
+                detour_probe = search_explore_global(cur, scan_target, obs);
+                if (detour_probe->ok && detour_probe->path.size() >= 2) {
+                    const auto& first = detour_probe->path[1];
+                    const double turn = std::abs(wrap_pi(std::atan2(first.y - cur.y, first.x - cur.x) - yaw_));
+                    const double cruise = std::max(0.2, 0.6 * gains_.v_max);   // 探索段实际平均速度约为上限的 0.6
+                    const double turn_first = length(detour_probe->path) / cruise +
+                        turn / std::max(0.2, gains_.max_yaw_rate) + 1.5;       // 1.5 s = 刹停+起步
+                    const double detour = cone_length / cruise;
+                    if (turn_first + 1.0 < detour) {
+                        ++cone_detour_rejections_;
+                        RCLCPP_INFO(get_logger(), "机头锥内的路绕远(%.1fm，直线%.1fm)：原地转%.0f°再直达预计%.1fs < 绕行%.1fs → 改走转向 (目标 %.2f,%.2f)",
+                            cone_length, direct, turn * 180.0 / M_PI, turn_first, detour, scan_target.x, scan_target.y);
+                        gr.ok = false;
+                    }
+                }
+            }
+        }
         if (gr.ok && gr.path.size() >= 2) {
             // ★换路评估(迟滞第二道闸)★：目标漂移触发了重算，但只要旧折线【仍无碰撞】就别急着换——
             //   给旧路/新路各打分(score_path: 剩余弧长=时间效益, 最小障碍边距=安全性)，新路需
@@ -1791,7 +1857,7 @@ private:
             traj_ = Trajectory{};
             tracker_->set_trajectory(traj_);
 
-            GlobalResult probe = search_explore_global(cur, scan_target, obs);
+            GlobalResult probe = detour_probe ? *detour_probe : search_explore_global(cur, scan_target, obs);
             const double probe_turn = probe.ok && probe.path.size() >= 2
                 ? std::abs(wrap_pi(std::atan2(probe.path[1].y - cur.y, probe.path[1].x - cur.x) - yaw_))
                 : M_PI;
@@ -2396,7 +2462,20 @@ private:
         const Vec2 cur{px_, py_};
         const auto cfg = required_config();
         Path2 direct{cur, target};
+        bool escape_direct = false;
         if (required_path_clear(cur, direct, target, obs, cfg)) {
+            drop_path_ = direct;
+        } else if (std::hypot(target.x - cur.x, target.y - cur.y) <= 1.5 &&
+                   obstacle_escape_clear(cur, target, obs, exec_config()) && field_motion_clear(cur, target, exec_config()) &&
+                   !required_path_clear(cur, Path2{cur, cur}, cur, obs, exec_config())) {
+            // 机身已落进拟合障碍的执行圈(拟合半径随点云波动)，而对准点在严格远离它的方向：放行这条直线，
+            //   与贴障后退同一规则(远离只会减少重叠)。否则任何路径都判不安全，r258 原地悬停 26 s 等拟合半径变小。
+            drop_path_ = direct;
+            escape_direct = true;
+        } else if (std::hypot(target.x - cur.x, target.y - cur.y) <= 1.5 &&
+                   required_path_clear(cur, direct, target, obs, exec_config())) {
+            // 目标离柱约 1 m 时，带包裹安装偏移的对准点可能差几厘米落进规划圈(r124：离柱心 0.69 m，规划要 0.70 m，
+            //   原地保持 400 s 超时)。近距低速(≤0.4 m/s)的最终对准只要求执行圈，与执行中的必达路径复核同一口径。
             drop_path_ = direct;
         } else {
             if (!drop_path_.empty()) drop_path_.back() = target;
@@ -2421,8 +2500,8 @@ private:
         traj_ = global_traj_; global_has_ = true;
         Vec2 carrot = target;
         // Furthest directly visible vertex on the checked route, without cutting an obstacle corner.
-        bool visible = false;
-        for (size_t i = drop_path_.size(); i-- > 0;) {
+        bool visible = escape_direct;   // 逃离直线已按远离规则校验过
+        for (size_t i = drop_path_.size(); !visible && i-- > 0;) {
             // Same execution margin as the kept route: a body already inside the
             // planning ring must still see its next waypoint.
             if (required_path_clear(cur, Path2{cur, drop_path_[i]}, drop_path_[i], obs, exec_config())) {
@@ -2558,9 +2637,14 @@ private:
                 static_cast<unsigned long long>(target.track_id), VisualDrop::name(before), VisualDrop::name(phase),
                 visual_drop_.samples(), visual_drop_.object().x, visual_drop_.object().y, visual_drop_.forced());
             if (phase == Phase::Sample) {
-                RCLCPP_INFO(get_logger(), "[探索投放] 采样入口：锁XY(%.3f,%.3f)，距目标%.3fm，实测水平速度%.3fm/s",
-                    px_, py_, std::hypot(px_ - visual_drop_.object().x, py_ - visual_drop_.object().y),
-                    std::hypot(v_fwd_est_, v_lat_est_));
+                const double c = std::cos(yaw_), s = std::sin(yaw_);
+                const Vec2 velocity{c * v_fwd_est_ - s * v_lat_est_, s * v_fwd_est_ + c * v_lat_est_};
+                const double speed = std::hypot(velocity.x, velocity.y);
+                const double lead = speed > 1e-3 ? std::min(drop_sample_slide_s_, drop_sample_slide_max_m_ / speed) : 0.0;
+                visual_drop_.shift_sample_anchor({velocity.x * lead, velocity.y * lead});
+                RCLCPP_INFO(get_logger(), "[探索投放] 采样入口：锁XY(%.3f,%.3f)(越圈点前移%.3fm到预计滑停点)，距目标%.3fm，实测水平速度%.3fm/s",
+                    px_ + velocity.x * lead, py_ + velocity.y * lead, speed * lead,
+                    std::hypot(px_ - visual_drop_.object().x, py_ - visual_drop_.object().y), speed);
             }
             if (before == Phase::Sample && visual_drop_.refinement()) {
                 if (vision_queue_->refine_active(*visual_drop_.refinement(), true)) ++vision_near_confirmations_;
@@ -2856,6 +2940,25 @@ private:
     void activate_visual_target(double current_time)
     {
         if (vision_queue_->active() || (visual_drop_enabled_ && visual_drop_.completed() >= 3)) return;
+        // 高速巡航中切入视觉目标：目标方位偏离机头超过换路预减速角时，先沿探索路线按斜坡刹到交接速度再接管。
+        //   直接接管时车式跟踪只能边转边冲，0.8 m/s 下冲过头 0.8 m 再绕回(r110 两次，各耗约 4 s)。
+        const bool was_braking = visual_handoff_brake_;
+        visual_handoff_brake_ = false;
+        if (carlike_mode_ && !vision_queue_->pending().empty() && explore_has_committed_ &&
+            tracker_->has_trajectory() && v_fwd_est_ > 2.0 * handoff_brake_speed_) {
+            const auto& next = vision_queue_->pending().front().position;
+            const double bearing = std::atan2(next.y - py_, next.x - px_);
+            // 速度也要先匹配：目标常在 2~2.5 m 处确认，已在接近段减速区内；接管瞬间 0.8→0.4 的急减速叠加转向是投放接近段最大的晃动源。
+            const double allowed = visual_drop_enabled_ ? visual_drop_.approach_limit_at(
+                std::hypot(next.x - px_, next.y - py_), v_goal_max_) : v_goal_max_;
+            if (std::abs(wrap_pi(bearing - yaw_)) >= handoff_brake_angle_ || v_fwd_est_ > allowed + 0.15) {
+                visual_handoff_brake_ = true;
+                if (!was_braking)
+                    RCLCPP_INFO(get_logger(), "[视觉队列] 目标在机头 %.0f° 方向、当前 %.2f m/s(接近段此处限 %.2f)，先沿当前路线减速再接管",
+                        std::abs(wrap_pi(bearing - yaw_)) * 180.0 / M_PI, v_fwd_est_, allowed);
+                return;
+            }
+        }
         reset_visual_approach();
         if (!vision_queue_->activate_next(current_time)) { vision_near_->reset(); return; }
         const auto& active = *vision_queue_->active();
@@ -2896,6 +2999,182 @@ private:
         vision_near_->position({px_, py_}, current_time);
     }
 
+    // ★视觉线索回访★：远处断续看到疑似目标(暂定候选连续 ≥3 帧)却没凑满确认帧时，把该处覆盖格恢复为未扫，
+    //   让选点逻辑安排一次近处观察。r114：柱排后的目标只在 2.5~3 m、视野边缘断续出现，覆盖图却已算扫过，漏投。
+    //   黑名单 ID 在进候选前已剔除；每处只触发一次，每次任务最多 vision_hint_limit_ 处，防误检拖着来回跑。
+    // 线索附近 0.6 m 内已有确认/排队/投放过的目标 = 线索已解决。只看"格子扫过"不够：掠过时目标在视野边缘凑不满连续帧(r151)。
+    bool vision_hint_resolved(const Vec2& hint) const
+    {
+        const auto near = [&](const Vec2& q) { return std::hypot(q.x - hint.x, q.y - hint.y) <= 0.6; };
+        for (const auto& candidate : vision_candidates_->snapshot())
+            if (candidate.confirmed && near(candidate.position)) return true;
+        if (vision_queue_->active() && near(vision_queue_->active()->position)) return true;
+        for (const auto& target : vision_queue_->pending()) if (near(target.position)) return true;
+        for (const auto& visited : vision_queue_->visited()) if (near(visited.position)) return true;
+        return false;
+    }
+
+    // 未解决的线索格子被扫过了却仍没确认(掠过、视野边缘)：再恢复一次未扫，让飞机回来正面看第二眼(每条最多两次)。
+    void refresh_vision_hints(double t)
+    {
+        for (size_t i = 0; i < vision_hints_.size(); ++i) {
+            if (vision_hint_unmarks_[i] >= 2 || t - vision_hint_times_[i] >= 30.0 || vision_hint_resolved(vision_hints_[i]))
+                continue;
+            int gi, gj;
+            grid_->world_to_small(vision_hints_[i].x, vision_hints_[i].y, gi, gj);
+            if (!grid_->in_small_bounds(gi, gj) || !grid_->small_scanned(gi, gj)) continue;
+            ++vision_hint_unmarks_[i];
+            const int restored = grid_->unmark_disk(vision_hints_[i].x, vision_hints_[i].y, 0.5);
+            RCLCPP_INFO(get_logger(), "[视觉线索] (%.2f, %.2f) 看过但仍未确认，恢复%d个小格再近看一次",
+                vision_hints_[i].x, vision_hints_[i].y, restored);
+        }
+    }
+
+    void revisit_vision_hints()
+    {
+        if (!grid_ || vision_hints_.size() >= static_cast<size_t>(vision_hint_limit_)) return;
+        for (const auto& candidate : vision_candidates_->snapshot()) {
+            if (candidate.confirmed || candidate.consecutive_frames < 3) continue;
+            const Vec2 p = candidate.position;
+            if (std::hypot(p.x - px_, p.y - py_) < 1.5) continue;   // 已经在近处看了
+            const auto near = [&](const Vec2& q, double r) { return std::hypot(p.x - q.x, p.y - q.y) <= r; };
+            if (std::any_of(vision_hints_.begin(), vision_hints_.end(), [&](const Vec2& q) { return near(q, 0.6); }))
+                continue;
+            if (std::any_of(vision_queue_->visited().begin(), vision_queue_->visited().end(),
+                    [&](const auto& v) { return near(v.position, vision_queue_->blacklist_radius()); }))
+                continue;
+            vision_hints_.push_back(p);
+            vision_hint_times_.push_back(steady_seconds());
+            vision_hint_unmarks_.push_back(1);
+            const int restored = grid_->unmark_disk(p.x, p.y, 0.5);
+            RCLCPP_INFO(get_logger(), "[视觉线索] 远处断续看到疑似目标(%.2f, %.2f)，连续%d帧未确认；恢复%d个小格为未扫，安排近看(%zu/%d)",
+                p.x, p.y, candidate.consecutive_frames, restored, vision_hints_.size(), vision_hint_limit_);
+            if (vision_hints_.size() >= static_cast<size_t>(vision_hint_limit_)) return;
+        }
+    }
+
+    // 视觉投放模式的"扫完"判定：投满 3 次由投放流程直接关闭；未满时剩余目标只可能在未扫区，覆盖率到 search_coverage_ 才收手。
+    //   没有任何按时间/停滞的提前收手(用户要求 2026-09-24：提前收手会导致完成不了)；没路时走原路后退换路。
+    void update_search_closure(double t)
+    {
+        if (coverage_closed_) return;
+        const double cov = grid_->coverage_ratio();
+        // 已确认、待投放/投放中的目标不能被收尾丢下(r159：确认后因接管前预减速稍晚激活，这个空档里收尾归航，漏投)。
+        if (vision_queue_->active() || !vision_queue_->pending().empty()) return;
+        refresh_vision_hints(t);
+        const double needed = visual_drop_.completed() < 3 ? search_coverage_ : done_coverage_;
+        // 正在累计确认帧的候选(看到了、还没满 10 帧)不能被收尾打断：r108 转头看见起飞点身后的目标，
+        //   同一眼把覆盖率推过阈值，确认只差几帧就被关掉了。候选断流超过 frame_gap_timeout 会自动清零。
+        for (const auto& candidate : vision_candidates_->snapshot())
+            if (!candidate.confirmed && candidate.consecutive_frames > 0) return;
+        // 刚看到、还没近看确认的视觉线索也不能被收尾打断(r143：线索出现 2 s 后别处覆盖把总覆盖推回 97% 就收尾，漏投)。
+        //   只等 30 s：够不到的线索不能把收尾永久卡住。
+        for (size_t i = 0; i < vision_hints_.size(); ++i)
+            if (t - vision_hint_times_[i] < 30.0 && !vision_hint_resolved(vision_hints_[i])) return;
+        if (cov >= needed) {
+            coverage_closed_ = true;
+            RCLCPP_INFO(get_logger(), "[探索收尾] 已投放%u次，覆盖率%.1f%%达到收尾阈值 → 停止搜索目标",
+                visual_drop_.completed(), cov * 100.0);
+        }
+    }
+
+    // ★原路后退换路(用户要求 2026-09-24)★：探索连续 backtrack_after_s_ 没有可执行路线(原地转身找解/A* 无解)时，
+    //   机头不动、沿来时的轨迹面包屑倒退 backtrack_distance_，退完清空"够不到"黑名单立即重新规划。
+    //   正常场地一般不会触发；它是走进死角时"怎么进去怎么出来"的兜底。返回 true = 本拍已写后退指令。
+    void record_trail()
+    {
+        const Vec2 cur{px_, py_};
+        if (trail_.empty() || std::hypot(cur.x - trail_.back().x, cur.y - trail_.back().y) >= 0.15) {
+            trail_.push_back(cur);
+            if (trail_.size() > 60) trail_.pop_front();
+        }
+    }
+
+    void finish_backtrack(const char* reason)
+    {
+        // 已退过的面包屑出队：下次再卡住就从更早的来路继续退。
+        if (backtrack_next_ > 0) {
+            const Vec2 reached = backtrack_path_[backtrack_next_ - 1];
+            while (!trail_.empty() && std::hypot(trail_.back().x - reached.x, trail_.back().y - reached.y) > 1e-6)
+                trail_.pop_back();
+        }
+        backtracking_ = false;
+        backtrack_path_.clear();
+        unreachable_.clear();
+        turning_for_solution_ = false;
+        plan_pending_ = true;
+        no_route_since_ = steady_seconds();
+        RCLCPP_INFO(get_logger(), "[探索] 原路后退结束(%s)，清空够不到黑名单重新找路", reason);
+    }
+
+    bool update_backtrack(const Obstacles& obs, geometry_msgs::msg::TwistStamped& cmd)
+    {
+        const double t = steady_seconds();
+        if (last_explore_tick_ < 0.0 || t - last_explore_tick_ > 0.3 || !has_goal_ || finished_) {
+            no_route_since_ = t;   // 刚回到探索分支 / 任务还没开始
+            if (backtracking_) { backtracking_ = false; backtrack_path_.clear(); }   // 被投放/插点打断的后退不再续(审查发现)
+        }
+        last_explore_tick_ = t;
+        if (!backtracking_) {
+            const bool has_route = explore_has_committed_ && !explore_failed_ && tracker_->has_trajectory();
+            if (has_route) record_trail();   // 贴障后退的反向轨迹不记入来路(审查发现)
+            if (has_route || retreating_) { no_route_since_ = t; return false; }
+            if (backtrack_after_s_ <= 0.0 || t - no_route_since_ < backtrack_after_s_) return false;
+            no_route_since_ = t;
+            backtrack_path_.clear();
+            Vec2 from{px_, py_};
+            double length = 0.0;
+            for (auto it = trail_.rbegin(); it != trail_.rend() && length < backtrack_distance_; ++it) {
+                const double step = std::hypot(it->x - from.x, it->y - from.y);
+                if (step < 0.10) continue;
+                backtrack_path_.push_back(*it);
+                length += step;
+                from = *it;
+            }
+            if (backtrack_path_.empty()) {
+                RCLCPP_WARN(get_logger(), "[探索] %.0f 秒没有可走的路，但没有可退的来路；继续原地找路", backtrack_after_s_);
+                return false;
+            }
+            backtracking_ = true;
+            backtrack_next_ = 0;
+            backtrack_started_ = t;
+            backtrack_command_ = {};
+            turning_for_solution_ = false;
+            ++backtracks_;
+            RCLCPP_WARN(get_logger(), "[探索] %.0f 秒没有可走的路 → 沿来时轨迹原路后退 %.1fm 再换路(第%llu次)",
+                backtrack_after_s_, length, static_cast<unsigned long long>(backtracks_));
+        }
+        const Vec2 cur{px_, py_};
+        while (backtrack_next_ < backtrack_path_.size() &&
+               std::hypot(backtrack_path_[backtrack_next_].x - cur.x, backtrack_path_[backtrack_next_].y - cur.y) < 0.12)
+            ++backtrack_next_;
+        if (backtrack_next_ >= backtrack_path_.size()) { finish_backtrack("已退到位"); return false; }
+        if (t - backtrack_started_ > 8.0) { finish_backtrack("超时"); return false; }
+        const Vec2 target = backtrack_path_[backtrack_next_];
+        if (!obstacle_segment_clear(cur, target, obs, ggcfg_) || !field_motion_clear(cur, target, ggcfg_)) {
+            finish_backtrack("来路被障碍/边界挡住");
+            return false;
+        }
+        double remaining = std::hypot(target.x - cur.x, target.y - cur.y);
+        for (size_t i = backtrack_next_ + 1; i < backtrack_path_.size(); ++i)
+            remaining += std::hypot(backtrack_path_[i].x - backtrack_path_[i - 1].x,
+                                    backtrack_path_[i].y - backtrack_path_[i - 1].y);
+        const double speed = std::min(retreat_v_max_, 0.8 * remaining + 0.05);
+        const double d = std::max(1e-6, std::hypot(target.x - cur.x, target.y - cur.y));
+        const double c = std::cos(yaw_), sn = std::sin(yaw_);
+        const Vec2 measured{c * v_fwd_est_ - sn * v_lat_est_, sn * v_fwd_est_ + c * v_lat_est_};
+        backtrack_command_ = slew_velocity(backtrack_command_,
+            {(target.x - cur.x) / d * speed, (target.y - cur.y) / d * speed}, measured,
+            gains_.max_accel, xy_brake_accel_, gains_.dt);
+        cmd.twist.linear.x = c * backtrack_command_.x + sn * backtrack_command_.y;
+        cmd.twist.linear.y = -sn * backtrack_command_.x + c * backtrack_command_.y;
+        cmd.twist.angular.z = 0.0;                      // 机头不动：倒着退回去，视野仍朝原方向
+        traj_ = make_polyline_trajectory([&] { Path2 path{cur}; for (size_t i = backtrack_next_; i < backtrack_path_.size(); ++i) path.push_back(backtrack_path_[i]); return path; }());
+        last_look_ = target;
+        look_valid_ = true;
+        return true;
+    }
+
     void poll_vision_shm()
     {
         vision_new_frame_.reset();
@@ -2926,6 +3205,7 @@ private:
                     if (!coverage_closed_ && visual_drop_.completed() < 3) {
                         vision_new_confirmations_ = vision_candidates_->update(filtered, {px_, py_}, current_time);
                         vision_queue_->enqueue(vision_candidates_->snapshot(), {px_, py_});
+                        revisit_vision_hints();
                     }
                     visual_drop_.sample(filtered, {px_, py_}, current_time,
                         vision_queue_->other_positions(visual_drop_.target_id()));
@@ -2945,6 +3225,7 @@ private:
                 const auto filtered = vision_queue_->filter_blacklisted(*vision_new_frame_);
                 vision_queue_->observe(filtered, current_time);
                 vision_new_confirmations_ = vision_candidates_->update(filtered, {px_, py_}, current_time);
+                revisit_vision_hints();
                 for (const auto& candidate : vision_new_confirmations_)
                     RCLCPP_INFO(get_logger(), "[视觉确认] 区域#%llu 连续%d帧，粗坐标(%.3f, %.3f)，类别暂不判定（本阶段不改变飞行目标）",
                         static_cast<unsigned long long>(candidate.track_id), candidate.consecutive_frames,
@@ -3110,7 +3391,7 @@ private:
             // 多插点：排队当前优先；放行后弹下一个。
             // ============================================================
             if (visual_drop_enabled_ && has_goal_ && !homing_) {
-                if (grid_->coverage_ratio() >= done_coverage_) coverage_closed_ = true;
+                update_search_closure(steady_seconds());
                 activate_visual_target(steady_seconds());
             }
             bool poi_active = false;
@@ -3262,9 +3543,12 @@ private:
             //   覆盖率只读一次并复用：判定与日志同源，日志里印的就是真正触发归航的那个值。
             if (!poi_active && !vision_target_active && has_goal_ && !homing_) {
                 const double cov = grid_->coverage_ratio();
-                if (cov >= done_coverage_ || (visual_drop_enabled_ &&
+                if ((!visual_drop_enabled_ && cov >= done_coverage_ && vision_queue_->pending().empty()) || (visual_drop_enabled_ &&
                     (coverage_closed_ || visual_drop_.completed() >= 3))) {
                     homing_ = true;
+                    visual_handoff_brake_ = false;
+                    // 归航终点前更早减速：进入 1.0 m 末端批准直线时速度够低，刹停投影不出 0.1 m 胶囊，不会急刹反推(r162 等)。
+                    global_tracker_->set_endpoint_slow(home_slow_radius_, home_slow_speed_);
                     turning_for_solution_ = false;            // 转归航：打断探索的原地转身找解
                     global_has_ = global_failed_ = false;
                     global_tracker_->set_trajectory({});
@@ -3325,11 +3609,12 @@ private:
                 traj_ = tracker_->trajectory();
                 //   绕障全由 replan_locked 内的 A* 完成(含离墙)，跟随手感与原状一致；无障碍时
                 //   A* 退化成直线，行为不变。A* 无解 → replan_locked 内已跳带悬停(放弃该区)。
-                bool handled = false;
+                // ★原路后退★优先：连续 backtrack_after_s_ 没路时沿来路倒退，退完重新找路。
+                bool handled = update_backtrack(obstacles, cmd);
 
-                // ★原地转身找解★优先：锥内无解但侧向有路时，本拍原地转身改朝向重搜(画旋转标志)。
+                // ★原地转身找解★：锥内无解但侧向有路时，本拍原地转身改朝向重搜(画旋转标志)。
                 //   step 返回 true=本拍已写 cmd(继续转/刚判真围死悬停)；false=刚解出(traj_已设)→落到下面跟随。
-                if (turning_for_solution_) {
+                if (!handled && turning_for_solution_) {
                     handled = step_turn_for_solution(obstacles, cmd);
                 }
 
@@ -3362,7 +3647,8 @@ private:
                         VelCmd vc = !tracker_ticks ? VelCmd{} :
                             tracker_->update(px_, py_, yaw_, v_fwd_est_, v_lat_est_, goal_tol_, yaw_rate_est_);
                         explore_tracker_ticked_ = tracker_ticks;
-                        if (explore_handoff_deferred_ && handoff_brake_ && !vc.holding_position && !vc.at_goal) {
+                        if (((explore_handoff_deferred_ && handoff_brake_) || visual_handoff_brake_) &&
+                            !vc.holding_position && !vc.at_goal) {
                             // 换路前预减速：沿旧路线继续跟踪航向，前进指令按减速斜坡收到交接速度。
                             // 以上一拍实际发出的前进指令为基准(审查：tracker 本拍已先加了 accel·dt，净减速只有一半)。
                             const double braked = std::max(0.0,
@@ -3523,6 +3809,7 @@ private:
                 number("vision_capacity_drops", vision_stats.capacity_drops);
                 number("vision_invalid_detections", vision_stats.invalid_detections);
                 number("vision_id_blacklist_dropped", vision_ids_dropped_);
+                number("vision_hints", vision_hints_.size());
                 for (const auto& candidate : vision_candidates_->snapshot()) {
                     const auto prefix = "vision_region_" + std::to_string(candidate.track_id) + "_";
                     number(prefix + "count", candidate.consecutive_frames);
@@ -3597,6 +3884,9 @@ private:
                 number("recovery_entries", recovery_entries_);
                 number("explore_guard_rejections", explore_guard_rejections_);
                 number("cone_bypass_adoptions", cone_bypass_adoptions_);
+                number("cone_detour_rejections", cone_detour_rejections_);
+                number("explore_backtracks", backtracks_);
+                number("explore_backtracking", backtracking_);
                 number("cone_hook_rejections", cone_hook_rejections_);
                 number("required_retreats", required_retreats_);
                 number("explore_guard_lateral_trims", explore_guard_lateral_trims_);
@@ -3609,7 +3899,7 @@ private:
                 number("heading_error", tracker_->heading_error());
                 number("reference_curvature", tracker_->reference_curvature());
                 number("next_corner_distance", tracker_->next_corner_distance());
-                number("handoff_brake", explore_handoff_deferred_ && handoff_brake_);
+                number("handoff_brake", (explore_handoff_deferred_ && handoff_brake_) || visual_handoff_brake_);
                 number("imu_gyro_fresh", gyro_fresh(steady_seconds()));
                 number("imu_gyro_disabled", gyro_disabled_);
                 number("imu_gyro_agreement", gyro_agreement_);
@@ -3726,6 +4016,11 @@ private:
     bool vision_collection_active_ = false;
     double vision_pose_timeout_ = params::VISION_POSE_TIMEOUT_S;
     std::vector<int> vision_id_blacklist_;
+    double drop_sample_slide_s_ = params::VISUAL_DROP_SAMPLE_SLIDE_S, drop_sample_slide_max_m_ = 0.20;
+    std::vector<Vec2> vision_hints_;          // 已安排近看的视觉线索位置(每次任务清空)
+    std::vector<double> vision_hint_times_;   // 与 vision_hints_ 一一对应的产生时刻(steady)
+    std::vector<int> vision_hint_unmarks_;    // 每条线索已恢复未扫的次数(最多 2)
+    int vision_hint_limit_ = params::VISION_HINT_LIMIT;
     std::uint64_t vision_ids_dropped_ = 0;
     double vision_hover_s_ = params::VISION_HOVER_S;
     double vision_straight_approach_m_ = params::VISION_STRAIGHT_APPROACH_M;
@@ -3801,6 +4096,17 @@ private:
     double        lane_spacing_;       // 旧牛耕车道间距：已不参与任何计算(见构造里说明)，保留仅为参数表兼容
     double        arc_ds_;
     double        done_coverage_, goal_tol_, v_est_alpha_;
+    double        search_coverage_ = params::SEARCH_COVERAGE;
+    double        home_slow_radius_ = params::HOME_SLOW_RADIUS_M, home_slow_speed_ = params::HOME_SLOW_V;
+    // 原路后退换路
+    std::deque<Vec2> trail_;                    // 探索轨迹面包屑(每 0.15 m 一个，最多 60 个)
+    bool          backtracking_ = false;
+    Path2         backtrack_path_;              // 本次后退依次经过的面包屑(由近到远)
+    size_t        backtrack_next_ = 0;
+    double        backtrack_started_ = -1.0, no_route_since_ = -1.0, last_explore_tick_ = -1.0;
+    Vec2          backtrack_command_{};
+    double        backtrack_after_s_ = params::EXPLORE_BACKTRACK_AFTER_S, backtrack_distance_ = params::EXPLORE_BACKTRACK_M;
+    uint64_t      backtracks_ = 0;
     double        goal_stop_v_, kp_goal_, kd_goal_, v_goal_max_;
     double        replan_period_ = 0.7, replan_dev_ = 0.5;
     double        candidate_period_ = params::REPLAN_CANDIDATE_PERIOD_S;
@@ -3855,8 +4161,10 @@ private:
     uint64_t candidate_skips_ = 0;
     uint64_t adoptions_ = 0, smooth_fallbacks_ = 0, turn_entries_ = 0, recovery_entries_ = 0;
     uint64_t explore_guard_rejections_ = 0, explore_guard_lateral_trims_ = 0;  // 巡航横漂补偿被几何守卫拦截/裁剪的拍数
+    uint64_t cone_detour_rejections_ = 0;        // 锥内路绕远、改走原地转向+直达的次数
     uint64_t cone_bypass_adoptions_ = 0;         // 锥内无解时直接采纳无锥路径交 tracker 转向的次数
     bool handoff_brake_ = false;                 // 换路前预减速进行中(配合 explore_handoff_deferred_)
+    bool visual_handoff_brake_ = false;          // 视觉目标接管前沿探索路线预减速进行中
     double handoff_brake_speed_ = 0.15;          // 需要停车转向的换路只在实测前进速度低于此值时采纳(m/s)
     double handoff_brake_angle_ = 0.7853981633974483; // 新路线前方切线与机头最大夹角超过此值(rad)的换路视为急转，先预减速
     uint64_t invalid_paths_ = 0;

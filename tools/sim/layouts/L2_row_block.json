@@ -1,3 +1,0 @@
-{"name": "L2_row_block", "description": "中部一排柱子横挡，只留 1.6m 缝，考验绕行决策",
- "obstacles": [{"x": 3.5, "y": -3.2}, {"x": 3.5, "y": -1.6}, {"x": 3.5, "y": 1.6}, {"x": 3.5, "y": 3.2}, {"x": 1.5, "y": 0.0}],
- "gates": {"gate_wall_A": "center", "gate_wall_B": "left"}}

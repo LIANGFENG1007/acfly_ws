@@ -308,7 +308,10 @@ VelCmd TrajectoryTracker::compute(double px, double py, double yaw,
         progress_idx_ = corner;
         corner = next_corner();
     }
-    double look_s = std::min(traj_.back().s, progress_s_ + std::max(0.01, g_.lookahead));
+    double lookahead = g_.lookahead;
+    if (g_.lookahead_time > 0.0 && g_.lookahead_max > g_.lookahead)
+        lookahead = std::clamp(g_.lookahead_time * previous_forward_command_, g_.lookahead, g_.lookahead_max);
+    double look_s = std::min(traj_.back().s, progress_s_ + std::max(0.01, lookahead));
     if (corner < traj_.size()) look_s = std::min(look_s, traj_[corner].s);
     const TrajPoint ref = sample_at(look_s);
     last_look_ = ref.p;
@@ -528,10 +531,13 @@ VelCmd TrajectoryTracker::compute(double px, double py, double yaw,
     // 终点/尖角前的线性停车律保留，但加最低爬行速度：v ∝ d 与曲率/航向门叠加后是指数逼近，
     // 仿真里出现朝尖角以 0.02 m/s 爬 14 s 才进入停车转向。到达判定容差为 max(0.08, goal_tol)。
     // (试过 sqrt(2ad) 律：到达速度约 0.2 m/s，终点过冲、航向来回，单元测试 45°/90° 退化，弃用。)
-    if (stop_distance < slow_radius) {
-        const double creep = std::min(g_.creep_speed, g_.v_max);
+    {
+        const double slow_speed = g_.endpoint_slow_speed > 0.0 ? std::min(g_.endpoint_slow_speed, g_.v_max) : g_.v_max;
         const double before = v;
-        v = std::min(v, std::max(creep, g_.v_max * stop_distance / slow_radius));
+        if (stop_distance < slow_radius)
+            v = std::min(v, std::max(std::min(g_.creep_speed, g_.v_max), slow_speed * stop_distance / slow_radius));
+        else
+            v = std::min(v, std::sqrt(slow_speed * slow_speed + 2.0 * decel * (stop_distance - slow_radius)));
         note(3, before);
     }
     const double slip = std::max(std::abs(v_lat_est), std::abs(path_lateral_velocity));

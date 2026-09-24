@@ -1,1 +1,0 @@
-{"name": "R01", "description": "randomize_arena 规则随机 4 柱 seed1", "obstacles": [{"x": 3.911, "y": -1.35}, {"x": 1.038, "y": -1.348}, {"x": 2.951, "y": 1.818}, {"x": 4.951, "y": 2.166}], "gates": {"gate_wall_A": "center", "gate_wall_B": "center"}}

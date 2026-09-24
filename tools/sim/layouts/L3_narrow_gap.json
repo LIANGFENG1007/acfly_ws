@@ -1,3 +1,0 @@
-{"name": "L3_narrow_gap", "description": "两柱圆心距 1.3m 的窄缝(过不去)+终点附近柱子",
- "obstacles": [{"x": 3.0, "y": -0.65}, {"x": 3.0, "y": 0.65}, {"x": 5.5, "y": -2.5}, {"x": 6.0, "y": 3.2}],
- "gates": {"gate_wall_A": "right", "gate_wall_B": "center"}}

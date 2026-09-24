@@ -560,7 +560,9 @@ FrontierSelection select_observation_target(
                     cfg.clearance_weight * clearance_deficit + cfg.small_region_penalty * small_deficit +
                     band_penalty + std::max(0.0, cfg.continuity_turn_penalty) * route_turn +
                     (detour_active ? cfg.goal_detour_weight * (evaluation.distance +
-                        std::hypot(cfg.goal.x - point.x, cfg.goal.y - point.y) - home_direct) : 0.0);
+                        std::hypot(cfg.goal.x - point.x, cfg.goal.y - point.y) - home_direct) : 0.0) -
+                    (cfg.priority_valid && std::hypot(cell.center.x - cfg.priority.x, cell.center.y - cfg.priority.y) <= 0.8
+                        ? cfg.priority_bonus : 0.0);
                 if (cost >= best_cost) continue;
                 best_cost = cost;
                 result = {true, point, gain, evaluation.clearance, region_size,

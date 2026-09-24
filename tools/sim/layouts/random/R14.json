@@ -1,1 +1,0 @@
-{"name": "R14", "description": "randomize_arena 规则随机 6 柱 seed14", "obstacles": [{"x": 2.275, "y": -1.168}, {"x": 1.561, "y": 1.121}, {"x": 3.582, "y": -2.76}, {"x": 0.913, "y": -2.357}, {"x": 5.987, "y": -0.726}, {"x": 6.022, "y": 2.117}], "gates": {"gate_wall_A": "center", "gate_wall_B": "center"}}
