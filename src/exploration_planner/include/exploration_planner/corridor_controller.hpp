@@ -50,10 +50,10 @@ struct CorridorConfig {
     //   离开门同样距离后回到中线。false = 旧的入口点流程。
     bool centerline_mode = false;
     double gate_align_distance = 0.60;   // 离门前沿/后沿多远开始/结束对准门中心(m)
-    double center_kp = 1.50;             // 横向对中 P (1/s)
+    double center_kp = 1.00;             // 横向对中 P (1/s)
     double center_kd = 0.30;             // 横向实测速度阻尼
-    double lateral_max_speed = 0.30;     // 横向纠偏速度上限(m/s)，涡流大不能太小
-    double lateral_acceleration = 0.60;  // 横向指令斜坡(m/s²)
+    double lateral_max_speed = 0.20;     // 横向纠偏速度上限(m/s)
+    double lateral_acceleration = 0.30;  // 横向指令斜坡(m/s²)
     double lateral_latency = 0.40;       // 横向速度响应延迟估计(s)，用于大横移的提前刹车包络
     double lateral_brake_accel = 0.30;   // 包络假设的实际刹车减速度(m/s²)
     double wall_latency = 1.0;           // 离墙净距包络的响应时间(s)：朝墙横移按 v·T+v²/2a≤净距 限速；0=关
@@ -93,8 +93,9 @@ public:
     bool active() const { return phase_ != CorridorPhase::Idle; }
     bool startedMoving() const;
     CorridorPhase phase() const { return phase_; }
-    Vec2 entry() const { return entry_; }
-    Vec2 goal() const { return h_; }
+    // 按宽度对中模式：返回雷达中线的两端(沿隧道轴)，可视化的走廊带/门线才是正的；H 的纵向不变
+    Vec2 entry() const { return cfg_.centerline_mode ? perception_.toWorld(0.0, center_t_) : entry_; }
+    Vec2 goal() const { return cfg_.centerline_mode ? perception_.toWorld(perception_.length(), center_t_) : h_; }
     const Path2& points() const { return points_; }
     const CorridorObservation& observation() const { return observation_; }
     const CorridorObservation& gate() const { return locked_gate_; }
@@ -144,13 +145,15 @@ private:
     int center_votes_ = 0, center_outliers_ = 0;
     double reference_t_ = 0.0;   // H 的横向，自由搜索时选最近的墙对
     bool door_valid_ = false, door_passable_ = false;
+    bool door_zone_ = false;     // 已进入当前门的对准区(进入后保持到过门，门位置测量抖动不再来回切目标)
+    double width_est_ = 0.0;     // 实测隧道宽度(两墙成对时低通)，只看到一侧墙时用它推中线
     CorridorObservation door_, next_door_;
     struct CommandSample { double time; Vec2 velocity; };
     std::deque<CommandSample> command_history_;   // 已发出的世界系速度指令(Smith 预估)
     Vec2 smithDisplacement(double now) const;
     bool setCenterlineFrame(const Vec2& reference);
     CorridorObservation analyzeCenterline(const Vec2& position, double minimum_gate_s) const;
-    void updateCenter(const CorridorObservation& observed, double now);
+    void updateCenter(const CorridorObservation& observed, double now, const Vec2& position);
     void updateDoor(const Vec2& position);
     CorridorCommand updateCenterline(const Vec2& position, double yaw, double vf, double vl,
                                      double now, double dt);

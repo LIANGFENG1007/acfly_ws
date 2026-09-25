@@ -121,10 +121,10 @@ inline constexpr double CORRIDOR_WIDTH = 1.30; // ★隧道宽度(m)★ 1.5→1.
 inline constexpr double CORRIDOR_WIDTH_TOL_M = 0.25;      // 两墙实测间距与 CORRIDOR_WIDTH 的允许偏差(m)，超出不认作隧道
 inline constexpr double CORRIDOR_CENTER_SEARCH_M = 4.0;   // 找墙对时以飞机为中心的横向搜索半径(m)，须大于探索终点到隧道远墙的距离
 inline constexpr double CORRIDOR_GATE_ALIGN_M = 0.60;     // ★离门多远开始/结束对准门中心(m)★ 用户定 60 cm；门外保持隧道中线
-inline constexpr double CORRIDOR_CENTER_KP = 1.50;        // 横向对中 P(1/s)：1.2→1.5(闭环测试扫描：0.8~1.2 在实机量级延迟+涡流下晃 0.09~0.18m、会碰墙；1.5/0.3 零失败；2.0 开始振荡)
+inline constexpr double CORRIDOR_CENTER_KP = 1.00;        // 横向对中 P(1/s)：1.5→1.0(2026-09-25 实机反馈 1.5 太激进、晃得更大)。仿真测试里 1.5 最稳，实机响应更慢，偏大就振荡
 inline constexpr double CORRIDOR_CENTER_KD = 0.30;        // 横向实测速度阻尼
-inline constexpr double CORRIDOR_LATERAL_MAX_SPEED = 0.30; // 横向纠偏速度上限(m/s)，单独限幅不被前进速度挤占；太小涡流里会晃
-inline constexpr double CORRIDOR_LATERAL_ACCEL = 0.60;    // 横向指令斜坡(m/s²)
+inline constexpr double CORRIDOR_LATERAL_MAX_SPEED = 0.20; // 横向纠偏速度上限(m/s)，单独限幅不被前进速度挤占。0.3→0.2(实机反馈激进)
+inline constexpr double CORRIDOR_LATERAL_ACCEL = 0.30;    // 横向指令斜坡(m/s²)：0.6→0.3(实机反馈激进；进门对准时横向目标跳变不再猛拽)
 inline constexpr double CORRIDOR_LATERAL_LATENCY_S = 0.40; // 横向响应延迟估计(s)：大横移(如门偏心)按 v·T+v²/2a≤误差 提前刹车，防止滑过门中心擦墙
 inline constexpr double CORRIDOR_SMITH_S = 0.0;           // 横向 Smith 预估窗口(s)，0=关。闭环测试扫描(72 组×4 种子)：实机延迟未知时窗口对不上反而更差，最优为关；实测出延迟后可试 0.2~0.3
 inline constexpr double CORRIDOR_LATERAL_BRAKE_ACCEL = 0.30; // 上述包络假设的实际刹车减速度(m/s²)：取 PX4 Gazebo 横向实测加速度能力 ~0.3(扫描 18 组×8 种子×3 响应模型，0 碰撞)；实机滞后更大可调小

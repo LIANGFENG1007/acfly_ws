@@ -282,13 +282,13 @@ bool run(const Scene& scene, const Dynamics& dyn, unsigned seed) {
     check(entry_done && std::abs(entry_pos.x - scene.center_x) <= 0.07, "横移结束时不在隧道中线");
     check(entry_done && std::abs(entry_pos.y - scene.lock_y) <= 0.06, "横移时 Y 没锁住");
     check(max_center_estimate_error <= 0.06, "雷达中线估计误差过大");
-    check(center_rms <= 0.10, "门外没有保持中线");   // 强涡流+0.4 s 延迟下的实际水平留余量
+    check(center_rms <= 0.16, "门外没有保持中线");   // 温和增益(实机反馈)在强涡流+0.4 s 延迟下的实际水平留余量；跟着 H 线走会偏 0.25 m
     check(fwd_mean >= 0.22, "门外前进太慢");
     check(aligning_outside_zone == 0, "离门还远就在对准门");
     check(std::abs(pos.y - scene.h_y) <= 0.12, "没停在 H 的纵向位置");
     for (std::size_t i = 0; i < scene.doors.size(); ++i) {
         const double door_margin = 0.5 * (scene.gap - p::CORRIDOR_ROBOT_WIDTH);
-        check(cross_error[i] >= 0.0 && cross_error[i] <= std::min(0.09, door_margin), "过门时没对准门" + std::to_string(i + 1));
+        check(cross_error[i] >= 0.0 && cross_error[i] <= std::min(0.10, door_margin), "过门时没对准门" + std::to_string(i + 1));
         check(align_start[i] >= 0.0 && align_start[i] <= p::CORRIDOR_GATE_ALIGN_M + 0.1, "对准门太早" + std::to_string(i + 1));
     }
     return ok;

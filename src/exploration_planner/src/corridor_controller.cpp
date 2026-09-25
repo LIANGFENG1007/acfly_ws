@@ -407,7 +407,7 @@ CorridorCommand CorridorController::updateMotion(const Vec2& position, double ya
             if (cfg_.centerline_mode) {
                 // 转头/降高期间就开始找墙对，横移开始时中线往往已锁定
                 observation_ = analyzeCenterline(position, passed_s_);
-                updateCenter(observation_, now);
+                updateCenter(observation_, now, position);
             } else {
                 observation_ = perception_.analyze(points_, position, passed_s_, &visibility_points_,
                     has_sensor_origin_ ? &sensor_origin_ : nullptr);
@@ -611,7 +611,8 @@ bool CorridorController::setCenterlineFrame(const Vec2& reference)
     center_locked_ = false;
     center_votes_ = center_outliers_ = 0;
     center_t_ = reference_t_;
-    door_valid_ = door_passable_ = false;
+    door_valid_ = door_passable_ = door_zone_ = false;
+    width_est_ = cfg_.perception.corridor_width;
     return true;
 }
 
@@ -623,10 +624,19 @@ CorridorObservation CorridorController::analyzeCenterline(const Vec2& position, 
         center_locked_ ? center_t_ : reference_t_, !center_locked_);
 }
 
-void CorridorController::updateCenter(const CorridorObservation& observed, double now)
+void CorridorController::updateCenter(const CorridorObservation& observed, double now, const Vec2& position)
 {
     if (!observed.center_valid) return;
-    const double measured = observed.center_t;
+    double measured = observed.center_t;
+    if (observed.center_from_pair) {
+        // 实测宽度慢低通；只在锁定后且飞机在隧道内时更新(隧道外看到的是墙外表面，会多一个墙厚)
+        if (center_locked_ && std::fabs(perception_.lateral(position) - center_t_) < 0.5 * width_est_)
+            width_est_ += 0.1 * (observed.measured_width - width_est_);
+    } else if (center_locked_ && observed.right_valid && !observed.left_valid) {
+        measured = observed.right_wall + 0.5 * width_est_;           // 只见一侧墙：用实测宽度，不用设定值
+    } else if (center_locked_ && observed.left_valid && !observed.right_valid) {
+        measured = observed.left_wall - 0.5 * width_est_;
+    }
     if (!center_locked_) {
         // 锁定必须是一对符合宽度的墙，且连续 confirm_frames 帧落在同一位置
         if (!observed.center_from_pair) return;
@@ -661,14 +671,13 @@ void CorridorController::updateDoor(const Vec2& position)
     const double radius = cfg_.perception.robot_width * 0.5;
     const double resolution = cfg_.perception.cell_size;
     const auto same_door = [&](const CorridorObservation& o) {
-        return o.gate_observed &&
-            std::fabs(o.gate_s - door_.gate_s) <= std::max(cfg_.gate_association, door_.gate_depth);
+        return o.gate_observed && std::fabs(o.gate_s - door_.gate_s) <= std::max(0.30, door_.gate_depth);
     };
     // 当前门永远是最近的未通过门：隧道外先看到远门、后看到近门时要切过来重新确认
     if (observation_.gate_observed && observation_.gate_s > passed_s_ &&
-        (!door_valid_ || observation_.gate_s < door_.gate_s - std::max(cfg_.gate_association, door_.gate_depth))) {
+        (!door_valid_ || observation_.gate_s < door_.gate_s - std::max(0.50, door_.gate_depth))) {
         door_valid_ = true;
-        door_passable_ = false;
+        door_passable_ = door_zone_ = false;
         door_ = observation_;
         confirmations_ = 0;
         candidate_ = {};
@@ -845,7 +854,7 @@ CorridorCommand CorridorController::updateCenterline(const Vec2& position, doubl
     if (processed_sequence_ != cloud_sequence_) {
         processed_sequence_ = cloud_sequence_;
         observation_ = analyzeCenterline(position, passed_s_);
-        updateCenter(observation_, now);
+        updateCenter(observation_, now, position);
         updateDoor(position);
     }
     // 门通过：离开门后沿 gate_align_distance，或机身已过门且下一扇门的对准区已开始
@@ -854,11 +863,12 @@ CorridorCommand CorridorController::updateCenterline(const Vec2& position, doubl
         const bool body_clear = s >= back + radius + resolution;
         const bool next_zone = next_door_.gate_observed &&
             s >= next_door_.gate_s - next_door_.gate_depth * 0.5 - cfg_.gate_align_distance;
-        if (s >= back + cfg_.gate_align_distance || (body_clear && next_zone)) {
+        const bool near_h = perception_.length() - s <= cfg_.gate_align_distance;
+        if (s >= back + cfg_.gate_align_distance || (body_clear && (next_zone || near_h))) {
             last_gate_back_ = back;
             passed_s_ = back + resolution;
             ++gates_passed_;
-            door_valid_ = door_passable_ = false;
+            door_valid_ = door_passable_ = door_zone_ = false;
             confirmations_ = 0;
             candidate_ = {};
             if (next_door_.gate_observed && next_door_.gate_s > passed_s_) {
@@ -902,8 +912,10 @@ CorridorCommand CorridorController::updateCenterline(const Vec2& position, doubl
             const double front = door_.gate_s - door_.gate_depth * 0.5;
             const double stop_s = front - radius - resolution;
             if (door_passable_) {
-                // 只在离门前沿 gate_align_distance 内对准门中心；过门后到后沿同样距离再回中线
-                if (s >= front - cfg_.gate_align_distance) {
+                // 只在离门前沿 gate_align_distance 内对准门中心；过门后到后沿同样距离再回中线。
+                //   进入后保持(门位置每帧更新会抖几厘米，边界附近不能在中线/门中心之间来回切)
+                if (!door_zone_ && s >= front - cfg_.gate_align_distance) door_zone_ = true;
+                if (door_zone_) {
                     t_ref = 0.5 * (door_.gap_left + door_.gap_right);
                     forward_cap = cfg_.gate_speed;
                     status = "Aligning to door center";

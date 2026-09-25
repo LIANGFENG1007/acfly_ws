@@ -221,6 +221,8 @@ CorridorObservation CorridorPerception::analyze(
     }
     result.right_valid = right.valid;
     result.left_valid = left.valid;
+    if (right.valid) result.right_wall = right.t;
+    if (left.valid) result.left_wall = left.t;
     if (right.valid && left.valid) {
         result.measured_width = left.t - right.t;
         if (std::abs(result.measured_width - config_.corridor_width) <= config_.width_tolerance) {
