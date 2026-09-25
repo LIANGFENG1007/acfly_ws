@@ -32,8 +32,6 @@ FlyMissionNode::FlyMissionNode()
     explore_goal_y_ = declare_parameter<double>("explore_goal_y", params::EXPLORE_GOAL_Y);
     corridor_enabled_ = declare_parameter<bool>(
         "explore_corridor_enabled", params::EXPLORE_CORRIDOR_ENABLED);
-    corridor_entry_x_ = declare_parameter<double>("corridor_entry_x", params::CORRIDOR_ENTRY_X);
-    corridor_entry_y_ = declare_parameter<double>("corridor_entry_y", params::CORRIDOR_ENTRY_Y);
     corridor_h_x_ = declare_parameter<double>("corridor_h_x", params::CORRIDOR_H_X);
     corridor_h_y_ = declare_parameter<double>("corridor_h_y", params::CORRIDOR_H_Y);
 

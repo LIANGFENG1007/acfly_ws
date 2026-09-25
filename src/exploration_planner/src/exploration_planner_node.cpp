@@ -239,6 +239,23 @@ public:
         pcfg.gate_min_clear_rays = declare_parameter<int>("corridor_gate_min_clear_rays", params::CORRIDOR_GATE_MIN_CLEAR_RAYS);
         pcfg.endpoint_exclusion = dd("corridor_endpoint_exclusion", params::CORRIDOR_ENDPOINT_EXCLUSION);
         pcfg.min_observed_ahead = dd("corridor_min_observed_ahead", params::CORRIDOR_MIN_OBSERVED_AHEAD);
+        // 按宽度对中(不用入口点)：fly_mission 发来的第一个点就是探索终点
+        ccfg_.centerline_mode = true;
+        pcfg.width_tolerance = dd("corridor_width_tol_m", params::CORRIDOR_WIDTH_TOL_M);
+        pcfg.center_search_range = dd("corridor_center_search_m", params::CORRIDOR_CENTER_SEARCH_M);
+        ccfg_.gate_align_distance = dd("corridor_gate_align_m", params::CORRIDOR_GATE_ALIGN_M);
+        ccfg_.center_kp = dd("corridor_center_kp", params::CORRIDOR_CENTER_KP);
+        ccfg_.center_kd = dd("corridor_center_kd", params::CORRIDOR_CENTER_KD);
+        ccfg_.lateral_max_speed = dd("corridor_lateral_max_speed", params::CORRIDOR_LATERAL_MAX_SPEED);
+        ccfg_.lateral_acceleration = dd("corridor_lateral_accel", params::CORRIDOR_LATERAL_ACCEL);
+        ccfg_.lateral_latency = dd("corridor_lateral_latency_s", params::CORRIDOR_LATERAL_LATENCY_S);
+        ccfg_.lateral_brake_accel = dd("corridor_lateral_brake_accel", params::CORRIDOR_LATERAL_BRAKE_ACCEL);
+        ccfg_.smith_time = std::max(0.0, dd("corridor_smith_s", params::CORRIDOR_SMITH_S));
+        ccfg_.wall_latency = std::max(0.0, dd("corridor_wall_latency_s", params::CORRIDOR_WALL_LATENCY_S));
+        ccfg_.wall_brake_accel = dd("corridor_wall_brake_accel", params::CORRIDOR_WALL_BRAKE_ACCEL);
+        ccfg_.min_forward_speed = dd("corridor_min_forward_speed", params::CORRIDOR_MIN_FORWARD_SPEED);
+        ccfg_.center_filter_time = dd("corridor_center_filter_s", params::CORRIDOR_CENTER_FILTER_S);
+        ccfg_.entry_center_tolerance = dd("corridor_entry_center_tol", params::CORRIDOR_ENTRY_CENTER_TOL);
         corridor_ = std::make_unique<CorridorController>(ccfg_);
         gcfg_.big_cell        = dd("big_cell", params::BIG_CELL);
         gcfg_.small_cell      = dd("small_cell", params::SMALL_CELL);
@@ -788,15 +805,16 @@ private:
             return;
         }
         if (route.poses.size() != 2) {
-            RCLCPP_WARN(get_logger(), "走廊路线需要且仅需要入口/H两个点");
+            RCLCPP_WARN(get_logger(), "走廊路线需要且仅需要探索终点/H两个点");
             return;
         }
         const auto& a = route.poses[0].pose.position;
         const auto& b = route.poses[1].pose.position;
         if (corridor_->configure({a.x, a.y}, {b.x, b.y})) {
             corridor_disabled_for_goal_ = false;
-            RCLCPP_INFO(get_logger(), "走廊路线: 入口(%.2f,%.2f), H(%.2f,%.2f)", a.x, a.y, b.x, b.y);
-        } else RCLCPP_WARN(get_logger(), "走廊坐标无效，到探索终点后悬停等待有效路线");
+            RCLCPP_INFO(get_logger(), "走廊路线: 探索终点(%.2f,%.2f) → H(%.2f,%.2f)，隧道宽 %.2fm：到位后锁纵向、按雷达墙对平移到中线",
+                        a.x, a.y, b.x, b.y, ccfg_.perception.corridor_width);
+        } else RCLCPP_WARN(get_logger(), "走廊坐标无效(H 须在转头方向前方 ≥0.5m)，到探索终点后悬停等待有效路线");
     }
 
     void on_goal(const geometry_msgs::msg::PointStamped::SharedPtr msg)
@@ -3395,6 +3413,12 @@ private:
                 }
                 if (corridor_->phase() != CorridorPhase::Done) {
                     const auto& observed = corridor_->observation();
+                    const Vec2 center = corridor_->centerWorld({px_, py_});
+                    RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 2000,
+                        "[走廊中线] locked=%d 中线点(%.2f,%.2f) 横向偏差=%.3fm 墙L=%d R=%d 实测宽=%.2f 成对=%d 飞机(%.2f,%.2f,z=%.2f)",
+                        corridor_->centerLocked(), center.x, center.y,
+                        std::hypot(center.x - px_, center.y - py_), observed.left_valid, observed.right_valid,
+                        observed.measured_width, observed.center_from_pair, px_, py_, pz_);
                     RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 2000,
                         "[走廊识别] reason=%s cloud=%zu walls=%d bounds=[%.2f,%.2f] observed_s=%.2f gate=%d gate_s=%.2f gap=%.2f rays=%d body=%.2f topic=%s rx_age=%.2fs filter=%s points=%zu/%zu/%zu z=[%.2f,%.2f] raw_z=[%.2f,%.2f] entry=(%.2f,%.2f) H=(%.2f,%.2f)",
                         observed.reason.c_str(), corridor_->points().size(), observed.walls_observed,
@@ -3958,6 +3982,9 @@ private:
                 number("corridor_cloud_receive_age_s", corridor_cloud_received_at_ >= 0.0
                     ? steady_seconds() - corridor_cloud_received_at_ : -1.0);
                 number("gates_passed", corridor_->gatesPassed());
+                number("corridor_center_locked", corridor_->centerLocked());
+                number("corridor_center_offset", corridor_->centerOffset());
+                number("corridor_measured_width", corridor_->observation().measured_width);
                 diagnostics.status.push_back(status);
             }
             if (publish_finished) completed_goal = goal_header_;

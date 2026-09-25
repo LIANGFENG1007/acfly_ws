@@ -192,8 +192,8 @@ private:
     double explore_goal_x_ = params::EXPLORE_GOAL_X;
     double explore_goal_y_ = params::EXPLORE_GOAL_Y;
     bool corridor_enabled_ = params::EXPLORE_CORRIDOR_ENABLED;
-    double corridor_entry_x_ = params::CORRIDOR_ENTRY_X;
-    double corridor_entry_y_ = params::CORRIDOR_ENTRY_Y;
+    double corridor_entry_x_ = 0.0;   // 上次发布的走廊起点(=探索终点)，只用于变化检测
+    double corridor_entry_y_ = 0.0;
     double corridor_h_x_ = params::CORRIDOR_H_X;
     double corridor_h_y_ = params::CORRIDOR_H_Y;
     bool corridor_active_ = false;

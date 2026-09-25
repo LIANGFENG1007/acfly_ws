@@ -254,10 +254,10 @@ inline constexpr double EXPLORE_LAND_HEADING_HANDOVER_SEC = 0.30; // H点降落�
 inline constexpr double EXPLORE_GOAL_X = 7.75;   // 原探索终点（图中红点）；10x10 场地(f2484b7)。实机小场地为 (4.77, 2.3)
 inline constexpr double EXPLORE_GOAL_Y = 4.0;
 inline constexpr bool   EXPLORE_CORRIDOR_ENABLED = true; // false: 红点完成后按旧流程降落
-inline constexpr double CORRIDOR_ENTRY_X = 9.47;  // 保持 -90 度朝向横移进入通道的第一个点 x；实机小场地为 5.7
-inline constexpr double CORRIDOR_ENTRY_Y = 4.0; // 进入通道的第一个点 y；实机小场地为 2.3
-inline constexpr double CORRIDOR_H_X = 9.67;      // 穿过全部门后的 H 点 x；实机小场地为 5.7
-inline constexpr double CORRIDOR_H_Y = -1.4;     // 穿过全部门后的 H 点 y；实机小场地为 -1.0
+// 不再需要入口点(2026-09-25)：到探索终点转头、降高后，规划器锁纵向(SLAM Y)沿 SLAM X 平移，
+//   按雷达测到的一对隧道墙(间距≈规划器 CORRIDOR_WIDTH)找中线；探索终点离隧道多远不需要准确。
+inline constexpr double CORRIDOR_H_X = 9.67;      // 穿过全部门后的 H 点 x：只用来判断隧道在哪一侧，横向以雷达中线为准；实机小场地为 5.7
+inline constexpr double CORRIDOR_H_Y = -1.4;     // 穿过全部门后的 H 点 y：纵向终点(停在这里)；实机小场地为 -1.0
 // ---------------------------------------------------------------------------
 // ★ 小车雷达追踪（TrackCar / TRACK_CAR 状态）★  ← 追踪调参都在这一段
 //   场地里另有一台雷达装在地面小车上，跑自己【独立的一套 SLAM】，位姿发在

@@ -18,6 +18,7 @@ struct LocalPoint {
 struct Wall {
     bool valid = false;
     double t = 0.0;
+    std::size_t support = 0;   // 纵向独立格数
     std::vector<double> samples;
 };
 
@@ -31,9 +32,38 @@ double median(std::vector<double> values) {
     return *middle;
 }
 
+using Columns = std::map<int, std::vector<LocalPoint>>;
+
+// 以一列为中心合并 ±band 内的相邻列：纵向独立格数与纵向跨度都够才是墙面。
+Wall columnWall(const Columns& columns, int key, const CorridorPerceptionConfig& config) {
+    const int neighborhood = std::max(1, static_cast<int>(
+        std::ceil(config.wall_exclusion_band / config.cell_size)));
+    std::vector<double> lateral_samples;
+    std::vector<double> longitudinal_samples;
+    std::set<int> longitudinal_cells;
+    for (int offset = -neighborhood; offset <= neighborhood; ++offset) {
+        const auto found = columns.find(key + offset);
+        if (found == columns.end()) continue;
+        for (const auto& p : found->second) {
+            lateral_samples.push_back(p.t);
+            longitudinal_samples.push_back(p.s);
+            longitudinal_cells.insert(static_cast<int>(std::floor(p.s / config.cell_size)));
+        }
+    }
+    Wall wall;
+    if (static_cast<int>(longitudinal_cells.size()) < config.wall_min_points) return wall;
+    const auto bounds = std::minmax_element(longitudinal_samples.begin(), longitudinal_samples.end());
+    if (*bounds.second - *bounds.first < config.wall_min_span) return wall;
+    wall.valid = true;
+    wall.support = longitudinal_cells.size();
+    wall.t = median(lateral_samples);
+    wall.samples = std::move(longitudinal_samples);
+    return wall;
+}
+
 Wall findWall(const std::vector<LocalPoint>& points, double expected,
               const CorridorPerceptionConfig& config) {
-    std::map<int, std::vector<LocalPoint>> columns;
+    Columns columns;
     for (const auto& p : points) {
         if (std::abs(p.t - expected) <= config.wall_search_tolerance) {
             columns[static_cast<int>(std::floor(p.t / config.cell_size))].push_back(p);
@@ -41,34 +71,35 @@ Wall findWall(const std::vector<LocalPoint>& points, double expected,
     }
 
     Wall result;
-    std::size_t best_support = 0;
-    const int neighborhood = std::max(1, static_cast<int>(
-        std::ceil(config.wall_exclusion_band / config.cell_size)));
     for (const auto& column : columns) {
-        std::vector<double> lateral_samples;
-        std::vector<double> longitudinal_samples;
-        std::set<int> longitudinal_cells;
-        for (int offset = -neighborhood; offset <= neighborhood; ++offset) {
-            const auto found = columns.find(column.first + offset);
-            if (found == columns.end()) continue;
-            for (const auto& p : found->second) {
-                lateral_samples.push_back(p.t);
-                longitudinal_samples.push_back(p.s);
-                longitudinal_cells.insert(static_cast<int>(std::floor(p.s / config.cell_size)));
-            }
-        }
-        if (static_cast<int>(longitudinal_cells.size()) < config.wall_min_points) continue;
-        const auto bounds = std::minmax_element(
-            longitudinal_samples.begin(), longitudinal_samples.end());
-        if (*bounds.second - *bounds.first < config.wall_min_span) continue;
-        if (longitudinal_cells.size() <= best_support) continue;
-        best_support = longitudinal_cells.size();
-        result.valid = true;
-        result.t = median(lateral_samples);
-        result.samples = std::move(longitudinal_samples);
+        Wall wall = columnWall(columns, column.first, config);
+        if (wall.valid && wall.support > result.support) result = std::move(wall);
     }
     std::sort(result.samples.begin(), result.samples.end());
     return result;
+}
+
+// 不预设位置：所有满足墙面条件的列，按纵向支撑做非极大抑制(同一面墙只留一条)。
+std::vector<Wall> wallCandidates(const std::vector<LocalPoint>& points,
+                                 const CorridorPerceptionConfig& config) {
+    Columns columns;
+    for (const auto& p : points)
+        columns[static_cast<int>(std::floor(p.t / config.cell_size))].push_back(p);
+    std::vector<Wall> raw;
+    for (const auto& column : columns) {
+        Wall wall = columnWall(columns, column.first, config);
+        if (wall.valid) raw.push_back(std::move(wall));
+    }
+    std::sort(raw.begin(), raw.end(), [](const Wall& a, const Wall& b) { return a.support > b.support; });
+    const double separation = std::max(2.0 * config.wall_exclusion_band, 2.0 * config.cell_size);
+    std::vector<Wall> kept;
+    for (auto& wall : raw) {
+        if (std::any_of(kept.begin(), kept.end(), [&](const Wall& k) { return std::abs(k.t - wall.t) <= separation; }))
+            continue;
+        std::sort(wall.samples.begin(), wall.samples.end());
+        kept.push_back(std::move(wall));
+    }
+    return kept;
 }
 
 double supportedUntil(const Wall& wall, double position_s, double max_gap, double initial_gap) {
@@ -123,7 +154,8 @@ double CorridorPerception::lateral(const Vec2& point) const {
 
 CorridorObservation CorridorPerception::analyze(
     const Path2& points, const Vec2& vehicle, double minimum_gate_s,
-    const Path2* visibility_points, const Vec2* sensor_origin) const {
+    const Path2* visibility_points, const Vec2* sensor_origin,
+    double center_hint, bool free_search) const {
     CorridorObservation result;
     result.frame_valid = frame_valid_;
     if (!frame_valid_ || !finite(vehicle) || !std::isfinite(config_.cell_size) ||
@@ -139,6 +171,11 @@ CorridorObservation CorridorPerception::analyze(
     // H is a destination, not a physical wall or a limit on measured wall support.
     const double max_s = position_s + config_.lookahead;
     const double half_width = config_.corridor_width * 0.5;
+    const double reference = std::isfinite(center_hint) ? center_hint : 0.0;
+    const double lateral_center = free_search ? lateral(vehicle) : reference;
+    const double lateral_limit = free_search
+        ? std::max(config_.center_search_range, half_width + config_.wall_search_tolerance)
+        : half_width + config_.wall_search_tolerance;
     std::vector<LocalPoint> local;
     std::set<std::pair<int, int>> occupied;
     for (const auto& point : points) {
@@ -146,7 +183,7 @@ CorridorObservation CorridorPerception::analyze(
         const double s = longitudinal(point);
         const double t = lateral(point);
         if (s < min_s || s > max_s ||
-            std::abs(t) > half_width + config_.wall_search_tolerance) continue;
+            std::abs(t - lateral_center) > lateral_limit) continue;
         const auto key = std::make_pair(static_cast<int>(std::floor(s / config_.cell_size)),
                                         static_cast<int>(std::floor(t / config_.cell_size)));
         if (occupied.insert(key).second) local.push_back({s, t});
@@ -157,8 +194,52 @@ CorridorObservation CorridorPerception::analyze(
         return result;
     }
 
-    const auto right = findWall(local, -half_width, config_);
-    const auto left = findWall(local, half_width, config_);
+    Wall right, left;
+    if (free_search) {
+        // 找一对间距≈corridor_width 的平行长墙；多对时取中点离参考线最近的一对，同距取支撑更强的
+        const auto candidates = wallCandidates(local, config_);
+        double best_offset = std::numeric_limits<double>::infinity();
+        std::size_t best_support = 0;
+        for (std::size_t i = 0; i < candidates.size(); ++i) {
+            for (std::size_t j = 0; j < candidates.size(); ++j) {
+                const double width = candidates[j].t - candidates[i].t;
+                if (width <= 0.0 || std::abs(width - config_.corridor_width) > config_.width_tolerance) continue;
+                const double offset = std::abs(0.5 * (candidates[i].t + candidates[j].t) - reference);
+                const std::size_t support = std::min(candidates[i].support, candidates[j].support);
+                if (offset < best_offset - config_.cell_size ||
+                    (offset <= best_offset + config_.cell_size && support > best_support)) {
+                    best_offset = offset;
+                    best_support = support;
+                    right = candidates[i];
+                    left = candidates[j];
+                }
+            }
+        }
+    } else {
+        right = findWall(local, reference - half_width, config_);
+        left = findWall(local, reference + half_width, config_);
+    }
+    result.right_valid = right.valid;
+    result.left_valid = left.valid;
+    if (right.valid && left.valid) {
+        result.measured_width = left.t - right.t;
+        if (std::abs(result.measured_width - config_.corridor_width) <= config_.width_tolerance) {
+            result.center_t = 0.5 * (left.t + right.t);
+            result.center_from_pair = true;
+        } else {
+            // 间距不符(一侧可能是门框/杂点)：取离期望位置更近的那一侧推算中线
+            const double right_error = std::abs(right.t - (reference - half_width));
+            const double left_error = std::abs(left.t - (reference + half_width));
+            result.center_t = right_error <= left_error ? right.t + half_width : left.t - half_width;
+        }
+        result.center_valid = true;
+    } else if (right.valid) {
+        result.center_t = right.t + half_width;
+        result.center_valid = true;
+    } else if (left.valid) {
+        result.center_t = left.t - half_width;
+        result.center_valid = true;
+    }
     result.walls_observed = right.valid && left.valid &&
         left.t - right.t > config_.robot_width;
     if (!result.walls_observed) {
