@@ -58,7 +58,7 @@ inline constexpr double VISUAL_DROP_APPROACH_SLOW_M = 1.20; // 采样圈外的�
 inline constexpr double VISUAL_DROP_ENTRY_SPEED_MPS = 0.15; // 采样入口的接近速度上限(m/s)：保留小幅前进以穿过1m阈值，不用速度达标来阻塞采样；XY纠偏仍有效
 inline constexpr double VISUAL_DROP_SAMPLE_S = 1.0;      // 锁定位置后的采样时长(s)：新帧能收多少收多少，加权平均；无有效帧则用粗坐标
 inline constexpr double VISUAL_DROP_SAMPLE_SLIDE_S = 0.60; // 采样锁点 = 越圈点 + 实测速度×此时长(上限 0.2 m)：按响应滞后自然滑停，不回拉(去掉采样→下降交接的前后点头)。0=锁在越圈点(旧)
-inline constexpr double VISUAL_DROP_HEIGHT_M = 0.15;     // 投放时雷达相对起飞位置的高度(m)：目标Z=起飞雷达Z+此值，不是离目标物表面高度
+inline constexpr double VISUAL_DROP_HEIGHT_M = 0.06;     // 投放时雷达相对起飞位置的高度(m)：目标Z=起飞雷达Z+此值，不是离目标物表面高度
 // ★投掷高度 SLAM Z 误差补偿★(2026-09-24 实测包 z_drift_0924_1941：雷达贴地、物理高度不变拖遍全场)
 //   SLAM 的 Z 读数随位置线性偏移 err = X·x + Y·y(相对起飞点，拟合残差 RMS 0.4 cm)；x 方向每米低 3.4 cm，8.5 m 处低约 29 cm。
 //   投掷目标 Z = 起飞Z + VISUAL_DROP_HEIGHT_M + err(目标位置)，让远处投掷的真实离地高度也是 0.15 m。
@@ -75,7 +75,7 @@ inline constexpr double VISUAL_DROP_OFFSET_M = 0.23;     // 包裹距雷达的�
 inline constexpr double VISUAL_DROP_DESCEND_MPS = 0.60;  // 投放下降速度上限(m/s)：根据剩余XY距离估计到达时间并调整限速，实际Z速度由主控PD计算
 inline constexpr double VISUAL_DROP_CLIMB_MPS = 0.60;    // 释放后回升速度上限(m/s)：锁定释放时XY，回到开始采样时的高度；持续输出XY纠偏速度
 inline constexpr double VISUAL_DROP_CLIMB_RELEASE_M = 0.50; // 0.35→0.5(2026-09-24 仿真第 15 轮：回升每局再省 1.8 s，倾角无变化)。 回升到离返回高度 <此值(m)就恢复探索，剩余高度边飞边爬(障碍点云按世界高度截取、柱子全高，低 0.35 m 不影响避障)。原来锁 XY 等高度进容差，每次约多等 2 s。0=旧行为
-inline constexpr double VISUAL_DROP_RELEASE_WAIT_S = 0.0; // 串口写出完成(或失败)后，锁XY并保持投放高度等待此时长(s)再回升：给电磁铁断电、包裹脱离留时间。
+inline constexpr double VISUAL_DROP_RELEASE_WAIT_S = 2.0; // 串口写出完成(或失败)后，锁XY并保持投放高度等待此时长(s)再回升：给电磁铁断电、包裹脱离留时间。
                                                           //   计时从主控回报串口结果那一拍起算，是固定物理等待，漂移/定位中断都不重置。0=写出后立即回升(旧行为)
 // Z到位容差使用主控的params::TOL_Z；下降/回升速度上限当前均不得超过0.60m/s。
 
@@ -422,7 +422,7 @@ inline constexpr int    VIZ_PERIOD_MS   = 50;    // 20Hz 刷新 OpenCV 弹窗（
 
 // ---- 飞机本体 ----
 //   雷达为中心、半径 ROBOT_RADIUS 的圆都算飞机，绝不能碰障碍。
-inline constexpr double ROBOT_RADIUS = 0.30;   // 飞机半径 (m)，碰撞判定+自身回波滤除都用它。真机实测 30cm
+inline constexpr double ROBOT_RADIUS = 0.4;   // 飞机半径 (m)，碰撞判定+自身回波滤除都用它。真机实测 30cm
 
 // ---- 点云预处理 / 聚类（obstacle_map）----
 inline constexpr double GROUND_Z      = 0.60;   // ★点云高度窗口·下限(世界z,m)★ 低于此的点丢弃(地面/近地杂物)。飞行高1m→取0.5滤地面
