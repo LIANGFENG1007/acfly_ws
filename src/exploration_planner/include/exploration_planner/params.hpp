@@ -152,8 +152,8 @@ inline constexpr int CORRIDOR_CONFIRM_FRAMES = 3;
 inline constexpr double CORRIDOR_CLOUD_TIMEOUT_S = 0.50; // 本机连续未收到新点云帧的时长，不与传感器时钟相减
 inline constexpr double CORRIDOR_CLOUD_WINDOW_S = 1.00; // 累计真实墙面点；新数据/门洞射线仍受独立超时检查
 inline constexpr double CORRIDOR_POSE_TIMEOUT_S = 0.30; // 本机连续未收到新有效里程计帧的时长；探索/归航/通道共用
-inline constexpr double CORRIDOR_Z_BELOW = 0.60; // 相对当前飞机高度的点云截取下界(m)
-inline constexpr double CORRIDOR_Z_ABOVE = 0.10; // 相对当前飞机高度的点云截取上界(m)
+inline constexpr double CORRIDOR_Z_BELOW = 0.30; // 相对当前飞机高度的点云截取下界(m)
+inline constexpr double CORRIDOR_Z_ABOVE = 0.30; // 相对当前飞机高度的点云截取上界(m)
 // ★走廊低空穿越(2026-09-25 用户要求)★：到达探索终点后【先转头】到 CORRIDOR_INITIAL_YAW_DEG，转好后原地(XY 定点、保持航向)
 //   降到 CORRIDOR_FLIGHT_Z，到位后才按原流程横移进入口、穿门、到 H；之后走廊全程保持该高度。
 inline constexpr bool   CORRIDOR_LOWER_ENABLED = true;
