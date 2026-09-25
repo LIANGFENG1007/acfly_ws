@@ -15,7 +15,7 @@ namespace params {
 //   true  = 先探索，覆盖率达标后去探索终点，再执行通道任务。
 //   false = 跳过探索和视觉/插点访问，起飞后直接去探索终点，再执行通道任务。
 //   直达终点仍使用原有避障与场地安全检查；场地边界请填写实际范围。
-inline constexpr bool EXPLORATION_ENABLED = true;
+inline constexpr bool EXPLORATION_ENABLED = false;
 
 // 探索终点到配置边界的最小距离(m)。0 = 终点中心可到边界，不能越界。
 // 只放宽前往探索终点的末段；普通探索/视觉目标仍使用原安全边距。
@@ -64,9 +64,10 @@ inline constexpr double VISUAL_DROP_HEIGHT_M = 0.15;     // 投放时雷达相�
 //   投掷目标 Z = 起飞Z + VISUAL_DROP_HEIGHT_M + err(目标位置)，让远处投掷的真实离地高度也是 0.15 m。
 //   ★只作用于投掷这一个高度★(下降对准/释放)；巡航、采样、回升等其他高度一律不矫正(用户要求)。
 //   前提：起飞点与起飞机头朝向与实测时一致(SLAM 坐标系随起飞位姿建立)。换场地/换起飞朝向要重新录包拟合。全置 0 = 不补偿
-//   ★fly_mission params.hpp 的 VISION_Z_SLOPE_X/Y(发给视觉的 z 矫正)用的是同一组值，改这里要一起改★
-inline constexpr double VISUAL_DROP_Z_SLOPE_X = -0.0338;  // 每米 x 的 SLAM Z 误差(m/m)
-inline constexpr double VISUAL_DROP_Z_SLOPE_Y = 0.0016;   // 每米 y 的 SLAM Z 误差(m/m)
+//   ★fly_mission params.hpp 的 VISION_Z_SLOPE_X/Y(发给视觉的 z 矫正)必须与 SLAM_Z_DRIFT_X/Y 同值，改这里要一起改★
+inline constexpr double SLAM_Z_DRIFT_X = -0.0338;         // SLAM Z 实测漂移：每米 x 的 Z 读数误差(m/m)。投掷高度补偿与走廊点云地面保护共用
+inline constexpr double SLAM_Z_DRIFT_Y = 0.0016;          // 同上，每米 y
+inline constexpr bool   VISUAL_DROP_Z_COMP_ENABLED = true; // 投掷高度是否按上面的漂移补偿(false=投掷用原 0.15 不补偿；不影响走廊地面保护)
 inline constexpr double VISUAL_DROP_Z_COMP_MAX = 0.40;    // 补偿量限幅(m)，防坐标异常时下降过猛；场地内最大约 0.31 m
 inline constexpr double VISUAL_DROP_XY_TOL_M = 0.10;     // 包裹水平到位容差(m)：经安装偏移补偿后的包裹XY距视觉目标≤此值即到位，不要求速度降到零
 inline constexpr double VISUAL_DROP_STABLE_S = 2.0;      // 提前投放所需连续稳定时间(s)：包裹XY和雷达Z均到位；超出任一容差则重新计这段时间
@@ -153,6 +154,13 @@ inline constexpr double CORRIDOR_CLOUD_WINDOW_S = 1.00; // 累计真实墙面点
 inline constexpr double CORRIDOR_POSE_TIMEOUT_S = 0.30; // 本机连续未收到新有效里程计帧的时长；探索/归航/通道共用
 inline constexpr double CORRIDOR_Z_BELOW = 0.60; // 相对当前飞机高度的点云截取下界(m)
 inline constexpr double CORRIDOR_Z_ABOVE = 0.10; // 相对当前飞机高度的点云截取上界(m)
+// ★走廊低空穿越(2026-09-25 用户要求)★：到达探索终点后【先转头】到 CORRIDOR_INITIAL_YAW_DEG，转好后原地(XY 定点、保持航向)
+//   降到 CORRIDOR_FLIGHT_Z，到位后才按原流程横移进入口、穿门、到 H；之后走廊全程保持该高度。
+inline constexpr bool   CORRIDOR_LOWER_ENABLED = true;
+inline constexpr double CORRIDOR_FLIGHT_Z = 0.05;      // 走廊飞行高度(绝对 SLAM Z，m)：用户从起点开雷达、带到终点实测的读数，已含该处漂移，不再矫正
+inline constexpr double CORRIDOR_DESCEND_MPS = 0.50;   // 降到走廊高度的垂直限速(m/s)，用户定 0.5；主控上限 0.6
+inline constexpr double CORRIDOR_Z_TOL_M = 0.05;       // 实际高度与走廊高度差小于此值(m)才开始横移进入口
+inline constexpr double CORRIDOR_CLOUD_FLOOR_MARGIN_M = 0.10; // 走廊点云切片下界不低于"起飞雷达高度+该处 SLAM Z 漂移(SLAM_Z_DRIFT_X/Y)+此余量"：低空时不把地面当墙/门
 inline constexpr double CORRIDOR_SELF_RADIUS = 0.10; // 仅去掉雷达自身近距离回波(m)
 inline constexpr double CORRIDOR_SENSOR_RANGE = 6.0;
 inline constexpr double CORRIDOR_CLOUD_MAX_YAW_RATE = 0.60; // 更快旋转时不更新走廊点云，防拖影

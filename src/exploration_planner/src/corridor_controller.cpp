@@ -69,6 +69,7 @@ void CorridorController::start(const Vec2& red, double now)
     red_ = red;
     rotation_hold_.begin(red);
     heading_recovery_ = false;
+    rotation_done_ = false;
     last_update_ = now;
     transition(configured_ ? CorridorPhase::Rotate : CorridorPhase::WaitRoute);
 }
@@ -357,9 +358,15 @@ CorridorCommand CorridorController::updateMotion(const Vec2& position, double ya
         auto cmd = rotateAt(rotation_hold_, position, yaw, vf, vl, dt);
         cmd.status = "Rotate to entry heading with XY hold";
         const double error = angle(cfg_.initial_yaw - yaw);
-        if (stable(std::fabs(error) <= cfg_.heading_tolerance, now)) {
-            transition(CorridorPhase::Entry);
-            cmd.status = "Heading aligned: entering corridor";
+        if (!rotation_done_ && stable(std::fabs(error) <= cfg_.heading_tolerance, now)) rotation_done_ = true;
+        if (rotation_done_) {
+            // 必须先转头、再降高：转好后仍在红点 XY 定点并保持航向，等降到走廊高度才横移进入口。
+            if (!cfg_.descend_before_entry || altitude_ready_) {
+                transition(CorridorPhase::Entry);
+                cmd.status = "Heading aligned: entering corridor";
+            } else {
+                cmd.status = "Heading aligned: descending to corridor height with XY hold";
+            }
         }
         return cmd;
     }

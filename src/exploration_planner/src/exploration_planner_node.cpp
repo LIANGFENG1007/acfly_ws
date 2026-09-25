@@ -117,9 +117,14 @@ public:
         dcfg.entry_speed = dd("visual_drop_entry_speed_mps", params::VISUAL_DROP_ENTRY_SPEED_MPS);
         dcfg.sample_seconds = dd("visual_drop_sample_s", params::VISUAL_DROP_SAMPLE_S);
         dcfg.drop_height = dd("visual_drop_height_m", params::VISUAL_DROP_HEIGHT_M);
-        dcfg.z_slope_x = dd("visual_drop_z_slope_x", params::VISUAL_DROP_Z_SLOPE_X);
-        dcfg.z_slope_y = dd("visual_drop_z_slope_y", params::VISUAL_DROP_Z_SLOPE_Y);
-        dcfg.z_comp_max = std::max(0.0, dd("visual_drop_z_comp_max", params::VISUAL_DROP_Z_COMP_MAX));
+        // SLAM Z 实测漂移：走廊点云地面保护始终使用；投掷高度补偿由单独开关决定(关补偿不影响走廊)。
+        z_slope_x_ = dd("slam_z_drift_x", params::SLAM_Z_DRIFT_X);
+        z_slope_y_ = dd("slam_z_drift_y", params::SLAM_Z_DRIFT_Y);
+        z_comp_max_ = std::max(0.0, dd("visual_drop_z_comp_max", params::VISUAL_DROP_Z_COMP_MAX));
+        const bool drop_z_comp = declare_parameter<bool>("visual_drop_z_comp_enabled", params::VISUAL_DROP_Z_COMP_ENABLED);
+        dcfg.z_slope_x = drop_z_comp ? z_slope_x_ : 0.0;
+        dcfg.z_slope_y = drop_z_comp ? z_slope_y_ : 0.0;
+        dcfg.z_comp_max = z_comp_max_;
         dcfg.xy_tolerance = dd("visual_drop_xy_tol_m", params::VISUAL_DROP_XY_TOL_M);
         dcfg.stable_seconds = dd("visual_drop_stable_s", params::VISUAL_DROP_STABLE_S);
         dcfg.timeout_seconds = dd("visual_drop_timeout_s", params::VISUAL_DROP_TIMEOUT_S);
@@ -204,6 +209,12 @@ public:
         dcfg.observation_gap = ccfg_.pose_timeout;
         visual_drop_ = VisualDrop(dcfg);
         corridor_z_below_ = dd("corridor_z_below", params::CORRIDOR_Z_BELOW);
+        corridor_lower_enabled_ = declare_parameter<bool>("corridor_lower_enabled", params::CORRIDOR_LOWER_ENABLED);
+        corridor_flight_z_ = dd("corridor_flight_z", params::CORRIDOR_FLIGHT_Z);
+        corridor_descend_speed_ = std::clamp(dd("corridor_descend_mps", params::CORRIDOR_DESCEND_MPS), 0.05, 0.6);
+        corridor_z_tol_ = std::max(0.01, dd("corridor_z_tol_m", params::CORRIDOR_Z_TOL_M));
+        corridor_cloud_floor_margin_ = dd("corridor_cloud_floor_margin_m", params::CORRIDOR_CLOUD_FLOOR_MARGIN_M);
+        ccfg_.descend_before_entry = corridor_lower_enabled_;
         corridor_z_above_ = dd("corridor_z_above", params::CORRIDOR_Z_ABOVE);
         corridor_self_radius_ = dd("corridor_self_radius", params::CORRIDOR_SELF_RADIUS);
         corridor_sensor_range_ = dd("corridor_sensor_range", params::CORRIDOR_SENSOR_RANGE);
@@ -933,11 +944,21 @@ private:
         const double received_at = steady_seconds();
         const CloudXYZ xyz(*msg);
         double px, py, pz, wz; bool ok;
+        double home_z = std::numeric_limits<double>::quiet_NaN();
         {
             std::lock_guard<std::mutex> lk(mtx_);
             px = px_; py = py_; ok = has_pose_;
             pz = pz_;
             wz = yaw_rate_est_;
+            if (drop_context_valid()) home_z = drop_context_->home_z;
+        }
+        // 走廊点云高度切片的下界。低空穿越(降到走廊高度)时 pz-z_below 会切到地面，地面点会被当成墙/门：
+        //   下界不低于"起飞雷达高度 + 该处 SLAM Z 实测漂移 + 地面余量"(地面在 SLAM 里随位置按同一漂移偏低)。
+        //   正常巡航高度时这道下限低于 pz-z_below，不起作用。
+        double z_low = pz - corridor_z_below_;
+        if (std::isfinite(home_z)) {
+            const double drift = std::clamp(z_slope_x_ * px + z_slope_y_ * py, -z_comp_max_, z_comp_max_);
+            z_low = std::max(z_low, home_z + drift + corridor_cloud_floor_margin_);
         }
 
         // Keep receipt separate from acceptance, so a held entry can report
@@ -955,6 +976,7 @@ private:
         if (!rejection.empty()) {
             std::lock_guard<std::mutex> lk(mtx_);
             corridor_cloud_received_at_ = received_at;
+            corridor_cloud_z_low_ = z_low;
             corridor_cloud_raw_points_ = raw_points;
             corridor_cloud_height_points_ = corridor_cloud_kept_points_ = 0;
             corridor_cloud_filter_reason_ = rejection;
@@ -971,7 +993,7 @@ private:
                 if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) return;
                 min_z = std::min(min_z, static_cast<double>(z));
                 max_z = std::max(max_z, static_cast<double>(z));
-                if (z < pz - corridor_z_below_ || z > pz + corridor_z_above_) return;
+                if (z < z_low || z > pz + corridor_z_above_) return;
                 ++height_points;
                 const double d = std::hypot(x - px, y - py);
                 if (d < corridor_self_radius_ || d > corridor_sensor_range_) return;
@@ -979,6 +1001,7 @@ private:
             });
             std::lock_guard<std::mutex> lk(mtx_);
             corridor_cloud_received_at_ = received_at;
+            corridor_cloud_z_low_ = z_low;
             corridor_cloud_raw_points_ = raw_points;
             corridor_cloud_height_points_ = height_points;
             corridor_cloud_kept_points_ = corridor_points.size();
@@ -3344,8 +3367,15 @@ private:
                         "[走廊里程计] 距本机收到新有效帧 %.3fs，超时阈值 %.3fs；检查 /aft_mapped_to_init 是否断流或时间戳停止推进",
                         pose_freshness_.age(local_now), ccfg_.pose_timeout);
                 }
+                if (corridor_lower_enabled_)
+                    corridor_->set_altitude_ready(std::abs(pz_ - corridor_flight_z_) <= corridor_z_tol_);
                 corridor_command_ = corridor_->update({px_, py_}, yaw_, v_fwd_est_, v_lat_est_,
                                                        local_now, pose_fresh);
+                // 先转头、转好后才降高：转头完成(rotationDone)起，走廊全程高度 = 走廊高度(绝对 SLAM Z，用户实测值，不做漂移矫正)。
+                if (corridor_lower_enabled_ && corridor_->rotationDone()) {
+                    drop_command_altitude_ = corridor_flight_z_;
+                    drop_command_speed_ = corridor_descend_speed_;
+                }
                 cmd.twist.linear.x = corridor_command_.forward;
                 cmd.twist.linear.y = corridor_command_.lateral;
                 cmd.twist.angular.z = corridor_command_.yaw_rate;
@@ -3374,7 +3404,7 @@ private:
                             ? local_now - corridor_cloud_received_at_ : -1.0,
                         corridor_cloud_filter_reason_.c_str(), corridor_cloud_raw_points_,
                         corridor_cloud_height_points_, corridor_cloud_kept_points_,
-                        pz_ - corridor_z_below_, pz_ + corridor_z_above_,
+                        corridor_cloud_z_low_, pz_ + corridor_z_above_,
                         corridor_cloud_min_z_, corridor_cloud_max_z_,
                         corridor_->entry().x, corridor_->entry().y, corridor_->goal().x, corridor_->goal().y);
                 }
@@ -4062,6 +4092,11 @@ private:
     builtin_interfaces::msg::Time goal_stamp_;
     std_msgs::msg::Header goal_header_;
     double corridor_z_below_ = 0.3, corridor_z_above_ = 0.3;
+    bool   corridor_lower_enabled_ = params::CORRIDOR_LOWER_ENABLED;
+    double corridor_flight_z_ = params::CORRIDOR_FLIGHT_Z, corridor_descend_speed_ = params::CORRIDOR_DESCEND_MPS;
+    double corridor_z_tol_ = params::CORRIDOR_Z_TOL_M, corridor_cloud_floor_margin_ = params::CORRIDOR_CLOUD_FLOOR_MARGIN_M;
+    double corridor_cloud_z_low_ = 0.0;
+    double z_slope_x_ = 0.0, z_slope_y_ = 0.0, z_comp_max_ = 0.0;   // SLAM Z 实测漂移(params::SLAM_Z_DRIFT_X/Y)
     double corridor_self_radius_ = 0.1, corridor_sensor_range_ = 6.0;
     double corridor_cloud_max_yaw_rate_ = 0.6;
     SensorFreshness pose_freshness_, cloud_freshness_;

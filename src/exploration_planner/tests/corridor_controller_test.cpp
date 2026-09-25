@@ -134,7 +134,33 @@ void startInside(Simulation& simulation) {
 
 }  // namespace
 
+// 低空穿越：必须先转头，转好后原地(XY 定点、保持航向)等降到走廊高度，到位才横移进入口，之后流程不变。
+void descendBeforeEntry() {
+    Simulation s(1.0);
+    s.scene.config.descend_before_entry = true;
+    s.controller = CorridorController(s.scene.config);
+    require(s.controller.configure(s.scene.entry, s.scene.h), "descent route is accepted");
+    s.controller.start(s.scene.red, s.now);
+    s.controller.set_altitude_ready(false);
+    for (int i = 0; i < 1500 && !s.controller.rotationDone(); ++i) s.step();
+    require(s.controller.rotationDone(), "heading aligns before descending");
+    const Vec2 held = s.position;
+    for (int i = 0; i < 300; ++i) {
+        s.step();
+        require(s.controller.phase() == CorridorPhase::Rotate, "moved toward the entry before reaching corridor height");
+    }
+    require(distance(s.position, held) < 0.10, "XY not held while descending");
+    require(std::abs(std::atan2(std::sin(s.yaw + kPi / 2.0), std::cos(s.yaw + kPi / 2.0))) < 0.10,
+            "heading not held while descending");
+    s.controller.set_altitude_ready(true);
+    s.step();
+    require(s.controller.phase() == CorridorPhase::Entry, "did not enter after reaching corridor height");
+    for (int i = 0; i < 6000 && s.controller.phase() != CorridorPhase::Done; ++i) s.step();
+    require(s.controller.phase() == CorridorPhase::Done, "corridor flow after descent did not finish");
+}
+
 int main() {
+    descendBeforeEntry();
     runMission(0.8);
     runMission(1.0);
     runMission(1.5);

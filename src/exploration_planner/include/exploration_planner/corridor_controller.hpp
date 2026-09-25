@@ -11,6 +11,8 @@ namespace exploration {
 struct CorridorConfig {
     CorridorPerceptionConfig perception;
     double initial_yaw = -1.5707963267948966;
+    // 转到 initial_yaw 后先原地(XY 定点、保持航向)等外部降到走廊高度，再横移进入口(set_altitude_ready)。false=转好即进入(旧行为)
+    bool descend_before_entry = false;
     double entry_speed = 0.30;
     double cruise_speed = 0.30;
     double gate_speed = 0.30;
@@ -67,6 +69,9 @@ public:
     CorridorCommand update(const Vec2& position, double yaw, double forward_velocity,
                            double lateral_velocity, double now, bool pose_fresh);
     bool configured() const { return configured_; }
+    // 转头已完成(之后走廊全程用走廊高度)；外部每拍告知实际高度是否已到走廊高度。
+    bool rotationDone() const { return rotation_done_; }
+    void set_altitude_ready(bool ready) { altitude_ready_ = ready; }
     bool active() const { return phase_ != CorridorPhase::Idle; }
     bool startedMoving() const;
     CorridorPhase phase() const { return phase_; }
@@ -87,6 +92,7 @@ private:
     PositionHold rotation_hold_, heading_hold_, waiting_hold_;
     bool waiting_for_evidence_ = false;
     bool heading_recovery_ = false;
+    bool rotation_done_ = false, altitude_ready_ = true;
     struct Cloud { double stamp; Path2 points; };
     std::deque<Cloud> clouds_;
     Path2 points_;
