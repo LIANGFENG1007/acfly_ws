@@ -178,10 +178,6 @@ if(BUILD_TESTING)
     src/corridor_controller.cpp src/corridor_perception.cpp)
   target_compile_features(corridor_controller_test PRIVATE cxx_std_17)
   add_test(NAME corridor_controller_test COMMAND corridor_controller_test)
-  add_executable(corridor_centerline_test tests/corridor_centerline_test.cpp
-    src/corridor_controller.cpp src/corridor_perception.cpp)
-  target_compile_features(corridor_centerline_test PRIVATE cxx_std_17)
-  add_test(NAME corridor_centerline_test COMMAND corridor_centerline_test)
   add_executable(corridor_arena_test tests/corridor_arena_test.cpp
     src/corridor_controller.cpp src/corridor_perception.cpp)
   target_compile_features(corridor_arena_test PRIVATE cxx_std_17)

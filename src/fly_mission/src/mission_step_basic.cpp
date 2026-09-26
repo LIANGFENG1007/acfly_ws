@@ -327,9 +327,8 @@ void FlyMissionNode::exploration_drop_tick()
 void FlyMissionNode::publish_exploration_corridor_route(bool force)
 {
     const bool enabled = get_parameter("explore_corridor_enabled").as_bool();
-    // 走廊起点 = 探索终点(不再单独给入口点)；规划器到位后按雷达墙对自己找隧道中线
-    const double entry_x = explore_goal_x_;
-    const double entry_y = explore_goal_y_;
+    const double entry_x = get_parameter("corridor_entry_x").as_double();
+    const double entry_y = get_parameter("corridor_entry_y").as_double();
     const double h_x = get_parameter("corridor_h_x").as_double();
     const double h_y = get_parameter("corridor_h_y").as_double();
     const auto equal = [](double a, double b) {
@@ -360,14 +359,14 @@ void FlyMissionNode::publish_exploration_corridor_route(bool force)
         finish.pose.position.y = h_y;
         route.poses = {entry, finish};
         corridor_route_pub_->publish(route);
-        RCLCPP_INFO(get_logger(), "[过门] 发布探索终点 (%.2f, %.2f) → H 点 (%.2f, %.2f)",
+        RCLCPP_INFO(get_logger(), "[过门] 发布入口 (%.2f, %.2f)，H 点 (%.2f, %.2f)",
             entry_x, entry_y, h_x, h_y);
     } else if (!enabled) {
         corridor_route_pub_->publish(route); // 空路径显式关闭尚未开始的后续过门。
     } else {
         RCLCPP_WARN(get_logger(),
-            "[过门] 探索终点/H 坐标未配置：探索可继续，到红点后保高等待；"
-            "请填写 params.hpp 的 EXPLORE_GOAL_X/Y、CORRIDOR_H_X/Y 或对应 ROS 参数");
+            "[过门] 入口/H 坐标未配置：探索可继续，到红点后保高等待；"
+            "请填写 params.hpp 的 CORRIDOR_ENTRY_X/Y、CORRIDOR_H_X/Y 或对应 ROS 参数");
     }
 }
 

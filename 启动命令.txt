@@ -7,6 +7,8 @@ ros2 launch point_lio mapping_mid360.launch.py rviz:=false
 /bin/python3 /home/nvidia/ws_opencv/pose.py
 
 启动通信节点
+pkill -f mavros_node; sleep 1; fastdds shm clean; ros2 launch mavros acfly.launch.py
+
 ros2 launch mavros acfly.launch.py
 
 主控程序

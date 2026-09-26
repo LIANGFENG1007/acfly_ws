@@ -109,39 +109,24 @@ inline constexpr double VISION_STRAIGHT_APPROACH_M = 0.40;
 inline constexpr double VISION_TARGET_TOL_M = 0.10; // 精确目标到位位置容差(m)
 inline constexpr double VISION_TARGET_STOP_SPEED_MPS = 0.05; // 兼容旧配置保留，已不用于视觉目标悬停计时条件
 
-// 探索终点后的走廊任务。探索终点/H 坐标由 fly_mission 的参数区发送，均为 camera_init 系(不再需要入口点)。
+// 探索终点后的走廊任务。入口/H 坐标由 fly_mission 的参数区发送，均为 camera_init 系。
 // true: 到探索终点等待路线，然后转向、进入、穿门、到 H 才 finished。
 // false: 保留到探索终点即完成的流程。过门始终使用速度接口，以执行 0.3m/s 限速。
 inline constexpr bool CORRIDOR_ENABLED = true;
 inline constexpr double CORRIDOR_INITIAL_YAW_DEG = -90.0; // 首次转到此角度，随后入口/对中/穿门/前往H均保持此航向
-inline constexpr double CORRIDOR_WIDTH = 1.30; // ★隧道宽度(m)★ 1.5→1.30(2026-09-25 用户设定)：雷达按"间距≈此值的一对平行墙"找隧道，中点即中线
-// ★按宽度对中(2026-09-25 用户要求，取代入口点)★：只给探索终点和 H。到探索终点先转头→降到走廊高度→锁纵向(SLAM Y)，
-//   沿横向(SLAM X)平移到雷达测得的隧道中线(探索终点离隧道多远不需要知道)；前进时实时保持中线(涡流大)，
-//   只在离门前沿 CORRIDOR_GATE_ALIGN_M 内对准门中心，离开门后沿同样距离再回中线。H 只决定隧道在哪一侧和最后停的纵向位置。
-inline constexpr double CORRIDOR_WIDTH_TOL_M = 0.25;      // 两墙实测间距与 CORRIDOR_WIDTH 的允许偏差(m)，超出不认作隧道
-inline constexpr double CORRIDOR_CENTER_SEARCH_M = 4.0;   // 找墙对时以飞机为中心的横向搜索半径(m)，须大于探索终点到隧道远墙的距离
-inline constexpr double CORRIDOR_GATE_ALIGN_M = 0.60;     // ★离门多远开始/结束对准门中心(m)★ 用户定 60 cm；门外保持隧道中线
-inline constexpr double CORRIDOR_CENTER_KP = 1.00;        // 横向对中 P(1/s)：1.5→1.0(2026-09-25 实机反馈 1.5 太激进、晃得更大)。仿真测试里 1.5 最稳，实机响应更慢，偏大就振荡
-inline constexpr double CORRIDOR_CENTER_KD = 0.30;        // 横向实测速度阻尼
-inline constexpr double CORRIDOR_LATERAL_MAX_SPEED = 0.20; // 横向纠偏速度上限(m/s)，单独限幅不被前进速度挤占。0.3→0.2(实机反馈激进)
-inline constexpr double CORRIDOR_LATERAL_ACCEL = 0.30;    // 横向指令斜坡(m/s²)：0.6→0.3(实机反馈激进；进门对准时横向目标跳变不再猛拽)
-inline constexpr double CORRIDOR_LATERAL_LATENCY_S = 0.40; // 横向响应延迟估计(s)：大横移(如门偏心)按 v·T+v²/2a≤误差 提前刹车，防止滑过门中心擦墙
-inline constexpr double CORRIDOR_SMITH_S = 0.0;           // 横向 Smith 预估窗口(s)，0=关。闭环测试扫描(72 组×4 种子)：实机延迟未知时窗口对不上反而更差，最优为关；实测出延迟后可试 0.2~0.3
-inline constexpr double CORRIDOR_LATERAL_BRAKE_ACCEL = 0.30; // 上述包络假设的实际刹车减速度(m/s²)：取 PX4 Gazebo 横向实测加速度能力 ~0.3(扫描 18 组×8 种子×3 响应模型，0 碰撞)；实机滞后更大可调小
-inline constexpr double CORRIDOR_WALL_LATENCY_S = 1.0;    // ★离墙净距包络★ 朝墙/门框横移时按 v·T+v²/2a≤机身侧面净距 限速(s)。门洞贴墙时只余几厘米，飞机横向刹停要 1 s 以上；
-                                                          //   离墙 0.3 m 以上时仍允许 ~0.2 m/s，不影响抗涡流；远离墙的纠偏不受限。0=关
-inline constexpr double CORRIDOR_WALL_BRAKE_ACCEL = 0.30; // 离墙净距包络的刹车减速度(m/s²)
-inline constexpr double CORRIDOR_MIN_FORWARD_SPEED = 0.20; // 隧道内前进最低速度(m/s)：太慢涡流里晃；只有门未确认/对不准过不去/阻挡/到 H 才低于它
-inline constexpr double CORRIDOR_CENTER_FILTER_S = 0.30;  // 中线估计低通(s)：滤掉单帧点云噪声，又能跟上漂移
-inline constexpr double CORRIDOR_ENTRY_CENTER_TOL = 0.05; // 横移到中线的完成容差(m)，到位后开始前进
+inline constexpr double CORRIDOR_WIDTH = 1.5; // 两侧墙搜索范围(m)，不把道路中线当成门中心
 inline constexpr double CORRIDOR_ROBOT_WIDTH = 0.64; // x500仿真含桨完整外廓(m)，实机按测量值调整
 // 实机 Point-LIO 默认输出；仿真 launch 在启动稠密转换节点后单独覆盖此参数。
 inline constexpr const char* CORRIDOR_CLOUD_TOPIC = "/cloud_registered";
 inline constexpr double CORRIDOR_MIN_GAP_EXTRA = 0.0; // 机宽以外额外要求(m)，默认不额外膨胀
-inline constexpr double CORRIDOR_ENTRY_SPEED = 0.30; // 锁纵向横移到隧道中线的速度上限(m/s)
+inline constexpr double CORRIDOR_ENTRY_SPEED = 0.30;
 inline constexpr double CORRIDOR_CRUISE_SPEED = 0.30;
+inline constexpr double CORRIDOR_MIN_FORWARD_SPEED = 0.30; // ★隧道里前进速度下限(m/s)★ 2026-09-26 用户定(0.2→0.3)：整个隧道都不低于它(涡流里太慢推不动)；只在快到 H、门还没确认时减速
+inline constexpr double CORRIDOR_LATERAL_SPEED = 0.35;     // ★隧道里横向纠偏速度上限(m/s)★ 和前进分开算；门前 0.6 m 内要横移到门中心，门偏得多要调大
+inline constexpr double CORRIDOR_LATERAL_ACCEL = 0.60;     // 隧道里横向指令斜坡(m/s²)
+inline constexpr double CORRIDOR_H_APPROACH_M = 1.20;      // 离 H 只剩这么远(m)时直接朝 H 飞：隧道墙可能在 H 前就结束(实机 H 前 0.17 m 墙就没了)
 inline constexpr double CORRIDOR_GATE_SPEED = 0.30; // 正对门中心穿越的速度上限(m/s)
-inline constexpr double CORRIDOR_ALIGN_SPEED = 0.20;
+inline constexpr double CORRIDOR_ALIGN_SPEED = 0.30;
 inline constexpr double CORRIDOR_YAW_KP = 1.60;
 inline constexpr double CORRIDOR_MAX_YAW_RATE = 0.60;
 inline constexpr double CORRIDOR_YAW_ACCEL = 1.20;
@@ -152,11 +137,11 @@ inline constexpr double CORRIDOR_VELOCITY_FILTER_S = 0.15; // 平移速度估计
 inline constexpr double CORRIDOR_ARRIVAL_HYSTERESIS = 1.50; // 到点后偏离超过此倍容差才重新对位
 inline constexpr double CORRIDOR_YAW_TOL_DEG = 5.0;
 inline constexpr double CORRIDOR_HEADING_STOP_DEG = 15.0;
-inline constexpr double CORRIDOR_POINT_TOL = 0.08;
+inline constexpr double CORRIDOR_POINT_TOL = 0.25;
 inline constexpr double CORRIDOR_STOP_SPEED = 0.04; // 兼容旧配置保留，转向和H点交接不再等待此速度
 inline constexpr double CORRIDOR_SETTLE_S = 0.25;
 inline constexpr double CORRIDOR_LOOKAHEAD = 0.25;
-inline constexpr double CORRIDOR_APPROACH_M = 1.20; // 提前在门前此距离附近完成对中(m)，中间点不要求停稳
+inline constexpr double CORRIDOR_APPROACH_M = 0.80; // 提前在门前此距离附近完成对中(m)，中间点不要求停稳
 inline constexpr bool CORRIDOR_CONTINUOUS_APPROACH = true; // 持续前进并对门中心，原启动命令直接生效
 inline constexpr double CORRIDOR_CONTINUOUS_CENTER_RESERVE = 0.15; // 机体前缘之外的门前对中预留(m)
 inline constexpr double CORRIDOR_CONTINUOUS_TIME_MARGIN = 0.50; // 横向对中时间估计的附加余量(s)
@@ -165,20 +150,20 @@ inline constexpr double CORRIDOR_CENTER_PREDICTION_S = 0.40; // 对中放行同�
 inline constexpr double CORRIDOR_EXIT_M = 0.50; // 门后沿当前门中心直行此距离(m)再向下一门/H偏移；空间不足时缩短。
                                                 // 1.0→0.5(2026-09-23)：开口靠墙时(0.75m 开口/0.64m 机宽)出门段贴墙，r01 实测机身离墙 2.7cm 飞了 1m；
                                                 // 机身完整越过门板只需 半机宽+栅格≈0.36m，0.5m 仍是完整直线出门
-inline constexpr double CORRIDOR_CENTER_TOL = 0.015; // 穿越前对门中心横向误差(m)
+inline constexpr double CORRIDOR_CENTER_TOL = 0.15; // 穿越前对门中心横向误差(m)
 inline constexpr double CORRIDOR_GATE_ASSOC_M = 0.15;
 inline constexpr int CORRIDOR_CONFIRM_FRAMES = 3;
 inline constexpr double CORRIDOR_CLOUD_TIMEOUT_S = 0.50; // 本机连续未收到新点云帧的时长，不与传感器时钟相减
-inline constexpr double CORRIDOR_CLOUD_WINDOW_S = 1.00; // 累计真实墙面点；新数据/门洞射线仍受独立超时检查
+inline constexpr double CORRIDOR_CLOUD_WINDOW_S = 20.00; // 累计真实墙面点；新数据/门洞射线仍受独立超时检查
 inline constexpr double CORRIDOR_POSE_TIMEOUT_S = 0.30; // 本机连续未收到新有效里程计帧的时长；探索/归航/通道共用
 inline constexpr double CORRIDOR_Z_BELOW = 0.30; // 相对当前飞机高度的点云截取下界(m)
 inline constexpr double CORRIDOR_Z_ABOVE = 0.30; // 相对当前飞机高度的点云截取上界(m)
 // ★走廊低空穿越(2026-09-25 用户要求)★：到达探索终点后【先转头】到 CORRIDOR_INITIAL_YAW_DEG，转好后原地(XY 定点、保持航向)
-//   降到 CORRIDOR_FLIGHT_Z，到位后才锁纵向横移到隧道中线、穿门、到 H；之后走廊全程保持该高度。
+//   降到 CORRIDOR_FLIGHT_Z，到位后才按原流程横移进入口、穿门、到 H；之后走廊全程保持该高度。
 inline constexpr bool   CORRIDOR_LOWER_ENABLED = true;
 inline constexpr double CORRIDOR_FLIGHT_Z = 0.05;      // 走廊飞行高度(绝对 SLAM Z，m)：用户从起点开雷达、带到终点实测的读数，已含该处漂移，不再矫正
 inline constexpr double CORRIDOR_DESCEND_MPS = 0.50;   // 降到走廊高度的垂直限速(m/s)，用户定 0.5；主控上限 0.6
-inline constexpr double CORRIDOR_Z_TOL_M = 0.05;       // 实际高度与走廊高度差小于此值(m)才开始横移到隧道中线
+inline constexpr double CORRIDOR_Z_TOL_M = 0.05;       // 实际高度与走廊高度差小于此值(m)才开始横移进入口
 inline constexpr double CORRIDOR_CLOUD_FLOOR_MARGIN_M = 0.10; // 走廊点云切片下界不低于"起飞雷达高度+该处 SLAM Z 漂移(SLAM_Z_DRIFT_X/Y)+此余量"：低空时不把地面当墙/门
 inline constexpr double CORRIDOR_SELF_RADIUS = 0.10; // 仅去掉雷达自身近距离回波(m)
 inline constexpr double CORRIDOR_SENSOR_RANGE = 6.0;
