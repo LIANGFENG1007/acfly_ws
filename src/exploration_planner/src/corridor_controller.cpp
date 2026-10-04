@@ -463,9 +463,12 @@ CorridorCommand CorridorController::updateMotion(const Vec2& position, double ya
         auto cmd = rotateAt(rotation_hold_, position, yaw, vf, vl, dt);
         cmd.status = "Rotate to entry heading with XY hold";
         const double error = angle(cfg_.initial_yaw - yaw);
-        if (!rotation_done_ && stable(std::fabs(error) <= cfg_.heading_tolerance, now)) rotation_done_ = true;
-        if (rotation_done_) {
-            // 必须先转头、再降高：转好后仍在红点 XY 定点并保持航向，等降到走廊高度才横移进入口。
+        const bool heading_ready = std::fabs(error) <= cfg_.heading_tolerance;
+        if (!rotation_done_ && stable(heading_ready, now)) rotation_done_ = true;
+        // A heading reached earlier can drift while Z is still descending.
+        // Entry needs the current heading as well as the current altitude.
+        if (rotation_done_ && heading_ready) {
+            // XY到点后转向与外部降高并行；保持红点XY，航向和高度都到位才横移进入口。
             if (!cfg_.descend_before_entry || altitude_ready_) {
                 transition(CorridorPhase::Entry);
                 cmd.status = "Heading aligned: entering corridor";

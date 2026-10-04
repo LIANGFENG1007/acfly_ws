@@ -128,6 +128,26 @@ bool required_config_valid(const GlobalConfig& cfg)
         std::isfinite(cfg.required_connector_length) && cfg.required_connector_length > 0.0;
 }
 
+// Only a complete, monotone straight route gets the home boundary exception.
+// Collinear resampling must preserve it; a curved detour must not inherit it.
+bool direct_required_shape(const Path2& path, const Vec2& goal, const GlobalConfig& cfg)
+{
+    if (!cfg.required_direct_path || path.size() < 2 ||
+        !inside_field_margin(goal, cfg, required_field_margin(cfg)) ||
+        std::hypot(path.back().x - goal.x, path.back().y - goal.y) > 1e-6) return false;
+    const Vec2 start = path.front();
+    const double dx = goal.x - start.x, dy = goal.y - start.y;
+    double previous = -1e-9;
+    for (const Vec2& p : path) {
+        if (!inside_field_margin(p, cfg, required_field_margin(cfg)) ||
+            segment_distance2(p, start, goal) > 1e-12) return false;
+        const double progress = (p.x - start.x) * dx + (p.y - start.y) * dy;
+        if (progress < previous - 1e-9) return false;
+        previous = progress;
+    }
+    return true;
+}
+
 bool terminal_extension_anchor(const Vec2& point, const Vec2& goal,
                                const GlobalConfig& cfg, Vec2& anchor)
 {
@@ -164,6 +184,19 @@ bool required_field_shape(const Path2& path, const Vec2& goal, const GlobalConfi
     terminal_start = path.size() - 1;
     if (path_inside_safe_field(path, cfg)) return true;
     if (inside_field_margin(goal, cfg, cfg.wall_margin)) return false;
+
+    if (cfg.required_direct_path) {
+        // Home may finish a necessary obstacle detour with one long straight
+        // leg. Keeping the old one-metre grid connector here manufactures a
+        // second turn in clear space just before the goal.
+        terminal_start = path.size() - 2;
+        while (terminal_start > 0 &&
+               segment_distance2(path[terminal_start], path[terminal_start - 1], goal) <= 1e-12)
+            --terminal_start;
+        const Path2 prefix(path.begin(), path.begin() + terminal_start + 1);
+        const Path2 terminal(path.begin() + terminal_start, path.end());
+        return path_inside_safe_field(prefix, cfg) && direct_required_shape(terminal, goal, cfg);
+    }
 
     Vec2 anchor;
     bool found_inside = false;
@@ -276,6 +309,31 @@ Path2 simplify(const Path2& pts, const Obstacles& obs, double rr, double robot_r
     return out;
 }
 
+// Visibility string pulling for home. At each anchor, connect to the farthest
+// later point reachable by one continuously checked segment. Goal visibility
+// is tested first, regardless of distance; all other edges keep the normal
+// field inset. Thus no retained corner can be skipped safely to a later guide.
+Path2 simplify_home_path(const Path2& raw, const Obstacles& obs, const GlobalConfig& cfg)
+{
+    if (raw.size() < 2) return {};
+    Path2 result{raw.front()};
+    size_t anchor = 0;
+    while (anchor + 1 < raw.size()) {
+        size_t next = raw.size() - 1;
+        for (; next > anchor; --next) {
+            const bool clear = next + 1 == raw.size()
+                ? required_path_clear(raw[anchor], {raw[anchor], raw[next]}, raw.back(), obs, cfg)
+                : field_segment_free(raw[anchor], raw[next], cfg) &&
+                  segment_free(raw[anchor], raw[next], obs, cfg.robot_radius + cfg.inflate, cfg.robot_radius);
+            if (clear) break;
+        }
+        if (next == anchor) return {};
+        result.push_back(raw[next]);
+        anchor = next;
+    }
+    return result;
+}
+
 }  // namespace
 
 static GlobalResult plan_path(const Vec2& start, const Vec2& goal,
@@ -297,6 +355,17 @@ static GlobalResult plan_path(const Vec2& start, const Vec2& goal,
          !std::isfinite(goal.x) || !std::isfinite(goal.y) ||
          !segment_free(start, start, obs, cfg.robot_radius + cfg.inflate, cfg.robot_radius)))
         return res;
+
+    // For home, try the actual start-to-goal line before any grid/heading-cone
+    // search. The task boundary is virtual; real obstacle inflation still applies.
+    if (required_goal && cfg.required_direct_path &&
+        required_path_clear(start, {start, goal}, goal, obs, cfg)) {
+        res.path = {start, goal};
+        res.start_blocked = !inside_field_margin(start, cfg, cfg.wall_margin) ||
+            point_blocked(start.x, start.y, obs, cfg.robot_radius + cfg.inflate);
+        res.ok = true;
+        return res;
+    }
 
     // ---- 建栅格 + 膨胀障碍 + 四面墙 ----
     //   ★热点★：本函数在【原地转身找解】期间每拍(50Hz)都跑，且持有节点 mtx_。
@@ -525,13 +594,14 @@ static GlobalResult plan_path(const Vec2& start, const Vec2& goal,
             const Vec2 point = exact_point(cix, ciy);
             const double distance = std::hypot(point.x - goal.x, point.y - goal.y);
             size_t terminal_start = 0;
-            // The virtual goal can only be reached by a verified final connector;
-            // normal grid expansion keeps the unchanged full field inset.
-            if (distance <= cfg.required_connector_length + 1e-9 &&
+            // Home connects any visible search node to the exact goal. No
+            // fixed approach radius participates in route geometry; normal
+            // grid expansion still keeps the unchanged full field inset.
+            if ((cfg.required_direct_path || distance <= cfg.required_connector_length + 1e-9) &&
                 (cur == start_idx || inside_field_margin(point, cfg, cfg.wall_margin)) &&
                 required_field_shape({point, goal}, goal, cfg, terminal_start) &&
-                connector_cone_clear(point, goal) &&
-                segment_free(point, goal, obs, rr, cfg.robot_radius)) {
+                segment_free(point, goal, obs, rr, cfg.robot_radius) &&
+                connector_cone_clear(point, goal)) {
                 const double ng = gscore[cur] + distance;
                 if (ng < gscore[goal_idx]) {
                     gscore[goal_idx] = ng;
@@ -588,7 +658,9 @@ static GlobalResult plan_path(const Vec2& start, const Vec2& goal,
 
     // ---- 串拉简化成稀疏拐点 ----
     if (required_goal) {
-        if (inside_field_margin(goal, cfg, cfg.wall_margin)) {
+        if (cfg.required_direct_path) {
+            res.path = simplify_home_path(raw, obs, cfg);
+        } else if (inside_field_margin(goal, cfg, cfg.wall_margin)) {
             // Interior goals need no boundary exception. Simplify through the
             // exact endpoint as well, otherwise a grid-selected terminal anchor
             // introduces a needless bend even when the whole straight line is free.
@@ -638,6 +710,15 @@ bool required_path_clear(const Vec2& cur, const Path2& path, const Vec2& goal,
 {
     if (!required_config_valid(cfg) || !std::isfinite(cur.x) || !std::isfinite(cur.y) ||
         point_blocked(goal.x, goal.y, obs, cfg.robot_radius + cfg.inflate)) return false;
+    if (direct_required_shape(path, goal, cfg)) {
+        if (!inside_field_margin(cur, cfg, required_field_margin(cfg))) return false;
+        // The reduced field is convex: an in-bounds current pose can rejoin
+        // the line without crossing the field boundary. Check all remaining
+        // obstacle segments, including the actual rejoin from a drifted pose.
+        return visit_remaining_segments(cur, path, [&](const Vec2& a, const Vec2& b) {
+            return segment_free(a, b, obs, cfg.robot_radius + cfg.inflate, cfg.robot_radius);
+        });
+    }
     size_t terminal_start = 0;
     if (!required_field_shape(path, goal, cfg, terminal_start)) return false;
     size_t projected_segment = 0;
@@ -655,7 +736,8 @@ bool required_path_clear(const Vec2& cur, const Path2& path, const Vec2& goal,
                 (!terminal_rejoin || inside_field_margin(b, cfg, cfg.wall_margin));
             if (!normal_rejoin) {
                 if (!terminal_rejoin || !inside_field_margin(a, cfg, required_field_margin(cfg)) ||
-                    std::hypot(a.x - goal.x, a.y - goal.y) > cfg.required_connector_length + 1e-9)
+                    (!cfg.required_direct_path &&
+                     std::hypot(a.x - goal.x, a.y - goal.y) > cfg.required_connector_length + 1e-9))
                     return false;
             }
         }

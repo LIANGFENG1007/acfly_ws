@@ -11,7 +11,7 @@ namespace exploration {
 struct CorridorConfig {
     CorridorPerceptionConfig perception;
     double initial_yaw = -1.5707963267948966;
-    // 转到 initial_yaw 后先原地(XY 定点、保持航向)等外部降到走廊高度，再横移进入口(set_altitude_ready)。false=转好即进入(旧行为)
+    // 转向期间可同时降高；航向和外部高度反馈(set_altitude_ready)都到位才横移进入口。false=只等待航向
     bool descend_before_entry = false;
     double entry_speed = 0.30;
     double cruise_speed = 0.30;

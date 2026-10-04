@@ -240,6 +240,107 @@ void interior_required_routes_have_no_artificial_connector_bend()
     require(detour.path.size() > 2,
             "interior connector simplification removed a necessary obstacle detour");
 }
+void home_routes_prefer_the_complete_straight_line()
+{
+    GlobalConfig cfg{-.5, -3.8, 9, 4.6, .04, .4, .10, .60};
+    cfg.required_goal_field_margin = 0;
+    cfg.required_direct_path = true;
+    cfg.head_cone_half = .4;
+    cfg.head_cone_radius = .8;
+    const Vec2 goal{7.75, 4.3};
+    for (Vec2 start : {Vec2{0,0}, {5.72,-1.39}, {3.24,-2.07}, {5.8,4}, {7.1,3.8}, goal}) {
+        for (double yaw : {0.0, 1.5, 3.0, -1.5}) {
+            const auto route = plan_required_path(start, goal, {}, cfg, yaw);
+            validate(route, start, goal, {}, cfg);
+            require(route.path.size() == 2, "empty home route retained a grid/heading connector bend");
+        }
+    }
+    // A line parallel to the boundary cannot intersect the ordinary inset.
+    // It remains legal for home, including collinear trajectory resampling.
+    const Vec2 start{1,4.6}, edge_goal{8,4.6};
+    auto route = plan_required_path(start, edge_goal, {}, cfg);
+    validate(route, start, edge_goal, {}, cfg);
+    require(route.path.size()==2, "clear boundary-parallel home route was bent inward");
+    require(required_path_clear({3,4.45}, {start,{3,4.6},{5,4.6},edge_goal}, edge_goal, {}, cfg),
+            "resampling or tracking error lost home straight-route permission");
+    require(!required_path_clear({3,4.61}, route.path, edge_goal, {}, cfg),
+            "home direct rejoin escaped the actual field");
+    require(!required_path_clear(start, {start,{3,4.3},edge_goal}, edge_goal, {}, cfg),
+            "a curved boundary detour inherited permission for a straight route");
+    require(!plan_required_path({0,0}, {9.01,4.3}, {}, cfg).ok,
+            "home direct path accepted an out-of-field endpoint");
+    cfg.required_goal_field_margin=.1;
+    require(!plan_required_path({0,0}, edge_goal, {}, cfg).ok, "home margin setting was ignored");
+    cfg.required_goal_field_margin=0;
+    // Real obstacles, including ones observed after adopting a line, retain
+    // full aircraft clearance. Off-route obstacles must not manufacture bends.
+    const Vec2 interior_start{1,0};
+    const Obstacles blocking{{4.375,2.15,.25}};
+    route=plan_required_path(interior_start,goal,blocking,cfg);
+    validate(route,interior_start,goal,blocking,cfg);
+    require(route.path.size()>2, "home shortcut crossed a blocking obstacle");
+    require(!obstacle_segment_clear(route.path[route.path.size()-3],goal,blocking,cfg),
+            "home obstacle detour retained a removable terminal connector corner");
+    require(distance(route.path[route.path.size()-2],goal)>cfg.required_connector_length,
+            "home detour still confines its final clear straight leg to one metre");
+    require(!required_path_clear(interior_start,{interior_start,goal},goal,blocking,cfg),
+            "new obstacle failed to invalidate home straight line");
+    route=plan_required_path(interior_start,goal,{{4,-2,.25}},cfg);
+    validate(route,interior_start,goal,{{4,-2,.25}},cfg);
+    require(route.path.size()==2, "off-route obstacle introduced a home bend");
+
+    // After a safe detour, a shallow final leg can spend more than a metre in
+    // the virtual wall inset. Revalidation and resampling must retain it.
+    const Path2 long_tail{{1,2},{2,3.9},goal};
+    const Vec2 midway{5.45,4.14};
+    require(required_path_clear(midway,long_tail,goal,{},cfg),
+            "execution lost the long clear home terminal leg after a detour");
+    require(required_path_clear({5.45,4.16},{{1,2},{2,3.9},midway,goal},goal,{},cfg),
+            "resampling or small drift invalidated the long home terminal leg");
+    require(!required_path_clear(midway,long_tail,goal,{{6.6,4.22,.1}},cfg),
+            "long home tail ignored a newly observed obstacle");
+    require(!required_path_clear({5.45,4.61},long_tail,goal,{},cfg),
+            "long home tail waived the actual field boundary");
+    cfg.required_direct_path=false;
+    require(!required_path_clear(midway,long_tail,goal,{},cfg),
+            "home-only long tail permission leaked to ordinary required goals");
+}
+void home_corners_require_geometric_obstructions()
+{
+    // Change both scene scale and grid resolution. No flight distance or one
+    // particular recorded connector may determine where a home route bends.
+    for (double scale : {.5,1.0,1.7}) for (double cell : {.04,.11,.2}) {
+        GlobalConfig cfg{-.5*scale,-3.8*scale,9*scale,4.6*scale,
+                         cell*scale,.4*scale,.1*scale,.6*scale};
+        cfg.required_goal_field_margin=0;
+        cfg.required_direct_path=true;
+        const Vec2 start{scale,0}, goal{7.75*scale,4.3*scale};
+        const Obstacles obstacles{{4.375*scale,2.15*scale,.25*scale},
+                                  {5.8*scale,3.2*scale,.15*scale}};
+        const auto route=plan_required_path(start,goal,obstacles,cfg);
+        validate(route,start,goal,obstacles,cfg);
+        require(route.path.size()>2,"visibility simplification crossed a blocking obstacle");
+        for (double legacy_length : {.15,1.0,5.0}) {
+            auto changed=cfg;changed.required_connector_length=legacy_length;
+            const auto same=plan_required_path(start,goal,obstacles,changed);
+            validate(same,start,goal,obstacles,changed);
+            require(same.path.size()==route.path.size(),"legacy connector radius changed home geometry");
+            for (size_t i=0;i<route.path.size();++i)
+                require(distance(same.path[i],route.path[i])<1e-9,
+                        "home still uses a fixed distance to choose its turn points");
+        }
+        for (size_t i=0;i+2<route.path.size();++i) {
+            for (size_t j=i+2;j<route.path.size();++j) {
+                Path2 skipped=route.path;
+                skipped.erase(skipped.begin()+i+1,skipped.begin()+j);
+                require(!required_path_clear(start,skipped,goal,obstacles,cfg),
+                        "home retained guide corners that a safe visible segment can skip");
+            }
+        }
+        const auto empty=plan_required_path(start,goal,{},cfg);
+        require(empty.ok && empty.path.size()==2,"empty scaled scene manufactured a waypoint");
+    }
+}
 }  // namespace
 
 int main()
@@ -252,5 +353,7 @@ int main()
     boundary_endpoint_permission();
     forward_field_entry_revalidation();
     interior_required_routes_have_no_artificial_connector_bend();
+    home_routes_prefer_the_complete_straight_line();
+    home_corners_require_geometric_obstructions();
     std::cout << "global_required_path_test: all checks passed\n";
 }

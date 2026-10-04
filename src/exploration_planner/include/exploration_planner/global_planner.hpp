@@ -42,6 +42,11 @@ struct GlobalConfig {
     // -1 preserves physical body clearance; 0 allows the center on the boundary.
     // Obstacle clearance and the ordinary path's wall_margin are unchanged.
     double required_goal_field_margin = -1.0;
+    // Home only: a straight, obstacle-checked connection may use the goal inset
+    // over its full length, including the final straight leg after a detour.
+    // Any preceding detour retains the ordinary field inset.
+    // Heading is handled by the controller, not an artificial path corner.
+    bool required_direct_path = false;
 };
 
 inline double required_field_margin(const GlobalConfig& cfg)
@@ -75,7 +80,8 @@ GlobalResult plan_global_path(const Vec2& start, const Vec2& goal,
 // may end with one straight connector across the virtual field inset, bounded
 // by required_connector_length. The goal and connector keep required_field_margin
 // (physical body clearance by default); obstacle robot_radius + inflate always applies.
-// The final connector anchor is retained as the penultimate result point.
+// The final connector anchor is retained as the penultimate result point,
+// except when required_direct_path authorizes a clear full-length straight route.
 GlobalResult plan_required_path(const Vec2& start, const Vec2& goal,
                                 const Obstacles& obs, const GlobalConfig& cfg,
                                 double start_yaw = NAN);

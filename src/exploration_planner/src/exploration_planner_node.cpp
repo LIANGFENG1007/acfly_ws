@@ -493,6 +493,11 @@ public:
             dd("required_slow_radius_m", params::REQUIRED_SLOW_RADIUS_M)});
         home_slow_radius_ = std::max(global_gains_.endpoint_slow_r, dd("home_slow_radius_m", params::HOME_SLOW_RADIUS_M));
         home_slow_speed_ = std::min(v_goal_max_, std::max(0.05, dd("home_slow_speed", params::HOME_SLOW_V)));
+        home_straight_approach_m_ = dd("home_straight_approach_m", params::HOME_STRAIGHT_APPROACH_M);
+        home_approach_speed_ = dd("home_approach_speed", params::HOME_APPROACH_V);
+        if (!std::isfinite(home_straight_approach_m_) || home_straight_approach_m_ < 0.0 ||
+            !std::isfinite(home_approach_speed_) || home_approach_speed_ <= 0.0)
+            throw std::invalid_argument("home approach distance must be nonnegative and speed positive");
         global_tracker_ = std::make_unique<TrajectoryTracker>(global_gains_);
         obs_map_ = std::make_unique<ObstacleMap>(ocfg_);
         if (viz_) viz_obj_ = std::make_unique<Visualizer>(gcfg_, 1000);  // 1000px：小格(0.05m≈5px)能看清
@@ -828,6 +833,7 @@ private:
         drop_status_.reset();
         drop_path_.clear(); drop_path_retry_ = -1; drop_entry_.reset();
         drop_cruise_z_.reset(); drop_pause_z_.reset();
+        reset_home_approach();
         vision_candidates_->reset();
         vision_queue_->reset();
         vision_near_->reset();
@@ -2025,7 +2031,10 @@ private:
     GlobalConfig required_config() const
     {
         GlobalConfig cfg = ggcfg_;
-        if (homing_) cfg.required_goal_field_margin = home_goal_wall_margin_;
+        if (homing_) {
+            cfg.required_goal_field_margin = home_goal_wall_margin_;
+            cfg.required_direct_path = true;
+        }
         return cfg;
     }
 
@@ -2076,7 +2085,7 @@ private:
 
         // Only the approved straight terminal connector can leave the full
         // field inset. Its execution capsule uses the existing arrival tolerance.
-        const auto in_connector = [this](const Vec2& p) {
+        const auto connector_distance = [this](const Vec2& p) {
             const double dx = global_target_.x - global_connector_start_.x;
             const double dy = global_target_.y - global_connector_start_.y;
             const double length2 = dx * dx + dy * dy;
@@ -2085,7 +2094,15 @@ private:
                               (p.y - global_connector_start_.y) * dy) / length2, 0.0, 1.0)
                 : 0.0;
             return std::hypot(p.x - global_connector_start_.x - u * dx,
-                              p.y - global_connector_start_.y - u * dy) <= goal_tol_;
+                              p.y - global_connector_start_.y - u * dy);
+        };
+        // A clear home line may run along the virtual boundary inset for more
+        // than one metre. If drift leaves its narrow capsule, allow corrections
+        // that recover toward the line while keeping the actual field bounds.
+        const double connector_tolerance = homing_ && global_has_
+            ? std::max(goal_tol_, connector_distance(cur)) : goal_tol_;
+        const auto in_connector = [&](const Vec2& p) {
+            return connector_distance(p) <= connector_tolerance + 1e-9;
         };
         if (in_connector(cur) && in_connector(stop)) return true;
 
@@ -2150,6 +2167,20 @@ private:
         }
         const bool target_moved = std::hypot(target.x - global_target_.x, target.y - global_target_.y) > 1e-6;
         if (target_moved) required_goal_holding_ = false;
+        // Recheck visibility from the actual aircraft position during home.
+        // Once the goal is safely visible, an old valid detour is no reason to
+        // keep visiting its corners. This is independent of the 1 m descent
+        // trigger. Adopt once; retain the tracker's velocity/history and run
+        // its update exactly once below so the shortcut does not insert a stop.
+        if (homing_ && global_has_ && !target_moved && global_raw_.size() > 2 &&
+            global_tracker_->has_trajectory() &&
+            required_path_clear(cur, {cur, target}, target, obs, required_cfg)) {
+            global_connector_start_ = cur;
+            global_raw_ = {cur, target};
+            global_traj_ = make_polyline_trajectory(global_raw_);
+            global_tracker_->set_trajectory(global_traj_);
+            required_goal_holding_ = false;
+        }
         VelCmd command;
         bool updated_existing = false;
         if (global_has_ && !target_moved && global_tracker_->has_trajectory()) {
@@ -2793,6 +2824,88 @@ private:
         return result;
     }
 
+    void reset_home_approach()
+    {
+        home_approach_active_ = home_descent_started_ = false;
+        home_approach_yaw_ = 0.0;
+        home_descent_pause_z_.reset();
+    }
+
+    // Like visual-drop alignment, keep the entry yaw while XY corrects in any
+    // direction. A new obstacle cancels the shortcut and restores checked A*.
+    Vec2 home_target_velocity(const Obstacles& obs)
+    {
+        const Vec2 cur{px_, py_};
+        const double distance = std::hypot(goal_.x - px_, goal_.y - py_);
+        const Path2 direct{cur, goal_};
+        const bool eligible = home_straight_approach_m_ > 0.0 &&
+            (home_approach_active_ || distance <= home_straight_approach_m_);
+        const auto cfg = home_approach_active_ ? exec_config() : required_config();
+        if (!eligible || !required_path_clear(cur, direct, goal_, obs, cfg)) {
+            if (home_approach_active_) {
+                home_approach_active_ = false;
+                global_has_ = global_failed_ = false;
+                global_tracker_->set_trajectory({});
+                required_goal_holding_ = false;
+            }
+            return pd_to_point_avoid(goal_, obs);
+        }
+        if (!home_approach_active_) {
+            home_approach_active_ = true;
+            home_approach_yaw_ = yaw_;
+            global_tracker_->set_trajectory({});
+            required_goal_holding_ = false;
+            required_blocked_time_valid_ = false;
+            RCLCPP_INFO(get_logger(), "[终点接近] 距离 %.2fm，保持当前朝向，切换安全XY直线对准", distance);
+        }
+        const double c = std::cos(yaw_), s = std::sin(yaw_);
+        const Vec2 measured{c*v_fwd_est_-s*v_lat_est_, s*v_fwd_est_+c*v_lat_est_};
+        Vec2 desired{kp_goal_*(goal_.x-px_)-kd_goal_*measured.x,
+                     kp_goal_*(goal_.y-py_)-kd_goal_*measured.y};
+        const double cap = std::min(v_goal_max_, home_approach_speed_);
+        const auto limit = [cap](Vec2& v) {
+            const double speed = std::hypot(v.x, v.y);
+            if (speed > cap) { v.x *= cap/speed; v.y *= cap/speed; }
+        };
+        limit(desired);
+        desired = slew_velocity(last_command_world_, desired, measured,
+                                gains_.max_accel, xy_brake_accel_, gains_.dt);
+        limit(desired);
+        global_target_ = goal_;
+        global_connector_start_ = cur;
+        global_raw_ = direct;
+        global_traj_ = make_polyline_trajectory(direct);
+        traj_ = global_traj_; last_look_ = goal_; look_valid_ = true;
+        global_has_ = true; global_failed_ = global_goal_blocked_ = false;
+        global_at_goal_ = distance <= goal_tol_;
+        VelCmd command;
+        command.v_fwd = c*desired.x+s*desired.y;
+        command.v_lat = -s*desired.x+c*desired.y;
+        command.yaw_rate = std::clamp(gains_.kp_yaw*wrap_pi(home_approach_yaw_-yaw_) -
+            gains_.kd_yaw*yaw_rate_est_, -gains_.max_yaw_rate, gains_.max_yaw_rate);
+        return guard_required_command(command, obs, false);
+    }
+
+    void update_home_descent()
+    {
+        if (!corridor_enabled_ || corridor_disabled_for_goal_ || !corridor_lower_enabled_ ||
+            !corridor_->configured()) return;
+        const bool safe_approach = home_approach_active_ && !global_failed_ && !global_braking_blocked_;
+        if (!home_descent_started_ && safe_approach) {
+            home_descent_started_ = true;
+            RCLCPP_INFO(get_logger(), "[终点接近] 同步降到走廊 Z=%.3f；XY到点即转向，继续降高", corridor_flight_z_);
+        }
+        if (!home_descent_started_) return;
+        // If the last straight segment is lost, pause Z at one fixed altitude
+        // while the existing obstacle recovery handles XY. Never climb back to
+        // the cruise height just because a guard rejected one control tick.
+        if (!safe_approach) {
+            if (!home_descent_pause_z_) home_descent_pause_z_ = pz_;
+        } else home_descent_pause_z_.reset();
+        drop_command_altitude_ = home_descent_pause_z_.value_or(corridor_flight_z_);
+        drop_command_speed_ = corridor_descend_speed_;
+    }
+
     // 飞机到最近障碍【边缘】的距离(圆心距 − 障碍半径)。无障碍返回很大值。
     double nearest_obstacle_dist(const Obstacles& obs) const
     {
@@ -3375,8 +3488,8 @@ private:
                     corridor_->set_altitude_ready(std::abs(pz_ - corridor_flight_z_) <= corridor_z_tol_);
                 corridor_command_ = corridor_->update({px_, py_}, yaw_, v_fwd_est_, v_lat_est_,
                                                        local_now, pose_fresh);
-                // 先转头、转好后才降高：转头完成(rotationDone)起，走廊全程高度 = 走廊高度(绝对 SLAM Z，用户实测值，不做漂移矫正)。
-                if (corridor_lower_enabled_ && corridor_->rotationDone()) {
+                // XY到点后立即转向，下降与转向并行；入口横移仍等待航向和高度均到位。
+                if (corridor_lower_enabled_ && corridor_->configured()) {
                     drop_command_altitude_ = corridor_flight_z_;
                     drop_command_speed_ = corridor_descend_speed_;
                 }
@@ -3587,6 +3700,7 @@ private:
                 if ((!visual_drop_enabled_ && cov >= done_coverage_ && vision_queue_->pending().empty()) || (visual_drop_enabled_ &&
                     (coverage_closed_ || visual_drop_.completed() >= 3))) {
                     homing_ = true;
+                    reset_home_approach();
                     visual_handoff_brake_ = false;
                     // 归航终点前更早减速：进入 1.0 m 末端批准直线时速度够低，刹停投影不出 0.1 m 胶囊，不会急刹反推(r162 等)。
                     global_tracker_->set_endpoint_slow(home_slow_radius_, home_slow_speed_);
@@ -3605,7 +3719,8 @@ private:
                 // 插点活动中：命令已在上面 POI 状态机里写好，这里不再覆盖。
             } else if (has_goal_ && homing_) {
                 // ---- 归航：直奔真实终点(不夹取)，平滑刹停。终点可能藏在障碍后 → 全局 A* 绕障。 ----
-                Vec2 vb = pd_to_point_avoid(goal_, obstacles);   // 内部写 traj_/last_look_
+                Vec2 vb = home_target_velocity(obstacles);   // 远段绕障，末段保持朝向并用XY对准
+                update_home_descent();
                 if (global_failed_) {
                     // 贴障无路先后退脱困(与探索分支同一套)，退出后下一规划周期重试；否则原地保持。
                     //   累计后退次数有上限，防止"后退→找到路→接近→又失效"无限循环。
@@ -3629,17 +3744,17 @@ private:
                     std::hypot(global_traj_.back().p.x - goal_.x,
                                global_traj_.back().p.y - goal_.y) < 1e-6;
                 const bool stopped = !global_failed_ && !global_braking_blocked_ &&
-                    global_at_goal_ && global_tracker_->remaining_distance() <= goal_tol_ && exact_path &&
+                    global_at_goal_ && (home_approach_active_ || global_tracker_->remaining_distance() <= goal_tol_) && exact_path &&
                     (d <= goal_tol_);
                 if (stopped) {
                     if (corridor_enabled_ && !corridor_disabled_for_goal_) {
-                        corridor_->start({px_, py_}, steady_seconds());
+                        corridor_->start(goal_, steady_seconds());
                         corridor_active = true;
                         tracker_->set_trajectory({});
                         global_tracker_->set_trajectory({});
                         traj_.clear();
                         last_look_ = {px_, py_};
-                        RCLCPP_INFO(get_logger(), "到达探索交接点，开始转向/入口横移/穿门/H任务");
+                        RCLCPP_INFO(get_logger(), "到达探索交接点XY，立即转向并继续降高；航向/高度到位后进入口/穿门/H任务");
                     } else if (!finished_) { finished_ = true; publish_finished = true; }
                 }
             } else {
@@ -3917,6 +4032,9 @@ private:
                 number("required_curvature", global_tracker_->reference_curvature());
                 number("required_next_corner_distance", global_tracker_->next_corner_distance());
                 number("required_at_goal", global_at_goal_);
+                number("home_straight_approach", home_approach_active_);
+                number("home_descent_started", home_descent_started_);
+                number("home_descent_paused", home_descent_pause_z_.has_value());
                 number("smooth_fallbacks", smooth_fallbacks_);
                 value("smooth_failure_reason", smooth_failure_reason_);
                 const Obstacles observed_obstacles = obs_map_->snapshot();
@@ -4241,6 +4359,10 @@ private:
     bool   look_valid_ = false;
     bool   finished_ = false;
     bool   homing_ = false;            // 覆盖率达标后进入归航刹停阶段（不再走 tracker）
+    double home_straight_approach_m_ = params::HOME_STRAIGHT_APPROACH_M;
+    double home_approach_speed_ = params::HOME_APPROACH_V, home_approach_yaw_ = 0.0;
+    bool home_approach_active_ = false, home_descent_started_ = false;
+    std::optional<double> home_descent_pause_z_;
     int    cur_band_ = -1;             // 上层扫描条带进度（-1=未初始化，由 plan_explore 维护）
     rclcpp::Time last_plan_time_;      // 上次重规划时刻（构造里用 now() 初始化）
     rclcpp::Time last_candidate_time_;

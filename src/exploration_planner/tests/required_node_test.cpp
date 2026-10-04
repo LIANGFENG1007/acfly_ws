@@ -1981,6 +1981,162 @@ void visual_sampling_brake_preserves_correction()
             "approach travel cap restricted XY correction while turning");
 }
 
+void home_visibility_shortcut_regression()
+{
+    ExplorationNode node;
+    node.timer_->cancel();
+    node.visual_drop_enabled_=false;
+    const Vec2 goal{6.7,0};
+    for (double distance : {1.3,2.0,4.0,5.8}) {
+        const Vec2 start{goal.x-distance,0};
+        reset(node,start);
+        node.reset_home_approach();
+        node.homing_=node.has_goal_=node.has_pose_=true;
+        node.goal_=node.global_target_=goal;
+        node.v_fwd_est_=.2;
+        node.global_tracker_->set_trajectory(node.make_polyline_trajectory({start,goal}));
+        for (int i=0;i<40;++i) node.global_tracker_->update(start.x,start.y,0,.2,0,node.goal_tol_,0);
+        const double prior=node.global_tracker_->issued_world_velocity(0).x;
+        require(prior>.1,"visibility regression needs an already moving controller");
+        const Path2 detour{start,{start.x+.4,.8},{goal.x-.4,.8},goal};
+        node.global_raw_=detour;
+        node.global_traj_=node.make_polyline_trajectory(detour);
+        node.global_tracker_->set_trajectory(node.global_traj_);
+        node.global_has_=true;
+        const auto command=node.home_target_velocity({});
+        require(node.global_raw_.size()==2 && !node.global_failed_ && !node.home_approach_active_,
+                "clear home chord kept chasing old corners until a distance threshold");
+        require(command.x >= prior-node.global_gains_.max_decel*node.global_gains_.dt-1e-6,
+                "visibility shortcut reset velocity or inserted a zero-speed tick");
+        const Vec2 anchor=node.global_raw_.front();
+        node.px_+=.01;node.home_target_velocity({});
+        require(std::hypot(node.global_raw_.front().x-anchor.x,node.global_raw_.front().y-anchor.y)<1e-9,
+                "visible home line was reset on every control tick");
+        const Obstacles blocked{{(start.x+goal.x)/2,0,.1}};
+        node.home_target_velocity(blocked);
+        require(!node.global_failed_ && node.global_raw_.size()>2 &&
+                required_path_clear({node.px_,node.py_},node.global_raw_,goal,blocked,node.required_config()),
+                "a newly blocked direct line failed to restore safe obstacle avoidance");
+        node.home_target_velocity({});
+        require(node.global_raw_.size()==2 && !node.global_failed_,
+                "obstacle removal left the old home detour committed");
+    }
+    std::cout << "home visibility: distance-independent shortcut, motion continuity, no repeated reset and new obstacle checks passed\n";
+}
+
+void home_straight_descent_regression()
+{
+    ExplorationNode node;
+    node.timer_->cancel();
+    node.corridor_enabled_ = node.corridor_lower_enabled_ = true;
+    node.home_straight_approach_m_ = 1.0;
+    node.home_approach_speed_ = .4;
+    node.corridor_flight_z_ = .05;
+    node.corridor_z_tol_ = .05;
+    node.ccfg_.descend_before_entry = true;
+    node.ccfg_.settle_time = 0.0;
+    node.corridor_ = std::make_unique<CorridorController>(node.ccfg_);
+    const Vec2 goal{(node.ggcfg_.min_x+node.ggcfg_.max_x)/2, node.ggcfg_.max_y-.3};
+    auto message = std::make_shared<geometry_msgs::msg::PointStamped>();
+    message->header.frame_id = "camera_init"; message->header.stamp.sec = 700;
+    message->point.x = goal.x; message->point.y = goal.y;
+    const auto mission = [&] {
+        ++message->header.stamp.sec; node.on_goal(message);
+        node.homing_ = node.has_goal_ = node.has_pose_ = true;
+        node.visual_drop_enabled_ = false;
+        reset(node, {goal.x, goal.y-.8});
+        node.pz_=1.2; node.yaw_=0;
+        node.corridor_disabled_for_goal_=false;
+        require(node.corridor_->configure({goal.x+1,goal.y},{goal.x+1,goal.y-4}), "configure home corridor");
+    };
+    mission();
+    // Even a 90-degree heading error must not gate world-Y motion near home.
+    auto command=node.home_target_velocity({});
+    node.update_home_descent();
+    require(node.home_approach_active_ && command.y>.001 && std::abs(node.last_yaw_rate_)<1e-9,
+            "home alignment chased goal yaw or lost lateral XY correction");
+    require(node.home_descent_started_ && node.drop_command_altitude_==.05 &&
+            node.drop_command_speed_==node.corridor_descend_speed_, "home approach did not start descent");
+    require(node.global_raw_.size()==2 && node.global_raw_.back().x==goal.x &&
+            node.global_raw_.back().y==goal.y, "home shortcut retained the terminal A* bend");
+    // Crossing outward again must not unlock yaw or return to cruise altitude.
+    node.py_=goal.y-1.04;
+    node.home_target_velocity({});node.update_home_descent();
+    require(node.home_approach_active_ && node.drop_command_altitude_==.05,
+            "distance jitter reset the latched approach/descent");
+    // New obstacle: no shortcut through it and no cruise-height bounce.
+    node.py_=goal.y-.8;node.pz_=.72;
+    node.home_target_velocity({{goal.x,goal.y-.4,.05}});node.update_home_descent();
+    require(!node.home_approach_active_ && node.home_descent_pause_z_ &&
+            node.drop_command_altitude_==.72,"blocked home approach continued descending or climbed to cruise");
+    node.pz_=.70;node.home_target_velocity({{goal.x,goal.y-.4,.05}});node.update_home_descent();
+    require(node.drop_command_altitude_==.72,"blocked descent anchor followed drift");
+    node.home_target_velocity({});node.update_home_descent();
+    require(node.home_approach_active_ && !node.home_descent_pause_z_ && node.drop_command_altitude_==.05,
+            "safe home route did not resume descent");
+    // Remote endpoint and disabled corridor may not descend early.
+    mission();node.py_=goal.y-1.2;node.home_target_velocity({});node.update_home_descent();
+    require(!node.home_approach_active_ && !node.home_descent_started_,"descent started outside configured distance");
+    require(node.global_raw_.size()==2 && !node.global_failed_,
+            "remote home planning retained an artificial boundary connector");
+    const Vec2 line_start=node.global_raw_.front();
+    for (const auto& p : node.global_traj_)
+        require(std::abs((p.p.x-line_start.x)*(goal.y-line_start.y)-
+                         (p.p.y-line_start.y)*(goal.x-line_start.x))<1e-9,
+                "trajectory smoothing curved a clear home straight line");
+    mission();node.py_=goal.y-1.01;node.home_target_velocity({});node.update_home_descent();
+    require(!node.home_descent_started_,"home descent started before entering one metre");
+    node.py_=goal.y-.99;node.home_target_velocity({});node.update_home_descent();
+    require(node.home_descent_started_,"safe home approach failed to start descent inside one metre");
+    // Whole-route straight flight near an edge, with drift correction outside
+    // the normal wall inset, must retain nonzero output before the last metre.
+    mission();node.px_=goal.x-2;node.py_=goal.y;
+    command=node.home_target_velocity({});
+    require(node.global_raw_.size()==2 && command.x>0 && !node.global_braking_blocked_,
+            "clear long home connection along the boundary lost motion output");
+    node.py_-=.15;
+    require(node.required_motion_clear({node.px_+.03,node.py_+.03},{}),
+            "home line drift correction was rejected outside its narrow capsule");
+    require(!node.required_motion_clear({node.px_,node.ggcfg_.max_y+.01},{}),
+            "home correction waived actual field bounds");
+    mission();node.corridor_disabled_for_goal_=true;
+    node.home_target_velocity({});node.update_home_descent();
+    require(!node.home_descent_started_,"disabled corridor triggered low flight");
+    mission();node.corridor_lower_enabled_=false;
+    node.home_target_velocity({});node.update_home_descent();
+    require(!node.home_descent_started_,"disabled corridor lowering still descended");
+    node.corridor_lower_enabled_=true;
+    mission();node.corridor_enabled_=false;
+    node.home_target_velocity({});node.update_home_descent();
+    require(!node.home_descent_started_,"home-only mission descended for a nonexistent corridor");
+    node.corridor_enabled_=true;
+    // Actual timer envelope: XY arrival transfers while still moving and high.
+    mission();node.py_=goal.y-.08;node.pz_=.9;node.v_lat_est_=.08;
+    node.on_timer();
+    require(node.corridor_->active() && node.corridor_->phase()==CorridorPhase::Rotate &&
+            std::abs(last_control.altitude-.05)<1e-12,
+            "home arrival waited for Z or zero speed, or lost descent during handoff");
+    node.px_=goal.x+.07;node.py_=goal.y;node.yaw_=0;node.pz_=.8;
+    node.v_fwd_est_=.03;node.v_lat_est_=0;
+    node.on_timer();
+    require(last_control.velocity.angular.z<0 && last_control.velocity.linear.x<0 &&
+            last_control.altitude==.05 && last_control.vertical_speed_limit==node.corridor_descend_speed_,
+            "rotation lost simultaneous XY correction / altitude descent");
+    require(!node.corridor_->rotationDone(),"test must exercise descent before yaw completion");
+    node.yaw_=node.ccfg_.initial_yaw;node.on_timer();
+    require(node.corridor_->rotationDone() && node.corridor_->phase()==CorridorPhase::Rotate,
+            "entry translation began before Z was ready");
+    node.pz_=node.corridor_flight_z_;node.yaw_+=2*node.ccfg_.heading_tolerance;node.on_timer();
+    require(node.corridor_->phase()==CorridorPhase::Rotate && last_control.velocity.angular.z<0,
+            "entry used a stale aligned heading after yaw drift during descent");
+    node.yaw_=node.ccfg_.initial_yaw;node.on_timer();
+    require(node.corridor_->phase()==CorridorPhase::Entry,"aligned heading and height failed to release entry");
+    ++message->header.stamp.sec;node.on_goal(message);
+    require(!node.home_approach_active_ && !node.home_descent_started_ && !node.home_descent_pause_z_,
+            "new mission retained old home approach / descent state");
+    std::cout << "home approach: direct XY, yaw lock, descent, obstacle pause, moving XY handoff and corridor gates passed\n";
+}
+
 }  // namespace
 
 int main(int argc, char** argv)
@@ -1990,6 +2146,9 @@ int main(int argc, char** argv)
     rclcpp::init(argc, argv, options);
     int result = 0;
     try {
+        home_visibility_shortcut_regression();
+        home_straight_descent_regression();
+        if (std::getenv("ACFLY_HOME_APPROACH_ONLY")) { rclcpp::shutdown(); return 0; }
         malformed_cloud_does_not_terminate_node();
         recorded_xy_handoffs();
         cruise_drift_compensation_is_checked();
