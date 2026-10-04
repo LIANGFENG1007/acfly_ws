@@ -231,6 +231,7 @@ private:
     Vec2 issued_world_velocity(double yaw) const;
     double smith_heading() const;
     double handoff_heading_ = 0.0;
+    double last_steering_heading_ = 0.0;
     double handoff_remaining_ = 0.0;
     bool handoff_valid_ = false;
 

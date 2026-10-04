@@ -255,11 +255,105 @@ void preserved_stop()
         std::cout << degrees << "deg sharp fallback preserved stop, duration=" << result.duration << "s\n";
     }
 }
+
+void drift_at_sharp_corner()
+{
+    // Real failure: a 9 cm sideways displacement just before a hard corner
+    // made the shrinking point bearing command a ~90 degree wrong-way turn.
+    // Exercise both turn directions and retain the original arrival tolerance.
+    for (const int side : {-1, 1}) {
+        auto g = gains();
+        g.compensate_lateral_drift = true;
+        g.kp_lat = params::KP_LAT; g.max_v_lat = params::MAX_V_LAT;
+        g.smith_time = params::CARLIKE_SMITH_S;
+        g.smith_yaw_time = params::CARLIKE_SMITH_YAW_S;
+        const auto path = trajectory_from_polyline({{0, 0}, {2, 0}, {2, 2.0*side}}, .05, g.corner_stop_rad);
+        TrajectoryTracker tracker(g);
+        tracker.set_trajectory(path);
+        auto cmd = tracker.update(1.999, .09*side, 0, .05, 0, .08, 0);
+        require(!tracker.reorienting() && std::abs(tracker.heading_error()) < 15*M_PI/180 &&
+                tracker.next_corner_distance() >= 0 && side*cmd.v_lat < 0,
+                "sideways drift near the vertex caused a wrong-way spin or skipped the corner");
+        cmd = tracker.update(1.999, .04*side, 0, .05, 0, .08, 0);
+        require(cmd.holding_position && side*tracker.heading_error() > 80*M_PI/180 &&
+                tracker.next_corner_distance() < 0,
+                "arrival did not hand off to the outgoing leg");
+
+        // Already aligning on the incoming leg: arrival must supersede that
+        // heading, while keeping a fixed hold anchor and active XY feedback.
+        TrajectoryTracker aligning(g);
+        aligning.set_trajectory(path);
+        cmd = aligning.update(1.999, .09*side, side*M_PI/2, 0, 0, .08, 0);
+        require(aligning.reorienting(), "fixture must start an incoming heading correction");
+        cmd = aligning.update(1.999, .04*side, 0, 0, 0, .08, 0);
+        require(cmd.holding_position && side*aligning.heading_error() > 80*M_PI/180 &&
+                std::hypot(cmd.v_fwd, cmd.v_lat) > 1e-6,
+                "arrival retained an obsolete turn heading or lost XY correction");
+
+        // A vertex truly passed outside tolerance must still request a checked
+        // connection from the planner, rather than using the extended yaw point
+        // as permission to drive through the obstacle-side corner.
+        TrajectoryTracker passed(g);
+        passed.set_trajectory(path);
+        cmd = passed.update(2.02, .12*side, 0, .05, 0, .08, 0);
+        require(cmd.needs_replan && passed.next_corner_distance() >= 0,
+                "yaw extension bypassed the unvisited sharp corner");
+    }
+    std::cout << "mirrored drifting corner, existing-turn handoff and overshoot checks passed\n";
+}
+void replan_keeps_current_heading()
+{
+    for (double side : {-1.0, 1.0}) {
+        TrajectoryTracker tracker(gains());
+        // Both routes share the straight leg being flown. Their future turn
+        // must not become the yaw reference during a mid-leg replan.
+        tracker.set_trajectory(trajectory_from_polyline({{0,0},{3,0},{5,side}}, .05, .4));
+        tracker.update(1,0,0,.4,0,.1,0);
+        tracker.set_trajectory(trajectory_from_polyline({{1,0},{3,0},{5,side}}, .05, .4));
+        for (int tick = 0; tick < 20; ++tick) {
+            const auto command = tracker.update(1+.008*tick,0,0,.4,0,.1,0);
+            require(std::abs(command.yaw_rate)<1e-9 &&
+                    std::abs(tracker.heading_error())<1e-9,
+                    "mid-leg replan steered toward the old route's future terminal bend");
+            require(command.v_fwd>0 && !command.holding_position,
+                    "straight replan stopped XY motion");
+        }
+    }
+    std::cout << "mirrored replans preserve current straight steering reference\n";
+}
+
+void sampled_escape_validation()
+{
+    const GlobalConfig config{-.5,-4,9,5,.04,.4,.1,.6};
+    for (double side : {-1.0, 1.0}) {
+        Path2 route{{5.68005542446227,-2.027308763130494},
+                    {6.320055424462271,-.9073087631304939},
+                    {5.934595844268404,-.4743233144529635}};
+        for (auto& p : route) p.y *= side;
+        const Vec2 cur{5.680519405931988,-2.0270198402094404*side};
+        const Obstacles obstacles{{4.974898266539072,-1.6251017334609275*side,.3392919729876019}};
+        require(path_clear(cur, {cur,route[1],route[2]}, obstacles, config),
+                "recorded outward escape fixture is not safe");
+        for (double spacing : {.01,.05,.15}) {
+            TrajectoryTracker tracker(gains());
+            tracker.set_trajectory(trajectory_from_polyline(route,spacing,.4));
+            const auto remaining = tracker.remaining_path(cur.x,cur.y);
+            require(path_clear(cur,remaining,obstacles,config),
+                    "straight sampling density falsely blocked a safe margin escape");
+            require(contains(remaining,route[1]),"validation skipped a real route bend");
+            const Obstacles blocked{{6.15,-1.20*side,.10}};
+            require(!path_clear(cur,remaining,blocked,config),
+                    "forward rejoin ignored a real obstacle in the flown segment");
+            require(tracker.progress_distance()==0,"validation changed tracker progress");
+        }
+    }
+    std::cout << "recorded/mirrored margin escapes are independent of straight sampling density\n";
+}
 }  // namespace
 
 int main()
 {
-    try { ordinary_turns(); constrained_rounds(); preserved_stop(); }
+    try { ordinary_turns(); constrained_rounds(); preserved_stop(); drift_at_sharp_corner(); replan_keeps_current_heading(); sampled_escape_validation(); }
     catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
     return 0;
 }

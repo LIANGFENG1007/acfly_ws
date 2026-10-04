@@ -36,11 +36,11 @@ struct ObstacleConfig {
     double track_alpha;                  // EMA 系数(0~1)：越大越跟手(响应快但抖)，越小越平滑(稳但滞后)
     double track_assoc_dist;             // 关联门限 (m)：测量圆中心距某 track < 此值才算"同一个障碍"
     int    track_max_misses;             // 连续多少帧没再看到就删该障碍(最近一段时间没出现=已离开视野)
-    // ★latch 智能回收(防幽灵)★：latch 格若【当前在视野内】却【连续 ghost_clear_frames 帧无点命中】→
-    //   判为幽灵(早已不存在/曾是噪声)，撤销 latch。看不到的 latch 格冻结不回收(不误伤真障碍)。
+    // latch 回收要求视野内整格都有更远回波作为空地证据，同时当前格无命中；
+    // 遮挡、稀疏回波、视野外均冻结计数，命中立即重置，不能仅凭“没看到”清除。
     double fov_deg;                      // 视野总开角 (度)：判定 latch 格是否在当前视野内
     double fov_range;                    // 视野半径 (m)
-    int    ghost_clear_frames;           // 视野内连续无命中达此帧数 → 撤销 latch(<=0 关闭回收=纯永久 latch)
+    int    ghost_clear_frames;           // 有效空地证据累计超过此帧数 → 撤销 latch(<=0 关闭回收)
 };
 
 class ObstacleMap
@@ -49,7 +49,7 @@ public:
     explicit ObstacleMap(const ObstacleConfig& cfg);
 
     // 喂入一帧世界系 2D 点（已滤地面/自身回波）：累计进占据栅格并重建障碍圆列表。
-    //   px,py,yaw/pose_valid：本帧观测位姿(SLAM系)，用于 latch 智能回收判定"格是否在当前视野内"。
+    //   px,py,yaw/pose_valid：本帧观测位姿(SLAM系)，用于视野与近回波遮挡检查。
     //   pose_valid=false 时跳过回收(不知视野→不敢撤 latch)。
     void integrate(const std::vector<Vec2>& pts,
                    double px = 0.0, double py = 0.0, double yaw = 0.0, bool pose_valid = false);
@@ -69,7 +69,7 @@ private:
     //   衰减到 0 也不撤销。用途：静态障碍(杆/凳不动)"一旦识别就永久记住、绝不消失"。半径不受
     //   影响：仍每帧按【当前占据格(含 latched)】重新聚类拟合，所以障碍大小照常随观测变化。
     std::vector<uint8_t>  latched_;      // 1=该格曾达占据阈值→永久占据
-    std::vector<uint16_t> ghost_miss_;   // latch 智能回收：该 latch 格【在视野内却无命中】的连续帧数，超阈值撤销 latch
+    std::vector<uint16_t> ghost_miss_;   // 有效空地证据帧数；真实命中清零，未知/遮挡冻结
     Obstacles obstacles_;                // 最近一次"时序平滑后"对外输出的障碍圆
     std::vector<Vec2> occ_points_;       // 最近一次重建时的占据格中心点(rviz 可视化用)
 

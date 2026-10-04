@@ -78,6 +78,12 @@ install(DIRECTORY launch/
 )
 
 if(BUILD_TESTING)
+  add_executable(obstacle_visibility_test tests/obstacle_visibility_test.cpp src/obstacle_map.cpp)
+  target_compile_features(obstacle_visibility_test PRIVATE cxx_std_17)
+  add_test(NAME obstacle_visibility_test COMMAND obstacle_visibility_test)
+  add_executable(drop_approach_test tests/drop_approach_test.cpp src/global_planner.cpp)
+  target_compile_features(drop_approach_test PRIVATE cxx_std_17)
+  add_test(NAME drop_approach_test COMMAND drop_approach_test)
   add_executable(visual_drop_test tests/visual_drop_test.cpp src/vision_target_queue.cpp)
   target_compile_features(visual_drop_test PRIVATE cxx_std_17)
   add_test(NAME visual_drop_test COMMAND visual_drop_test)
@@ -141,6 +147,22 @@ if(BUILD_TESTING)
     ENVIRONMENT "ROS_DOMAIN_ID=203;ROS_LOCALHOST_ONLY=1;ROS_LOG_DIR=/tmp/acfly-required-node-ctest-logs"
     RUN_SERIAL TRUE
     TIMEOUT 60
+  )
+  add_test(NAME visual_drop_node_test COMMAND required_node_test
+    --ros-args -p visual_drop_enabled:=false -p viz:=false -p corridor_enabled:=false -p exploration_enabled:=true
+    -p field_min_x:=0.0 -p field_min_y:=-5.0 -p field_max_x:=7.5 -p field_max_y:=5.0
+    -p fov_range:=3.0 -p v_max:=0.6)
+  add_test(NAME exploration_corner_transition_test COMMAND required_node_test
+    --ros-args -p viz:=false)
+  set_tests_properties(exploration_corner_transition_test PROPERTIES
+    ENVIRONMENT "ACFLY_CORNER_TRANSITION_ONLY=1;ROS_DOMAIN_ID=203;ROS_LOCALHOST_ONLY=1;ROS_LOG_DIR=/tmp/acfly-required-node-ctest-logs"
+    RUN_SERIAL TRUE
+    TIMEOUT 60
+  )
+  set_tests_properties(visual_drop_node_test PROPERTIES
+    ENVIRONMENT "ACFLY_VISUAL_DROP_ONLY=1;ROS_DOMAIN_ID=203;ROS_LOCALHOST_ONLY=1;ROS_LOG_DIR=/tmp/acfly-required-node-ctest-logs"
+    RUN_SERIAL TRUE
+    TIMEOUT 120
   )
   add_executable(global_path_progress_test tests/global_path_progress_test.cpp src/global_planner.cpp)
   target_compile_features(global_path_progress_test PRIVATE cxx_std_17)

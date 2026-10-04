@@ -11,7 +11,7 @@
 namespace exploration {
 
 struct VisualDropConfig {
-    double entry_distance = 1.0, sample_seconds = 1.0, drop_height = .5;
+    double sample_seconds = 1.0, drop_height = .5;
     double approach_slow_distance = 1.20, entry_speed = 0.08;
     double xy_tolerance = .10, stable_seconds = 2.0, timeout_seconds = 4.0;
     double offset = .23, descend_speed = .40, climb_speed = .60;
@@ -30,9 +30,9 @@ struct VisualDropConfig {
 // owners. Every clock argument is local monotonic time, never a ROS wall clock.
 class VisualDrop {
 public:
-    enum class Phase { Idle, Approach, Sample, Descend, Send, Wait, Climb, Done };
+    enum class Phase { Idle, Approach, Sample, Descend, Send, Wait, Climb, Done, Validate };
     explicit VisualDrop(VisualDropConfig cfg = {}) : cfg_(cfg) {
-        for (double v : {cfg.entry_distance, cfg.sample_seconds, cfg.drop_height,
+        for (double v : {cfg.sample_seconds, cfg.drop_height,
                 cfg.xy_tolerance, cfg.stable_seconds, cfg.timeout_seconds, cfg.offset,
                 cfg.descend_speed, cfg.climb_speed, cfg.association_radius, cfg.weight_min_distance, cfg.observation_gap,
                 cfg.approach_slow_distance, cfg.entry_speed})
@@ -46,12 +46,37 @@ public:
             throw std::invalid_argument("Invalid visual drop release wait");
     }
     void reset() { *this = VisualDrop(cfg_); }
-    void begin(const VisionVisitTarget& target) {
-        if (completed_ >= 3 || phase_ != Phase::Idle || !target.track_id) return;
+    void begin(const VisionVisitTarget& target, double yaw = 0) {
+        if (completed_ >= 3 || phase_ != Phase::Idle || !target.track_id || !std::isfinite(yaw)) return;
         target_id_ = target.track_id; object_ = coarse_ = target.position;
+        yaw_ = yaw;
         phase_ = Phase::Approach; samples_ = 0; weight_ = 0; votes_ = {};
         xy_since_ = stable_since_ = wait_since_ = -1; have_frame_ = false; refinement_.reset();
         used_coarse_ = true; forced_ = false; last_tick_ = -1; z_comp_ = 0.0;
+    }
+    // 只有节点确认到达已选安全点后才能采样；距物体的径向距离不再触发任何阶段切换。
+    bool start_sample(Vec2 anchor, double z, double yaw, double now,
+                      std::optional<double> return_height = {}) {
+        if (phase_ != Phase::Approach || !std::isfinite(anchor.x) || !std::isfinite(anchor.y) ||
+            !std::isfinite(z) || !std::isfinite(yaw) || !std::isfinite(now) ||
+            (return_height && !std::isfinite(*return_height))) return false;
+        anchor_ = anchor; sample_z_ = z; return_z_ = return_height.value_or(z);
+        yaw_ = yaw; sample_start_ = now;
+        last_tick_ = now; phase_ = Phase::Sample;
+        return true;
+    }
+    // 精确坐标和实际起点必须先通过直线通路检查，才允许发布下降或启动投放计时。
+    bool authorize_descent() {
+        if (phase_ != Phase::Validate) return false;
+        phase_ = Phase::Descend;
+        return true;
+    }
+    void retry_approach() {
+        if (phase_ != Phase::Validate && phase_ != Phase::Sample) return;
+        coarse_ = object_; phase_ = Phase::Approach;
+        samples_ = 0; weight_ = 0; votes_ = {}; have_frame_ = false;
+        refinement_.reset(); xy_since_ = stable_since_ = -1;
+        used_coarse_ = true; forced_ = false;
     }
     void sample(const VisionFrame& frame, Vec2 aircraft, double now, const std::vector<Vec2>& others) {
         if (phase_ != Phase::Sample || !std::isfinite(aircraft.x) || !std::isfinite(aircraft.y) ||
@@ -97,10 +122,6 @@ public:
         if (last_tick_ >= 0 && (now < last_tick_ || now-last_tick_ > cfg_.observation_gap))
             stable_since_ = -1;
         last_tick_ = now;
-        if (phase_ == Phase::Approach && norm(position, object_) <= cfg_.entry_distance) {
-            anchor_ = position; return_z_ = z; yaw_ = yaw; sample_start_ = now;
-            phase_ = Phase::Sample;
-        }
         if (phase_ == Phase::Sample && now - sample_start_ >= cfg_.sample_seconds) {
             if (samples_) {
                 object_ = mean_; used_coarse_ = false;
@@ -114,7 +135,7 @@ public:
             // 目标位置已定：按位置算一次投掷高度补偿，整个下降/释放期间保持不变。
             z_comp_ = std::clamp(cfg_.z_slope_x * object_.x + cfg_.z_slope_y * object_.y,
                                  -cfg_.z_comp_max, cfg_.z_comp_max);
-            phase_ = Phase::Descend;
+            phase_ = Phase::Validate;
         }
         if (phase_ == Phase::Descend) {
             const bool xy_ok = norm(position, lidar_target(yaw)) <= cfg_.xy_tolerance;
@@ -138,15 +159,10 @@ public:
         // tick() may have observed arrival at the just-computed precise point.
         // That point was rejected; it must not start the coarse target's timers.
         xy_since_ = stable_since_ = -1;
+        z_comp_ = std::clamp(cfg_.z_slope_x * object_.x + cfg_.z_slope_y * object_.y,
+                             -cfg_.z_comp_max, cfg_.z_comp_max);
     }
     void pose_interrupted() { stable_since_ = -1; }
-    // 采样锁点前移到预计滑停点(节点按实测速度估算)：越圈时锁在越圈点，惯性冲过 7 cm 后被 -0.17 m/s 回拉，
-    //   1 s 后下降对准又向前 +0.4 m/s(投放点本就在前方)——多余的一次前后点头(r115)。
-    void shift_sample_anchor(Vec2 delta) {
-        if (phase_ == Phase::Sample && std::isfinite(delta.x) && std::isfinite(delta.y)) {
-            anchor_.x += delta.x; anchor_.y += delta.y;
-        }
-    }
     // now: local monotonic time of the serial result; starts the release wait.
     bool serial_finished(unsigned index, std::uint64_t target_id, Vec2 position, double now) {
         if (phase_ != Phase::Send || index != completed_ + 1 || target_id != target_id_ ||
@@ -157,9 +173,13 @@ public:
     }
     void finish_visit() { if (phase_ == Phase::Done) { phase_ = Phase::Idle; target_id_ = 0; } }
     Vec2 lidar_target(double actual_yaw) const {
-        if (phase_ == Phase::Sample || phase_ == Phase::Wait || phase_ == Phase::Climb || phase_ == Phase::Done)
+        if (phase_ == Phase::Sample || phase_ == Phase::Validate || phase_ == Phase::Wait || phase_ == Phase::Climb || phase_ == Phase::Done)
             return anchor_;
         if (phase_ == Phase::Approach) return object_;
+        return alignment_target(actual_yaw);
+    }
+    // 接近点规划也必须使用包裹补偿后的雷达位置，不能只在下降时才补偿。
+    Vec2 alignment_target(double actual_yaw) const {
         const unsigned index = completed_ + 1;
         const double forward = index == 1 ? cfg_.offset : 0;
         const double left = index == 2 ? cfg_.offset : (index == 3 ? -cfg_.offset : 0);
@@ -168,40 +188,29 @@ public:
     }
     double altitude(double home_z) const {
         return phase_ == Phase::Descend || phase_ == Phase::Send || phase_ == Phase::Wait
-            ? home_z + cfg_.drop_height + z_comp_ : return_z_;
+            ? home_z + cfg_.drop_height + z_comp_ :
+            (phase_ == Phase::Sample || phase_ == Phase::Validate ? sample_z_ : return_z_);
     }
     double z_compensation() const { return z_comp_; }
     double drop_height() const { return cfg_.drop_height; }
-    // Slow down for the sampling circle, which is reached before the object.
-    // A positive crossing speed avoids asymptotically stopping outside the
-    // distance-only phase transition. This is a command cap, not an arrival gate.
-    // 接管前预判：距目标 distance 处接近段允许的速度(与 approach_speed_limit 同一曲线，目标尚未激活时用)。
+    // 按到所选安全点的距离减速，与物体距离、固定1米采样圈无关。
     double approach_limit_at(double distance, double cruise_speed) const {
+        if (!std::isfinite(distance) || !std::isfinite(cruise_speed) || cruise_speed <= 0) return 0;
         const double entry = std::min(cfg_.entry_speed, cruise_speed);
-        const double fraction = std::clamp((distance - cfg_.entry_distance) / cfg_.approach_slow_distance, 0.0, 1.0);
-        return entry + (cruise_speed - entry) * fraction * fraction;
-    }
-    double approach_speed_limit(Vec2 position, double cruise_speed) const {
-        if (!std::isfinite(position.x) || !std::isfinite(position.y) ||
-            !std::isfinite(cruise_speed) || cruise_speed <= 0.0) return 0.0;
-        const double entry = std::min(cfg_.entry_speed, cruise_speed);
-        const double fraction = std::clamp((norm(position, object_) - cfg_.entry_distance) /
-            cfg_.approach_slow_distance, 0.0, 1.0);
-        // Ease towards the crossing speed early enough for delayed velocity
-        // tracking; a linear ramp leaves too much residual speed at the circle.
+        const double fraction = std::clamp(distance / cfg_.approach_slow_distance, 0.0, 1.0);
         return entry + (cruise_speed - entry) * fraction * fraction;
     }
     double vertical_limit(double z, double home_z, double remaining_xy, double toward_speed) const {
         if (phase_ == Phase::Climb || phase_ == Phase::Done) return cfg_.climb_speed;
         if (phase_ != Phase::Descend && phase_ != Phase::Send && phase_ != Phase::Wait) return .10;
-        // Estimate the remaining horizontal flight time; speed up descent when
-        // XY approaches its goal, but never exceed the old 0.40 m/s drop limit.
+        // 不再固定1米入场：长直线允许较小下降速度，避免仍用0.1m/s下限而提前降到底。
+        // 到目标附近仍可用配置的全部下降速度；发送/释放等待保留原0.1m/s纠偏下限。
         const double seconds = std::max(.5, remaining_xy / std::clamp(toward_speed, .15, .40));
-        return std::clamp(std::abs(z - altitude(home_z)) / seconds, std::min(.10, cfg_.descend_speed), cfg_.descend_speed);
+        const double floor = phase_ == Phase::Descend ? .02 : .10;
+        return std::clamp(std::abs(z - altitude(home_z)) / seconds, std::min(floor, cfg_.descend_speed), cfg_.descend_speed);
     }
     Phase phase() const { return phase_; }
     unsigned completed() const { return completed_; }
-    double entry_distance() const { return cfg_.entry_distance; }
     double package_offset() const { return cfg_.offset; }
     double release_wait() const { return cfg_.release_wait; }
     double wait_since() const { return wait_since_; }
@@ -218,7 +227,8 @@ public:
     static const char* name(Phase p) {
         switch (p) {
             case Phase::Idle: return "idle"; case Phase::Approach: return "approach";
-            case Phase::Sample: return "sample_hold"; case Phase::Descend: return "descend_align";
+            case Phase::Sample: return "sample_hold"; case Phase::Validate: return "validate_descent";
+            case Phase::Descend: return "descend_align";
             case Phase::Send: return "serial_wait"; case Phase::Wait: return "release_wait";
             case Phase::Climb: return "climb_hold"; case Phase::Done: return "done";
         }
@@ -232,7 +242,7 @@ private:
     std::uint64_t target_id_ = 0, last_seq_ = 0, last_epoch_ = 0;
     Vec2 object_{}, coarse_{}, anchor_{}, mean_{};
     double z_comp_ = 0;   // 本次投掷的 SLAM Z 误差补偿(m)
-    double return_z_ = 0, yaw_ = 0, sample_start_ = 0, xy_since_ = -1, stable_since_ = -1;
+    double return_z_ = 0, sample_z_ = 0, yaw_ = 0, sample_start_ = 0, xy_since_ = -1, stable_since_ = -1;
     double wait_since_ = -1;
     double weight_ = 0, last_stamp_ = 0, accepted_stamp_ = 0, last_tick_ = -1;
     bool have_frame_ = false, used_coarse_ = true, forced_ = false;

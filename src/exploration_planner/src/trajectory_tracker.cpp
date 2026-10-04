@@ -58,6 +58,7 @@ void TrajectoryTracker::inherit_motion(const TrajectoryTracker& other)
     filtered_lateral_target_ = other.filtered_lateral_target_;
     filtered_slip_ = other.filtered_slip_;
     prev_yaw_ = other.prev_yaw_;
+    last_steering_heading_ = other.last_steering_heading_;
     motion_valid_ = other.motion_valid_;
     history_ = other.history_;
 }
@@ -65,7 +66,9 @@ void TrajectoryTracker::inherit_motion(const TrajectoryTracker& other)
 void TrajectoryTracker::set_trajectory(const Trajectory& traj)
 {
     if (!traj_.empty() && !traj.empty()) {
-        const double old_heading = traj_.back().theta;
+        // 换路衔接的是当前正在执行的航向，不是旧路线尚未飞到的终点切线。
+        // 用终点方向会在重规划后先朝未来弯道摆头，再返回当前直线。
+        const double old_heading = motion_valid_ ? last_steering_heading_ : sample_at(progress_s_).theta;
         const double new_heading = traj.front().theta;
         const double delta = wrap_pi(new_heading - old_heading);
         if (std::abs(delta) < 0.7853981633974483) {
@@ -194,9 +197,28 @@ Path2 TrajectoryTracker::remaining_path(double px, double py) const
     if (corner < traj_.size() && traj_[corner].s <= remaining_s + 1e-9 &&
         dist(result.back(), traj_[corner].p) > 1e-6)
         result.push_back(traj_[corner].p);  // Keep every unpassed hard corner.
-    for (const auto& point : traj_) {
-        if (point.s > remaining_s + 1e-9 && dist(result.back(), point.p) > 1e-6)
-            result.push_back(point.p);
+    size_t first = 0;
+    while (first < traj_.size() && traj_[first].s <= remaining_s + 1e-9) ++first;
+    // 直线的采样密度不应改变重接方向。贴障脱离时，下一个几厘米远的
+    // 采样点可能位于飞机侧后方，造成“路被挡住”的假判断和连续重规划。
+    // 只合并同向共线的采样点；每个真实弯点和未经过的硬折点都保留，
+    // 从实际位置到该直线末端的整段仍由调用方进行障碍检查。
+    if (first > 0 && first < traj_.size()) {
+        const Vec2 a = traj_[first-1].p;
+        const Vec2 b = traj_[first].p;
+        const double dx = b.x-a.x, dy = b.y-a.y;
+        const double length = std::hypot(dx,dy);
+        while (first+1 < traj_.size() && first != corner && length > 1e-9) {
+            const Vec2 from = traj_[first].p, to = traj_[first+1].p;
+            const double sx = to.x-from.x, sy = to.y-from.y;
+            if (dx*sx+dy*sy <= 0 ||
+                std::abs(dx*sy-dy*sx) > 1e-9*length*std::hypot(sx,sy)) break;
+            ++first;
+        }
+    }
+    for (size_t i = first; i < traj_.size(); ++i) {
+        if (dist(result.back(), traj_[i].p) > 1e-6)
+            result.push_back(traj_[i].p);
     }
     if (result.size() == 1) result.push_back(traj_.back().p);
     return result;
@@ -298,11 +320,13 @@ VelCmd TrajectoryTracker::compute(double px, double py, double yaw,
             aligning_ = true;
             alignment_hold_.begin(stop_anchor(cur, yaw, v_fwd_est, v_lat_est), issued_world_velocity(yaw),
                                   g_.hold_slide, g_.stop_anchor_max_m);
-            alignment_heading_ = heading(traj_[corner].p, traj_[corner + 1].p);
-            alignment_heading_valid_ = true;
-            alignment_settled_ = 0.0;
-            turn_direction_ = wrap_pi(alignment_heading_ - yaw) >= 0.0 ? 1 : -1;
         }
+        // 到点是一次新的航段交接。此前若已因偏移进入转向，也必须替换旧的
+        // “朝向折点”参考；保持原XY锚点，不先转完旧方向再转回下一段。
+        alignment_heading_ = heading(traj_[corner].p, traj_[corner + 1].p);
+        alignment_heading_valid_ = true;
+        alignment_settled_ = 0.0;
+        turn_direction_ = wrap_pi(alignment_heading_ - yaw) >= 0.0 ? 1 : -1;
         passed_corner_s_ = traj_[corner].s;
         progress_s_ = traj_[corner].s;
         progress_idx_ = corner;
@@ -340,7 +364,19 @@ VelCmd TrajectoryTracker::compute(double px, double py, double yaw,
                 predicted.y -= (advance - .5) * ry;
             }
         }
-        if (dist(predicted, ref.p) > 1e-6) desired_theta = heading(predicted, ref.p);
+        Vec2 steering_ref = ref.p;
+        if (corner < traj_.size() && look_s >= traj_[corner].s - 1e-9) {
+            // 折点会截短前瞻距离。几厘米横漂除以趋零的剩余距离会把航向拉向
+            // 一侧，随后又被出场方向拉回。仅将航向参考沿入场切线延伸到原有
+            // 前瞻长度；位置目标/减速/到点检查仍是原折点，不能切角越障。
+            const double incoming = heading(traj_[corner - 1].p, traj_[corner].p);
+            const double tx = std::cos(incoming), ty = std::sin(incoming);
+            const double ahead = (steering_ref.x-predicted.x)*tx + (steering_ref.y-predicted.y)*ty;
+            const double extension = std::max(0.0, lookahead-ahead);
+            steering_ref.x += extension*tx;
+            steering_ref.y += extension*ty;
+        }
+        if (dist(predicted, steering_ref) > 1e-6) desired_theta = heading(predicted, steering_ref);
         debug_.geo_error = wrap_pi(heading(cur, ref.p) - yaw);
         debug_.lead_error = wrap_pi(desired_theta - heading(cur, ref.p));
     }
@@ -356,6 +392,7 @@ VelCmd TrajectoryTracker::compute(double px, double py, double yaw,
         if (handoff_remaining_ <= 0.0) handoff_valid_ = false;
     }
     last_heading_error_ = e_yaw;
+    last_steering_heading_ = desired_theta;
     const double e_ct = -std::sin(nearest.theta) * (px - nearest.p.x) +
                          std::cos(nearest.theta) * (py - nearest.p.y);
 
@@ -417,6 +454,7 @@ VelCmd TrajectoryTracker::compute(double px, double py, double yaw,
         // Smith 模式下同样对比预测航向(审查发现：此处用实测航向且又关掉了实测角速度外推，停车转向会过冲约 0.3 rad)。
         e_yaw = wrap_pi(alignment_heading_ - yaw_ahead);
         last_heading_error_ = e_yaw;
+        last_steering_heading_ = alignment_heading_;
         // The shortest turn changes sign at pi. Keep the chosen turn through
         // that noisy boundary until there is an unambiguous shorter direction.
         if (std::abs(e_yaw) > 2.6 && turn_direction_ * e_yaw < 0.0)

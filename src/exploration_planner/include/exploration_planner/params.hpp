@@ -46,18 +46,13 @@ inline constexpr bool EXPLORATION_CARLIKE_MODE = true;
 inline constexpr int VISION_ID_BLACKLIST[] = {3, 4, 5};
 
 // 视觉SHM目标确认、排队和投放流程。
-// 视觉投放：提前减速，到采样距离后锁XY/Z/yaw，按SAMPLE_S收帧；包裹XY到位起4s，XY+Z连续2s可提前投放。
-// 高度=主控起飞雷达Z+0.5m；Z容差直接使用主控起飞TOL_Z；释放后锁XY、保持投放高度等RELEASE_WAIT_S再回原高度。
+// 视觉投放：在目标周围1m圆周上选可直线斜降的入口；正常直达优先，受阻才换圆周方向。锁XY/Z/yaw采样后下降。
+// 高度=主控起飞雷达Z+HEIGHT_M+已启用的Z补偿；Z容差使用主控起飞TOL_Z；释放后锁XY等待RELEASE_WAIT_S再回原高度。
 inline constexpr bool VISUAL_DROP_ENABLED = true;        // true=启用三包裹投放；false=旧的视觉到点悬停流程，不执行投放
-inline constexpr double VISUAL_DROP_ENTRY_M = 1.0;       // 开始采样的水平距离(m)：雷达到视觉粗坐标距离≤此值时，锁定当时的XY/Z/yaw
-inline constexpr double VISUAL_DROP_ENTRY_INSET_M = 0.40; // 接近段的终点不是目标物，而是A*路径上距目标(ENTRY_M-此值)处的入口点(m)：
-                                                          //   跟踪器的末段减速在入口点结束而不是在目标物上结束，跨过1m采样圈时仍有0.4m余量、
-                                                          //   速度由ENTRY_SPEED封顶而不是被减速曲线压到爬行；目标贴障碍时入口点仍在可通行路径上，
-                                                          //   不会因目标物本身落在禁入区而被判 goal blocked 永远保持
-inline constexpr double VISUAL_DROP_APPROACH_SLOW_M = 1.20; // 采样圈外的提前减速距离(m)：默认距目标2.20m开始逐渐降速，到1.00m进入采样
-inline constexpr double VISUAL_DROP_ENTRY_SPEED_MPS = 0.15; // 采样入口的接近速度上限(m/s)：保留小幅前进以穿过1m阈值，不用速度达标来阻塞采样；XY纠偏仍有效
+inline constexpr double VISUAL_DROP_ENTRY_M = 1.0;       // 采样入口圆半径(m)，圆心是视觉目标。直达/绕障都在这一圈选点；已在圈内且可直降时不倒退凑距离
+inline constexpr double VISUAL_DROP_APPROACH_SLOW_M = 1.20; // 距采样点此范围内逐步减速(m)；受阻选点仅用原GLOBAL_MARGIN，不再额外要求远离障碍
+inline constexpr double VISUAL_DROP_ENTRY_SPEED_MPS = 0.15; // 接近安全点时的指令速度上限(m/s)，仍持续XY纠偏；到点后采样1秒，再核准直线并下降
 inline constexpr double VISUAL_DROP_SAMPLE_S = 1.0;      // 锁定位置后的采样时长(s)：新帧能收多少收多少，加权平均；无有效帧则用粗坐标
-inline constexpr double VISUAL_DROP_SAMPLE_SLIDE_S = 0.60; // 采样锁点 = 越圈点 + 实测速度×此时长(上限 0.2 m)：按响应滞后自然滑停，不回拉(去掉采样→下降交接的前后点头)。0=锁在越圈点(旧)
 inline constexpr double VISUAL_DROP_HEIGHT_M = 0.03;     // 投放时雷达相对起飞位置的高度(m)：目标Z=起飞雷达Z+此值，不是离目标物表面高度
 // ★投掷高度 SLAM Z 误差补偿★(2026-09-24 实测包 z_drift_0924_1941：雷达贴地、物理高度不变拖遍全场)
 //   SLAM 的 Z 读数随位置线性偏移 err = X·x + Y·y(相对起飞点，拟合残差 RMS 0.4 cm)；x 方向每米低 3.4 cm，8.5 m 处低约 29 cm。

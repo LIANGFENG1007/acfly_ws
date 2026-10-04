@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <algorithm>
+#include <limits>
 #include <utility>
 #include <vector>
 
@@ -27,8 +28,27 @@ void ObstacleMap::integrate(const std::vector<Vec2>& pts,
     // 本帧命中标记（只标一次，避免同格多点重复加分）
     std::vector<uint8_t> hit_now(hit_.size(), 0);
 
+    // 未命中不等于看见空地：旧格可能被前面的障碍遮住，或本帧点云过稀。
+    // 只在覆盖旧格整个角宽的各个方向都有更远回波时累计清除证据。
+    // 角分辨率由现有栅格/观测范围决定；每桶保留最近回波，不能用远处
+    // 回波越过同方向的近障碍。一次遍历点云，避免对每个旧格遍历所有点。
+    const bool can_clear = pose_valid && std::isfinite(px) && std::isfinite(py) &&
+        std::isfinite(yaw) && cfg_.ghost_clear_frames > 0 && cfg_.fov_range > 0;
+    const int ray_bins = can_clear ? std::max(16,static_cast<int>(std::ceil(
+        2*M_PI*cfg_.fov_range/(cfg_.cell*.5)))) : 0;
+    const double ray_step = ray_bins ? 2*M_PI/ray_bins : 0;
+    std::vector<double> nearest_ray(ray_bins,std::numeric_limits<double>::infinity());
+
     const double ex = cfg_.edge_ignore;
     for (const auto& p : pts) {
+        if (!std::isfinite(p.x) || !std::isfinite(p.y)) continue;
+        if (can_clear) {
+            const double dx=p.x-px,dy=p.y-py;
+            double angle=std::atan2(dy,dx);
+            if(angle<0) angle+=2*M_PI;
+            const int bin=std::min(ray_bins-1,static_cast<int>(angle/ray_step));
+            nearest_ray[bin]=std::min(nearest_ray[bin],std::hypot(dx,dy));
+        }
         // 去掉贴墙的点（墙不当障碍，靠 WALL_MARGIN 边界逻辑兜底）
         if (p.x < cfg_.min_x + ex || p.x > cfg_.max_x - ex ||
             p.y < cfg_.min_y + ex || p.y > cfg_.max_y - ex)
@@ -50,10 +70,9 @@ void ObstacleMap::integrate(const std::vector<Vec2>& pts,
         hit_[i] = static_cast<uint16_t>(v);
     }
 
-    // ★latch 智能回收(防幽灵)★：latch 格若【当前在视野内】却【连续无点命中】→ 判为幽灵，撤销 latch。
-    //   看不到的 latch 格(视野外)冻结计数，不回收——不误伤真障碍(飞机没在看它时不该清)。
-    //   真静态障碍:飞机看它时总会命中→计数归零→永不回收。幽灵:视野扫到却无点→计数涨过阈值→清除。
-    if (pose_valid && cfg_.ghost_clear_frames > 0) {
+    // 视野只限定可回收区域；还必须有无遮挡的自由空间证据。
+    // 空包、遮挡和缺少回波的方向冻结计数，真实命中仍立即清零。
+    if (can_clear) {
         const double half_fov = (cfg_.fov_deg * 0.5) * M_PI / 180.0;
         const double r2 = cfg_.fov_range * cfg_.fov_range;
         const double cyaw = std::cos(yaw), syaw = std::sin(yaw);
@@ -74,7 +93,23 @@ void ObstacleMap::integrate(const std::vector<Vec2>& pts,
                 if (fwd <= 0.0) continue;                   // 在身后 → 不在视野，冻结
                 if (std::fabs(std::atan2(lat, fwd)) > half_fov) continue;  // 超开角 → 冻结
 
-                // 在视野内却没命中 → 幽灵嫌疑 +1；累计超阈值 → 撤销 latch(连 hit 一起清零)
+                const double distance=std::hypot(dx,dy);
+                const double cell_radius=cfg_.cell*std::sqrt(.5);
+                if(distance<=cell_radius) continue;
+                const double angle=std::atan2(dy,dx);
+                const double half_angle=std::asin(cell_radius/distance);
+                const int first=static_cast<int>(std::floor((angle-half_angle)/ray_step));
+                const int last=static_cast<int>(std::floor((angle+half_angle)/ray_step));
+                bool observed_free=true;
+                for(int bin=first;bin<=last;++bin) {
+                    const double range=nearest_ray[(bin%ray_bins+ray_bins)%ray_bins];
+                    if(!std::isfinite(range) || range<=distance+cell_radius) {
+                        observed_free=false;break;
+                    }
+                }
+                if(!observed_free) continue;
+
+                // 整格被有效射线穿过且无命中，才增加幽灵计数。
                 if (++ghost_miss_[id] > cfg_.ghost_clear_frames) {
                     latched_[id]    = 0;
                     hit_[id]        = 0;

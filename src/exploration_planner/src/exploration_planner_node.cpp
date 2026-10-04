@@ -62,6 +62,7 @@
 #include "exploration_planner/cloud_xyz.hpp"
 #include "exploration_planner/velocity_slew.hpp"
 #include "exploration_planner/visual_drop.hpp"
+#include "exploration_planner/drop_approach.hpp"
 #include <acfly_interfaces/msg/exploration_context.hpp>
 #include <acfly_interfaces/msg/exploration_command.hpp>
 #include <acfly_interfaces/msg/drop_status.hpp>
@@ -111,8 +112,9 @@ public:
         vision_candidates_ = std::make_unique<VisionCandidates>(vision_config);
         visual_drop_enabled_ = declare_parameter<bool>("visual_drop_enabled", params::VISUAL_DROP_ENABLED);
         VisualDropConfig dcfg;
-        dcfg.entry_distance = dd("visual_drop_entry_m", params::VISUAL_DROP_ENTRY_M);
-        drop_entry_inset_ = dd("visual_drop_entry_inset_m", params::VISUAL_DROP_ENTRY_INSET_M);
+        drop_entry_radius_ = dd("visual_drop_entry_m", params::VISUAL_DROP_ENTRY_M);
+        if (!std::isfinite(drop_entry_radius_) || drop_entry_radius_ <= 0)
+            throw std::invalid_argument("visual_drop_entry_m must be finite and positive");
         dcfg.approach_slow_distance = dd("visual_drop_approach_slow_m", params::VISUAL_DROP_APPROACH_SLOW_M);
         dcfg.entry_speed = dd("visual_drop_entry_speed_mps", params::VISUAL_DROP_ENTRY_SPEED_MPS);
         dcfg.sample_seconds = dd("visual_drop_sample_s", params::VISUAL_DROP_SAMPLE_S);
@@ -132,7 +134,6 @@ public:
         dcfg.descend_speed = dd("visual_drop_descend_mps", params::VISUAL_DROP_DESCEND_MPS);
         dcfg.climb_speed = dd("visual_drop_climb_mps", params::VISUAL_DROP_CLIMB_MPS);
         dcfg.climb_release = std::max(0.0, dd("visual_drop_climb_release_m", params::VISUAL_DROP_CLIMB_RELEASE_M));
-        drop_sample_slide_s_ = std::max(0.0, dd("visual_drop_sample_slide_s", params::VISUAL_DROP_SAMPLE_SLIDE_S));
         dcfg.release_wait = dd("visual_drop_release_wait_s", params::VISUAL_DROP_RELEASE_WAIT_S);
         if (dcfg.descend_speed > .6 || dcfg.climb_speed > .6)
             throw std::invalid_argument("visual drop vertical limits exceed main controller 0.6m/s");
@@ -831,8 +832,9 @@ private:
         vision_hint_times_.clear();
         vision_hint_unmarks_.clear();
         drop_status_.reset();
-        drop_path_.clear(); drop_path_retry_ = -1; drop_entry_.reset();
-        drop_cruise_z_.reset(); drop_pause_z_.reset();
+        drop_path_.clear(); drop_path_retry_ = -1; drop_entry_.reset(); drop_approach_ = {};
+        drop_entry_time_ = -1; drop_obstructed_approach_ = false;
+        drop_cruise_z_.reset();
         reset_home_approach();
         vision_candidates_->reset();
         vision_queue_->reset();
@@ -869,6 +871,8 @@ private:
         last_yaw_rate_ = 0.0;
         poi_mode_ = PoiMode::EXPLORE;
         last_command_world_ = {};
+        drop_leg_target_.reset();
+        yaw_command_history_.clear();
         recovery_holding_ = false;
         poi_queue_.clear();
         poi_seen_.clear();
@@ -1085,8 +1089,8 @@ private:
                             const FrontierSelection* observation = nullptr)
     {
         explore_handoff_deferred_ = false;
-        // Restore one continuously sampled curve. Validate both the resulting
-        // curve and its fallback; a rejected curve must never be executed.
+        // 用局部相切圆角生成连续轨迹，已构造的起步曲线保留原形状。
+        // 再套一遍穿点样条会在曲线接直线处过冲，凭空插入反向曲率。
         const Obstacles transition_obs = obs_map_->snapshot();
         if (gr.path.size() < 2 || !path_inside_safe_field(gr.path) ||
             !path_clear(gr.path.front(), gr.path, transition_obs, ggcfg_)) {
@@ -1094,25 +1098,18 @@ private:
             return false;
         }
         const Path2 blended = blend_explore_transition(clean_explore_guides(gr.path, transition_obs), transition_obs);
-        // Intermediate samples describe a single curve, not stop waypoints.
-        const Trajectory smooth_traj = smooth_catmull_rom(blended, arc_ds_);
+        // 小间距采样点描述同一条曲线，不作为中间停车点。其余真实折点只在
+        // 局部圆角通过曲率、障碍及场界检查后替换；直线段不向外鼓包。
+        const Trajectory smooth_traj = rounded_fallback_trajectory(blended, ggcfg_, transition_obs);
         Path2 smooth_points;
         smooth_points.reserve(smooth_traj.size());
         for (const auto& tp : smooth_traj) smooth_points.push_back(tp.p);
 
-        // Catmull-Rom 可能在急弯处向障碍内侧切入；最终执行轨迹也必须满足同一
-        // 安全口径。若平滑轨迹不安全，退回已经逐段校验过的采样折线。
+        // 局部验证之外，最终整条轨迹也必须满足同一安全口径。
         const bool field_safe = smooth_points.size() >= 2 && path_inside_safe_field(smooth_points);
         const bool obstacle_safe = field_safe && path_clear(blended.front(), smooth_points, transition_obs, ggcfg_);
         const bool smooth_safe = field_safe && obstacle_safe;
-        Trajectory execution = smooth_safe ? smooth_traj : rounded_fallback_trajectory(blended, ggcfg_, transition_obs);
-        if (!smooth_safe) {
-            Path2 rounded_points;
-            for (const auto& tp : execution) rounded_points.push_back(tp.p);
-            if (execution.size() < 2 || !path_inside_safe_field(rounded_points) ||
-                !path_clear(blended.front(), rounded_points, transition_obs, ggcfg_))
-                execution = make_polyline_trajectory(blended);
-        }
+        Trajectory execution = smooth_safe ? smooth_traj : make_polyline_trajectory(blended);
         const bool handoff_moving = v_fwd_est_ > handoff_brake_speed_;
         if (carlike_mode_ && explore_has_committed_ && tracker_->has_trajectory() &&
             (tracker_->remaining_distance() <= explore_handoff_m_ || handoff_moving) &&
@@ -1368,7 +1365,7 @@ private:
         return result;
     }
 
-    // 用实际航向接入第一条引导段，再对完整引导路线统一生成连续曲线。
+    // 用实际航向接入第一条引导段；后续采样必须保留已检查的连接形状。
     // 起步连接必须经过障碍和场界检查，不插入需要回追的单格起步点。
     Path2 blend_explore_transition(const Path2& path, const Obstacles& obs)
     {
@@ -1379,7 +1376,7 @@ private:
             return candidate.size() >= 2 && path_inside_safe_field(candidate) &&
                 path_clear(candidate.front(), candidate, obs, ggcfg_);
         };
-        // Keep original guide vertices for continuous Catmull-Rom smoothing.
+        // Keep the checked guides when a monotone tangent connection is unavailable.
         const Path2 rounded = path;
         if (rounded.size() < 2) return path;
 
@@ -1388,9 +1385,8 @@ private:
         const double d03 = std::hypot(p3.x - p0.x, p3.y - p0.y);
         if (d03 < 1e-3) return rounded;
 
-        // Only join the measured body heading to the first line. An old raw
-        // tangent may already be stale, and the next line belongs to its own
-        // interior corner; neither may bend this initial segment backwards.
+        // Use measured heading at entry; a following guide may provide an exit
+        // tangent only after the complete join passes geometry/curvature checks.
         const Vec2 old_dir{std::cos(yaw_), std::sin(yaw_)};
         const Vec2 new_dir{(p3.x - p0.x) / d03, (p3.y - p0.y) / d03};
         const double dot = std::clamp(old_dir.x * new_dir.x + old_dir.y * new_dir.y, -1.0, 1.0);
@@ -1400,45 +1396,80 @@ private:
         const double handle = std::min(turn_blend_m_, d03 * 0.45);
         if (handle < turn_round_min_m_) return rounded;
 
-        const Vec2 c1{p0.x + old_dir.x * handle, p0.y + old_dir.y * handle};
-        const Vec2 c2{p3.x - new_dir.x * handle, p3.y - new_dir.y * handle};
+        const auto connect = [&](Vec2 end_dir, double turn_sign) -> Path2 {
+            // 两端切线交点限定各自控制柄，而不是硬套相同长度。短首段中
+            // 出场柄越过交点会让控制多边形反折，单向绕障变成 S 形。
+            const double cross=old_dir.x*end_dir.y-old_dir.y*end_dir.x;
+            if(std::abs(cross)<1e-9) return {};
+            const Vec2 chord{p3.x-p0.x,p3.y-p0.y};
+            const double incoming=(chord.x*end_dir.y-chord.y*end_dir.x)/cross;
+            const double outgoing=(old_dir.x*chord.y-old_dir.y*chord.x)/cross;
+            if(incoming<=1e-6 || outgoing<=1e-6) return {};
+            const double first_handle=std::min(handle,incoming);
+            const double last_handle=std::min(handle,outgoing);
+            const Vec2 c1{p0.x+old_dir.x*first_handle,p0.y+old_dir.y*first_handle};
+            const Vec2 c2{p3.x-end_dir.x*last_handle,p3.y-end_dir.y*last_handle};
 
-        const int samples = std::max({4, turn_blend_samples_,
-            static_cast<int>(std::ceil((d03 + 2.0 * handle) / std::max(.005, arc_ds_)))});
-        Path2 blended;
-        blended.reserve(static_cast<size_t>(samples) + rounded.size());
-        blended.push_back(p0);
-        for (int k = 1; k <= samples; ++k) {
-            const double t = static_cast<double>(k) / samples;
-            const double u = 1.0 - t;
-            const double w0 = u * u * u;
-            const double w1 = 3.0 * u * u * t;
-            const double w2 = 3.0 * u * t * t;
-            const double w3 = t * t * t;
-            blended.push_back({
-                w0 * p0.x + w1 * c1.x + w2 * c2.x + w3 * p3.x,
-                w0 * p0.y + w1 * c1.y + w2 * c2.y + w3 * p3.y});
-        }
-        // Evaluate the cubic derivatives more densely than the executed
-        // samples before accepting a start transition. Curvature clipping
-        // would conceal a hook rather than make it flyable.
-        for (int sample = 0; sample <= samples * 4; ++sample) {
-            const double t = static_cast<double>(sample) / (samples * 4), u = 1.0 - t;
-            const Vec2 derivative{
-                3 * u * u * (c1.x - p0.x) + 6 * u * t * (c2.x - c1.x) + 3 * t * t * (p3.x - c2.x),
-                3 * u * u * (c1.y - p0.y) + 6 * u * t * (c2.y - c1.y) + 3 * t * t * (p3.y - c2.y)};
-            const Vec2 second{
-                6 * u * (c2.x - 2 * c1.x + p0.x) + 6 * t * (p3.x - 2 * c2.x + c1.x),
-                6 * u * (c2.y - 2 * c1.y + p0.y) + 6 * t * (p3.y - 2 * c2.y + c1.y)};
-            const double speed = std::hypot(derivative.x, derivative.y);
-            if (speed < 1e-6 || derivative.x * new_dir.x + derivative.y * new_dir.y < -1e-9 ||
-                std::abs(derivative.x * second.y - derivative.y * second.x) /
-                    (speed * speed * speed) > turn_round_max_curvature_) return rounded;
-        }
-        for (size_t i = 2; i < rounded.size(); ++i) blended.push_back(rounded[i]);
+            const int samples = std::max({4, turn_blend_samples_,
+                static_cast<int>(std::ceil((d03 + 2.0 * handle) / std::max(.005, arc_ds_)))});
+            Path2 blended;
+            blended.reserve(static_cast<size_t>(samples) + rounded.size());
+            blended.push_back(p0);
+            for (int k = 1; k <= samples; ++k) {
+                const double t = static_cast<double>(k) / samples;
+                const double u = 1.0 - t;
+                const double w0 = u * u * u;
+                const double w1 = 3.0 * u * u * t;
+                const double w2 = 3.0 * u * t * t;
+                const double w3 = t * t * t;
+                blended.push_back({
+                    w0 * p0.x + w1 * c1.x + w2 * c2.x + w3 * p3.x,
+                    w0 * p0.y + w1 * c1.y + w2 * c2.y + w3 * p3.y});
+            }
+            // Evaluate the cubic derivatives more densely than the executed
+            // samples before accepting a start transition. Curvature clipping
+            // would conceal a hook rather than make it flyable.
+            for (int sample = 0; sample <= samples * 4; ++sample) {
+                const double t = static_cast<double>(sample) / (samples * 4), u = 1.0 - t;
+                const Vec2 derivative{
+                    3 * u * u * (c1.x - p0.x) + 6 * u * t * (c2.x - c1.x) + 3 * t * t * (p3.x - c2.x),
+                    3 * u * u * (c1.y - p0.y) + 6 * u * t * (c2.y - c1.y) + 3 * t * t * (p3.y - c2.y)};
+                const Vec2 second{
+                    6 * u * (c2.x - 2 * c1.x + p0.x) + 6 * t * (p3.x - 2 * c2.x + c1.x),
+                    6 * u * (c2.y - 2 * c1.y + p0.y) + 6 * t * (p3.y - 2 * c2.y + c1.y)};
+                const double speed = std::hypot(derivative.x, derivative.y);
+                if (speed < 1e-6 || derivative.x * new_dir.x + derivative.y * new_dir.y < -1e-9 ||
+                    std::abs(derivative.x * second.y - derivative.y * second.x) /
+                        (speed * speed * speed) > turn_round_max_curvature_) return {};
+                if (turn_sign*(derivative.x*second.y-derivative.y*second.x) < -1e-9) return {};
+            }
+            for (size_t i = 2; i < rounded.size(); ++i) blended.push_back(rounded[i]);
 
-        if (!safe(blended)) return rounded;
-        return blended;
+            if (!safe(blended)) return {};
+            return blended;
+        };
+        // Facing the first chord at the end of a curved join can create an S:
+        // turn past that heading, turn back to it, then immediately turn again
+        // for the next leg. Prefer one continuous turn tangent to the next leg
+        // when its direction brackets the chord and the whole curve is safe.
+        if (rounded.size() > 2) {
+            const Vec2 next = rounded[2];
+            const double length = std::hypot(next.x-p3.x,next.y-p3.y);
+            if (length > 1e-6) {
+                const Vec2 end_dir{(next.x-p3.x)/length,(next.y-p3.y)/length};
+                const double turn = wrap_pi(std::atan2(end_dir.y,end_dir.x)-yaw_);
+                const double chord = wrap_pi(std::atan2(new_dir.y,new_dir.x)-yaw_);
+                if (std::abs(turn) < turn_blend_max_angle_rad_ &&
+                    turn*chord > 0 && std::abs(chord) <= std::abs(turn)) {
+                    const Path2 continuous = connect(end_dir,turn>0 ? 1 : -1);
+                    if (!continuous.empty()) return continuous;
+                }
+            }
+        }
+        // 两点直线没有需要衔接的下一段切线。强迫曲线从当前机头出发又
+        // 沿首段弦方向结束，必然先转过弦方向再转回。保持已检查的引导线，
+        // 由跟踪器处理航向误差和 XY 纠偏；不能回退到允许反向曲率的曲线。
+        return rounded;
     }
 
     // 路径起步 cone_hook_window_ 内各段方向相对机头的最大偏角(rad)，用于识别锥约束硬凑的钩子。
@@ -1456,11 +1487,15 @@ private:
         return worst;
     }
 
-    // 平滑执行轨迹(与 adopt_explore_path 同一 Catmull-Rom)在起步 cone_hook_window_ 内的最大曲率(1/m)。
-    double start_curvature(const Path2& path) const
+    // 与实际采纳路径使用相同的局部圆角和安全回退，避免按未执行的样条误拒路线。
+    double start_curvature(const Path2& path, const Obstacles& obs) const
     {
         if (path.size() < 2) return 0.0;
-        const Trajectory t = smooth_catmull_rom(path, arc_ds_);
+        Trajectory t = rounded_fallback_trajectory(path, ggcfg_, obs);
+        Path2 points;
+        for (const auto& p : t) points.push_back(p.p);
+        if (!path_inside_safe_field(points) || !path_clear(path.front(), points, obs, ggcfg_))
+            t = make_polyline_trajectory(path);
         double k = 0.0;
         for (const auto& p : t) {
             if (p.s - t.front().s > cone_hook_window_) break;
@@ -1797,7 +1832,7 @@ private:
             const Path2 guides = clean_explore_guides(gr.path, obs);
             const double hook = cone_hook_angle(cur, guides);
             if (hook >= cone_hook_deg_ * M_PI / 180.0) {
-                const double kappa = start_curvature(blend_explore_transition(guides, obs));
+                const double kappa = start_curvature(blend_explore_transition(guides, obs), obs);
                 if (kappa >= cone_hook_kappa_) {
                     ++cone_hook_rejections_;
                     RCLCPP_INFO(get_logger(), "机头锥内的路起步 %.1fm 内急转 %.0f°、执行曲率 %.1f/m → 视为锥内无解，改走停车转向/原地找解 (目标 %.2f,%.2f)",
@@ -2516,15 +2551,51 @@ private:
 
     bool drop_context_valid() const { return drop_context_ && drop_context_->mission == goal_header_; }
 
+    void remember_yaw_command(double rate)
+    {
+        const double dt=std::max(1e-3,gains_.dt);
+        const size_t count=static_cast<size_t>(std::max(0.0,std::lround(gains_.smith_yaw_time/dt)*1.0));
+        yaw_command_history_.push_back(rate);
+        while(yaw_command_history_.size()>count) yaw_command_history_.pop_front();
+    }
+
+    double pending_yaw_rotation() const
+    {
+        if(gains_.smith_yaw_time<=0) return std::max(0.0,gains_.prediction_time)*yaw_rate_est_;
+        const double dt=std::max(1e-3,gains_.dt);
+        double rotation=0;
+        for(double rate:yaw_command_history_) rotation+=rate*dt;
+        // 新定位恢复时还没有完整指令历史，仅对缺少的部分用实测角速度外推。
+        return rotation+std::max(0.0,gains_.smith_yaw_time-yaw_command_history_.size()*dt)*yaw_rate_est_;
+    }
+
+    bool drop_escape_velocity_clear(Vec2 velocity, const Obstacles& obs) const
+    {
+        const double speed=std::hypot(velocity.x,velocity.y);
+        if(!std::isfinite(speed) || speed<=1e-9) return false;
+        const double horizon=std::min(.35,std::max(0.0,global_gains_.prediction_time))+
+            speed/(2*std::max(1e-3,global_gains_.max_accel));
+        const Vec2 cur{px_,py_},stop{px_+velocity.x*horizon,py_+velocity.y*horizon};
+        return obstacle_escape_clear(cur,stop,obs,exec_config()) && field_motion_clear(cur,stop,exec_config());
+    }
+
     // Holonomic velocity tracking: the locked yaw never gates XY corrections.
-    // Every segment and the final command still pass the required-point obstacle checks.
-    Vec2 drop_xy_velocity(Vec2 target, const Obstacles& obs, double t, bool holding)
+    // 接近/采样保留避障；下降获准后保持单一直线，不再由通用规划圈撤销动作。
+    Vec2 drop_xy_velocity(Vec2 target, const Obstacles& obs, double t, bool holding, bool committed = false)
     {
         const Vec2 cur{px_, py_};
-        const auto cfg = required_config();
+        const bool approaching = visual_drop_.phase() == VisualDrop::Phase::Approach;
+        // 路线采纳用完整规划余量，执行/选择下一可见路点用原有执行余量。
+        // 否则风把飞机推离转角几厘米后，下一段永远不可见，PD只会停在旧转角。
+        const auto cfg = approaching ? exec_config() : required_config();
         Path2 direct{cur, target};
         bool escape_direct = false;
-        if (required_path_clear(cur, direct, target, obs, cfg)) {
+        if (committed) {
+            drop_path_ = direct;
+            escape_direct = true;
+        } else if (approaching) {
+            drop_path_ = drop_approach_.path;
+        } else if (required_path_clear(cur, direct, target, obs, cfg)) {
             drop_path_ = direct;
         } else if (std::hypot(target.x - cur.x, target.y - cur.y) <= 1.5 &&
                    obstacle_escape_clear(cur, target, obs, exec_config()) && field_motion_clear(cur, target, exec_config()) &&
@@ -2560,22 +2631,67 @@ private:
         global_raw_ = drop_path_; global_traj_ = make_polyline_trajectory(drop_path_);
         traj_ = global_traj_; global_has_ = true;
         Vec2 carrot = target;
+        double approach_heading = drop_approach_.arrival_heading;
+        const bool active_leg_pending = approaching && drop_leg_target_ &&
+            drop_leg_track_==visual_drop_.target_id() &&
+            std::hypot(cur.x-drop_leg_target_->x,cur.y-drop_leg_target_->y)>goal_tol_ &&
+            std::any_of(drop_path_.begin()+1,drop_path_.end(),[&](Vec2 p) {
+                return std::hypot(p.x-drop_leg_target_->x,p.y-drop_leg_target_->y)<1e-6;
+            });
         // Furthest directly visible vertex on the checked route, without cutting an obstacle corner.
         bool visible = escape_direct;   // 逃离直线已按远离规则校验过
         for (size_t i = drop_path_.size(); !visible && i-- > 0;) {
+            if(approaching && i==0) continue;
+            // 已采纳的直线飞到交接范围才换段；不能因逐帧可见性变化，在绕障
+            // 中途突然跳过当前路点，随后又因新点云撤回这条捷径。
+            if(active_leg_pending &&
+                std::hypot(drop_path_[i].x-drop_leg_target_->x,drop_path_[i].y-drop_leg_target_->y)>1e-6) continue;
             // Same execution margin as the kept route: a body already inside the
             // planning ring must still see its next waypoint.
-            if (required_path_clear(cur, Path2{cur, drop_path_[i]}, drop_path_[i], obs, exec_config())) {
-                carrot = drop_path_[i]; visible = true; break;
+            // 新的跨点捷径仍须完整规划余量；执行余量只用于继续已采纳的下一段。
+            const bool continuing_leg = approaching && i==2 &&
+                std::hypot(cur.x-drop_path_[1].x,cur.y-drop_path_[1].y)<=goal_tol_;
+            const auto connector_cfg = approaching && i>1 && !continuing_leg ? drop_transit_config() : cfg;
+            if (approaching ? (obstacle_escape_clear(cur, drop_path_[i], obs, connector_cfg) &&
+                               field_motion_clear(cur, drop_path_[i], connector_cfg)) :
+                required_path_clear(cur, Path2{cur, drop_path_[i]}, drop_path_[i], obs, exec_config())) {
+                if (approaching) {
+                    const bool same_leg = drop_leg_target_ && drop_leg_track_==visual_drop_.target_id() &&
+                        std::hypot(drop_leg_target_->x-drop_path_[i].x,drop_leg_target_->y-drop_path_[i].y)<1e-6;
+                    const bool terminal=std::hypot(drop_path_[i].x-target.x,drop_path_[i].y-target.y)<1e-6;
+                    const double heading = same_leg ? drop_leg_heading_ :
+                        (!terminal && continuing_leg ?
+                         std::atan2(drop_path_[i].y-drop_path_[1].y,drop_path_[i].x-drop_path_[1].x) :
+                         terminal && std::hypot(target.x-cur.x,target.y-cur.y)<=goal_tol_ ? yaw_ :
+                         std::atan2(drop_path_[i].y-cur.y,drop_path_[i].x-cur.x));
+                    if(terminal && !same_leg && !drop_descent_clear(target,visual_drop_.alignment_target(heading),
+                            obs,required_config(),goal_tol_,exec_config().inflate)) continue;
+                    approach_heading=heading;
+                    if(terminal) drop_approach_.arrival_heading=heading;
+                    if(!same_leg) drop_leg_anchor_=drop_path_[i];
+                    drop_leg_target_=drop_path_[i];drop_leg_heading_=heading;drop_leg_track_=visual_drop_.target_id();
+                }
+                carrot = drop_path_[i]; visible = true;
+                if (approaching && i > 0) {
+                    // 只保留已确认可直达的路点及其后续段，不能再追已经飞过的顶点。
+                    drop_approach_.path.erase(drop_approach_.path.begin(), drop_approach_.path.begin()+i);
+                    drop_approach_.path.insert(drop_approach_.path.begin(),cur);
+                }
+                break;
             }
         }
-        if (!visible) { global_failed_ = true; last_yaw_rate_ = 0; return recovery_velocity(obs, true); }
+        if (!visible) {
+            if(approaching) { drop_entry_.reset();drop_approach_={};drop_entry_time_=-1;drop_leg_target_.reset(); }
+            global_failed_ = true; last_yaw_rate_ = 0; return recovery_velocity(obs, true);
+        }
         last_look_ = carrot; look_valid_ = true;
         const double c = std::cos(yaw_), s = std::sin(yaw_);
         const Vec2 measured{c*v_fwd_est_-s*v_lat_est_, s*v_fwd_est_+c*v_lat_est_};
         Vec2 desired{kp_goal_*(carrot.x-px_)-kd_goal_*measured.x,
                      kp_goal_*(carrot.y-py_)-kd_goal_*measured.y};
-        const double cap = std::min(v_goal_max_, holding ? .20 : .40);
+        const double cap = approaching ? visual_drop_.approach_limit_at(
+            std::hypot(target.x-cur.x,target.y-cur.y), v_goal_max_) :
+            std::min(v_goal_max_, holding ? .20 : .40);
         const auto limit = [cap](Vec2& v) {
             const double n = std::hypot(v.x,v.y);
             if (n > cap) { v.x *= cap/n; v.y *= cap/n; }
@@ -2587,91 +2703,209 @@ private:
         VelCmd command;
         command.v_fwd = c*desired.x+s*desired.y; command.v_lat = -s*desired.x+c*desired.y;
         command.holding_position = holding;
-        command.yaw_rate = std::clamp(gains_.kp_yaw*wrap_pi(visual_drop_.yaw()-yaw_) -
+        // 最后一段跟踪已验算的入场航向，横向漂移由XY纠正，不能让“当前位置指向
+        // 入口”的方位角在减速时不断变化，从而把包裹对准点旋到另一侧。
+        // 这是路线给出的参考方向；实际yaw只在到点开始采样时捕获。
+        const double heading = approaching ? approach_heading : visual_drop_.yaw();
+        command.yaw_rate = std::clamp(gains_.kp_yaw*wrap_pi(heading-yaw_) -
             gains_.kd_yaw*yaw_rate_est_, -gains_.max_yaw_rate, gains_.max_yaw_rate);
-        return guard_required_command(command, obs, false);
-    }
-
-    bool required_goal_admissible(const Vec2& p, const Obstacles& obs, const GlobalConfig& cfg) const
-    {
-        const double margin = required_field_margin(cfg);
-        return path_clear(p, Path2{p, p}, obs, ggcfg_) &&
-            p.x >= ggcfg_.min_x + margin && p.x <= ggcfg_.max_x - margin &&
-            p.y >= ggcfg_.min_y + margin && p.y <= ggcfg_.max_y - margin;
-    }
-
-    // Point on the planned route lying `arc` metres before the object. Returns
-    // the current position when the remaining route is already shorter.
-    static Vec2 point_before_end(const Path2& path, double arc, Vec2 fallback)
-    {
-        double acc = 0;
-        for (size_t i = path.size(); i-- > 1;) {
-            const Vec2& a = path[i-1];
-            const Vec2& b = path[i];
-            const double seg = std::hypot(b.x-a.x, b.y-a.y);
-            if (acc + seg >= arc) {
-                const double u = seg > 1e-9 ? (arc - acc) / seg : 0.0;
-                return {b.x + (a.x-b.x)*u, b.y + (a.y-b.y)*u};
+        if(approaching) {
+            // 接近段同样按已有响应预测、角加速度限幅交接，不能把新航段的角度
+            // 直接变成满角速度，等机头转过头后再反向拉回。XY继续独立反馈。
+            // 与原跟踪器共用 Smith 时间的语义：预测尚未体现到定位中的已发指令。
+            // 不能用同一段滞后的SLAM角速度同时做长外推和阻尼，会形成来回摆动。
+            const double error=wrap_pi(heading-yaw_-pending_yaw_rotation());
+            const double accel=std::max(1e-3,gains_.max_yaw_accel);
+            const double braking=std::sqrt(2*accel*std::abs(error));
+            const double desired_rate=std::clamp(std::clamp(gains_.kp_yaw*error,-braking,braking)-
+                gains_.kd_yaw*yaw_rate_est_,-gains_.max_yaw_rate,gains_.max_yaw_rate);
+            command.yaw_rate=last_yaw_rate_+std::clamp(desired_rate-last_yaw_rate_,
+                -accel*gains_.dt,accel*gains_.dt);
+        } else drop_leg_target_.reset();
+        if (!committed) {
+            // 规划器已允许沿当前段单调退出拟合圈，速度守卫也必须使用同一
+            // 起点规则。普通碰撞检查会连离开圈的指令都清零，风会继续把机身
+            // 推向障碍。这里只接续刚检查过的路线，所有重叠障碍都必须远离，
+            // 整个短预测段仍检查其他障碍及场界；XY仍受原加速度/速度限制。
+            if(approaching && !obstacle_segment_clear(cur,cur,obs,exec_config()) &&
+                drop_escape_velocity_clear(desired,obs)) {
+                global_braking_blocked_=false;
+                command_projection_blocked_=measured_projection_blocked_=false;
+                required_blocked_time_valid_=false;
+                global_block_reason_="drop_monotonic_escape";
+                last_yaw_rate_=0;
+                return {command.v_fwd,command.v_lat};
             }
-            acc += seg;
+            return guard_required_command(command, obs, false);
         }
-        return fallback;
+        // 下降、投放等待和原地回升持续输出XY和yaw闭环，不重规划、不套通用避障刹停。
+        // 上层位姿有效期保护、指令限幅和加速度限制仍然生效。
+        global_braking_blocked_ = false;
+        command_projection_blocked_ = measured_projection_blocked_ = false;
+        required_blocked_time_valid_ = false;
+        global_block_reason_.clear();
+        last_yaw_rate_ = command.yaw_rate;
+        return {command.v_fwd, command.v_lat};
     }
 
-    // Sampling entry point for the approach phase, cached per target so the
-    // required-path controller is not replanned every tick. Recomputed when the
-    // object estimate moves or the route to the cached point keeps failing.
-    Vec2 drop_entry_point(std::uint64_t track_id, Vec2 object, const Obstacles& obs, double t)
+    GlobalConfig drop_transit_config() const
     {
-        const double arc = std::max(0.3, visual_drop_.entry_distance() - drop_entry_inset_);
-        const bool stale = !drop_entry_ || drop_entry_track_ != track_id ||
-            std::hypot(object.x-drop_entry_object_.x, object.y-drop_entry_object_.y) > .05 ||
-            ((global_failed_ || global_goal_blocked_) && t - drop_entry_time_ >= .5);
-        if (!stale) return *drop_entry_;
+        auto cfg = required_config();
+        // 与普通路线共用原有余量；不为投放另加一个更大的障碍禁入圈。
+        // 入口留出到点容差，防止“入口恰在边界上、PD无限逼近、实际位置却永远未进合法区”。
+        cfg.required_goal_field_margin = required_field_margin(cfg) + goal_tol_;
+        cfg.wall_margin = required_field_margin(cfg);
+        cfg.head_cone_half = cfg.head_cone_radius = 0;
+        return cfg;
+    }
+
+    bool drop_descent_line_clear(Vec2 start, Vec2 landing, const Obstacles& obs,
+                                 double entry_tolerance = 0) const
+    {
+        // 接近点用完整规划余量；只有投放终点陷入外层余量时才逐渐收小该余量。
+        // 不能删除拟合障碍本身或机体半径，也不能据此放宽接近路线/结束点。
+        return drop_descent_clear(start,landing,obs,required_config(),entry_tolerance,exec_config().inflate);
+    }
+
+    Vec2 drop_landing_from_entry(Vec2 entry, Vec2 from) const
+    {
+        // 当前已在到点容差内时只能按真实yaw核准；毫米级位移没有可执行的入场方向。
+        const bool already_here=std::hypot(from.x-px_,from.y-py_)<1e-6 &&
+            std::hypot(entry.x-from.x,entry.y-from.y)<=goal_tol_;
+        const double heading=!already_here && std::hypot(entry.x-from.x,entry.y-from.y)>1e-6
+            ? std::atan2(entry.y-from.y,entry.x-from.x) : yaw_;
+        return visual_drop_.alignment_target(heading);
+    }
+
+    std::optional<Vec2> drop_entry_point(std::uint64_t track_id, Vec2 object,
+                                       const Obstacles& obs, double t)
+    {
         const Vec2 cur{px_, py_};
-        const GlobalConfig cfg = required_config();
-        Vec2 entry = object; const char* how = "object"; bool found = false;
-        if (std::hypot(object.x-cur.x, object.y-cur.y) <= arc) {
-            entry = cur; how = "already_inside"; found = true;
-        } else {
-            GlobalResult gr = plan_required_path(cur, object, obs, cfg, yaw_);
-            if (!gr.ok || gr.path.size() < 2) gr = plan_required_path(cur, object, obs, cfg);
-            if (gr.ok && gr.path.size() >= 2 && !gr.goal_blocked) {
-                const Vec2 p = point_before_end(gr.path, arc, cur);
-                if (required_goal_admissible(p, obs, cfg)) { entry = p; how = "on_route"; found = true; }
+        const auto transit = drop_transit_config();
+        const bool same_target = drop_entry_track_ == track_id &&
+            std::hypot(object.x-drop_entry_object_.x,object.y-drop_entry_object_.y) <= .05;
+        const auto safe_entry = [&](Vec2 entry, double tolerance, double heading) {
+            return drop_descent_clear(entry,entry,obs,transit) &&
+                drop_descent_clear(entry,visual_drop_.alignment_target(heading),obs,required_config(),tolerance,
+                    exec_config().inflate);
+        };
+        const auto direct = [&](Vec2 entry) {
+            return obstacle_escape_clear(cur,entry,obs,transit) && field_motion_clear(cur,entry,transit);
+        };
+        // 接近期间也保留完整到点误差包络。只检查入口中心会把近障直线留到最后才
+        // 判失效：已经在旧入口停下，再侧移几厘米重找入口，形成两段和尖角。
+        // 已到达且实际下降线通过则可以立即采样，不为未使用的容差重新移位。
+        const double cached_heading = std::isfinite(drop_approach_.arrival_heading) ? drop_approach_.arrival_heading : yaw_;
+        const bool arrived_clear = same_target && drop_entry_ &&
+            std::hypot(cur.x-drop_entry_->x,cur.y-drop_entry_->y)<=goal_tol_ &&
+            safe_entry(*drop_entry_,0,cached_heading) &&
+            drop_descent_line_clear(cur,visual_drop_.alignment_target(yaw_),obs);
+        if (same_target && drop_entry_ && (safe_entry(*drop_entry_,goal_tol_,cached_heading) || arrived_clear)) {
+            // 校验实际将执行的剩余折线；不能先投影回旧路段，把获准的单调
+            // 脱离障碍误判成回到圈内，也不能把已通过的路段重新插回控制目标。
+            Vec2 from=cur;bool clear=drop_approach_.path.size()>1;
+            for(size_t i=1;clear && i<drop_approach_.path.size();++i) {
+                const Vec2 to=drop_approach_.path[i];
+                clear=obstacle_escape_clear(from,to,obs,exec_config()) && field_motion_clear(from,to,exec_config());
+                from=to;
             }
-            if (!found) {
-                // Object inside an inflation or unreachable head-on: take the
-                // admissible point of the entry circle with the shortest route.
-                double best = std::numeric_limits<double>::infinity();
-                for (int k = 0; k < 24; ++k) {
-                    const double a = 2.0 * M_PI * k / 24.0;
-                    const Vec2 p{object.x + arc*std::cos(a), object.y + arc*std::sin(a)};
-                    if (!required_goal_admissible(p, obs, cfg)) continue;
-                    const GlobalResult r = plan_required_path(cur, p, obs, cfg);
-                    if (!r.ok || r.path.size() < 2) continue;
-                    double len = 0;
-                    for (size_t i = 1; i < r.path.size(); ++i)
-                        len += std::hypot(r.path[i].x-r.path[i-1].x, r.path[i].y-r.path[i-1].y);
-                    if (len < best) { best = len; entry = p; how = "circle"; found = true; }
-                }
+            if(clear) return drop_entry_;
+        }
+        const bool invalidated = same_target && drop_entry_.has_value();
+        const bool continuing_final=invalidated && drop_leg_target_ && drop_leg_track_==track_id &&
+            std::hypot(drop_leg_target_->x-drop_entry_->x,drop_leg_target_->y-drop_entry_->y)<1e-6;
+        const double previous_heading=drop_leg_heading_;
+        // 正在执行最后直线时，先以同一航向找经过执行余量/完整下降检查的直达
+        // 入口修正。累计修正不得超出本航段初始入口的到点容差；否则正常重规划。
+        // 先做这项联合检查，不能让格子搜索插入一个短折点后才尝试恢复旧航向。
+        if(continuing_final) {
+            const auto fixed_landing=[this,previous_heading](Vec2,Vec2) {
+                return visual_drop_.alignment_target(previous_heading);
+            };
+            auto continuing_transit=transit;
+            continuing_transit.inflate=exec_config().inflate;
+            auto adjusted=plan_drop_approach(cur,object,visual_drop_.alignment_target(previous_heading),obs,
+                continuing_transit,required_config(),drop_entry_radius_,goal_tol_,exec_config().inflate,fixed_landing);
+            if(adjusted.ok && adjusted.path.size()==2 &&
+                std::hypot(adjusted.entry.x-drop_leg_anchor_.x,adjusted.entry.y-drop_leg_anchor_.y)<=goal_tol_ &&
+                (adjusted.entry.x-cur.x)*std::cos(previous_heading)+
+                (adjusted.entry.y-cur.y)*std::sin(previous_heading)>0) {
+                adjusted.arrival_heading=previous_heading;adjusted.reason="continue_checked_final";
+                drop_approach_=std::move(adjusted);drop_entry_=drop_approach_.entry;
+                drop_leg_target_=drop_entry_;drop_entry_object_=object;drop_entry_time_=t;
+                return drop_entry_;
             }
         }
-        const bool changed = !drop_entry_ ||
-            std::hypot(entry.x-drop_entry_->x, entry.y-drop_entry_->y) > .05;
-        drop_entry_ = entry; drop_entry_track_ = track_id; drop_entry_object_ = object; drop_entry_time_ = t;
-        if (changed)
-            RCLCPP_INFO(get_logger(), "[探索投放] 区域#%llu 接近入口点(%.3f,%.3f) 来源=%s 距目标%.2fm 飞机(%.2f,%.2f)",
-                static_cast<unsigned long long>(track_id), entry.x, entry.y, how,
-                std::hypot(entry.x-object.x, entry.y-object.y), px_, py_);
-        return entry;
+        // 点云拟合增大导致入口需微调时，保留正在执行且仍安全的绕障段。
+        // 不能从每一拍的当前位置重铺第一段，把已经开始的绕障转向又拉回。
+        // 只延续已有中间路点；旧入口本身失效时绝不先飞到旧入口再补一段。
+        if(invalidated && drop_leg_target_ && drop_leg_track_==track_id &&
+            std::hypot(drop_leg_target_->x-drop_entry_->x,drop_leg_target_->y-drop_entry_->y)>1e-6 &&
+            ((cur.x-drop_leg_target_->x)*std::cos(drop_leg_heading_)+(cur.y-drop_leg_target_->y)*std::sin(drop_leg_heading_)<=0 ||
+             std::hypot(cur.x-drop_leg_target_->x,cur.y-drop_leg_target_->y)<=goal_tol_) &&
+            drop_descent_clear(*drop_leg_target_,*drop_leg_target_,obs,exec_config()) &&
+            obstacle_escape_clear(cur,*drop_leg_target_,obs,exec_config()) &&
+            field_motion_clear(cur,*drop_leg_target_,exec_config())) {
+            const Vec2 join=*drop_leg_target_;
+            const auto landing=[this](Vec2 entry,Vec2 from){return drop_landing_from_entry(entry,from);};
+            auto continued=plan_drop_approach(join,object,visual_drop_.alignment_target(yaw_),obs,transit,
+                required_config(),drop_entry_radius_,goal_tol_,exec_config().inflate,landing);
+            if(continued.ok && std::hypot(continued.entry.x-join.x,continued.entry.y-join.y)>goal_tol_) {
+                continued.path.insert(continued.path.begin(),cur);
+                continued.reason="continue_checked_leg";
+                drop_approach_=std::move(continued);drop_entry_=drop_approach_.entry;
+                drop_entry_object_=object;drop_entry_time_=t;
+                return drop_entry_;
+            }
+        }
+        drop_leg_target_.reset();
+        if (!drop_obstructed_approach_) {
+            Vec2 entry = cur;
+            const double distance = std::hypot(object.x-cur.x,object.y-cur.y);
+            if (distance > drop_entry_radius_) {
+                const double u = 1.0-drop_entry_radius_/distance;
+                entry = {cur.x+u*(object.x-cur.x),cur.y+u*(object.y-cur.y)};
+            }
+            const double heading=std::hypot(entry.x-cur.x,entry.y-cur.y)>goal_tol_
+                ? std::atan2(entry.y-cur.y,entry.x-cur.x) : yaw_;
+            if (safe_entry(entry,goal_tol_,heading) && direct(entry)) {
+                drop_approach_ = {true,entry,{cur,entry},"normal_entry",heading};
+                drop_entry_ = entry; drop_entry_track_ = track_id; drop_entry_object_ = object;
+                return drop_entry_;
+            }
+            drop_obstructed_approach_ = true;
+        }
+        drop_entry_.reset(); drop_approach_ = {};
+        // 只给连续失败的搜索限频。已有路线失效时立即接上新路线，不能先回拉悬停半秒。
+        if (!invalidated && same_target && drop_entry_time_ >= 0 && t-drop_entry_time_ < .5) return {};
+        drop_entry_time_ = t; drop_entry_track_ = track_id; drop_entry_object_ = object;
+        // 所有合法入口一起按路程选择。斜降终点进入外层余量时使用既有渐变
+        // 余量规则；不能因另一侧更宽就绕远。机体/障碍轮廓和巡航余量始终保留。
+        const auto landing=[this](Vec2 entry, Vec2 from) { return drop_landing_from_entry(entry,from); };
+        drop_approach_ = plan_drop_approach(cur, object, visual_drop_.alignment_target(yaw_), obs, transit, required_config(),
+            drop_entry_radius_,goal_tol_,exec_config().inflate,landing);
+        if (!drop_approach_.ok) {
+            RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                "[探索投放] 区域#%llu 未找到可直线斜降的安全点：%s；保留当前目标",
+                static_cast<unsigned long long>(track_id), drop_approach_.reason);
+            return {};
+        }
+        drop_entry_ = drop_approach_.entry;
+        RCLCPP_INFO(get_logger(), "[探索投放] 区域#%llu 最近圆周入口(%.3f,%.3f)，距物体%.2fm，来源=%s；到点采样后直线斜降",
+            static_cast<unsigned long long>(track_id), drop_entry_->x, drop_entry_->y,
+            std::hypot(drop_entry_->x-object.x,drop_entry_->y-object.y), drop_approach_.reason);
+        return drop_entry_;
     }
 
     Vec2 visual_drop_velocity(const Obstacles& obs, double t)
     {
         using Phase = VisualDrop::Phase;
         const auto target = *vision_queue_->active();
-        if (visual_drop_.phase() == Phase::Idle) visual_drop_.begin(target);
+        if (visual_drop_.phase() == Phase::Idle) {
+            visual_drop_.begin(target, yaw_);
+            drop_entry_.reset(); drop_approach_ = {}; drop_entry_time_ = -1; drop_leg_target_.reset();
+            drop_obstructed_approach_ = false;
+        }
         if (!drop_context_valid()) {
             vision_last_event_ = "drop_waiting_for_takeoff_context";
             last_yaw_rate_ = 0;
@@ -2679,56 +2913,74 @@ private:
                 "[探索投放] 等待主控本次任务的起飞Z和高度容差，保持当前位置");
             return recovery_velocity(obs, true);
         }
-        auto before = visual_drop_.phase();
+        const auto before = visual_drop_.phase();
         if (drop_status_) {
             if (visual_drop_.serial_finished(drop_status_->release_index, drop_status_->target_id, {px_, py_}, t)) {
                 RCLCPP_INFO(get_logger(), "[探索投放] 第%u次%s，锁XY(%.3f,%.3f)，保持投放高度等待%.1fs后回升到Z=%.3f",
                     drop_status_->release_index, drop_status_->success ? "写出完成" : "发送失败",
                     px_, py_, visual_drop_.release_wait(), visual_drop_.return_z());
-                drop_path_.clear(); drop_pause_z_.reset();
+                drop_path_.clear();
                 if (visual_drop_.completed() >= 3) { coverage_closed_ = true; vision_queue_->discard_waiting(); poi_queue_.clear(); }
             }
             drop_status_.reset();
         }
-        visual_drop_.tick({px_, py_}, pz_, yaw_, t, drop_context_->home_z, drop_context_->height_tolerance);
-        auto phase = visual_drop_.phase();
-        if (phase != before) {
-            drop_path_.clear(); drop_path_retry_ = -1; drop_entry_.reset();
-            RCLCPP_INFO(get_logger(), "[探索投放] 区域#%llu %s -> %s；采样%d帧，坐标(%.3f,%.3f)，强制超时=%d",
-                static_cast<unsigned long long>(target.track_id), VisualDrop::name(before), VisualDrop::name(phase),
-                visual_drop_.samples(), visual_drop_.object().x, visual_drop_.object().y, visual_drop_.forced());
-            if (phase == Phase::Sample) {
-                const double c = std::cos(yaw_), s = std::sin(yaw_);
-                const Vec2 velocity{c * v_fwd_est_ - s * v_lat_est_, s * v_fwd_est_ + c * v_lat_est_};
-                const double speed = std::hypot(velocity.x, velocity.y);
-                const double lead = speed > 1e-3 ? std::min(drop_sample_slide_s_, drop_sample_slide_max_m_ / speed) : 0.0;
-                visual_drop_.shift_sample_anchor({velocity.x * lead, velocity.y * lead});
-                RCLCPP_INFO(get_logger(), "[探索投放] 采样入口：锁XY(%.3f,%.3f)(越圈点前移%.3fm到预计滑停点)，距目标%.3fm，实测水平速度%.3fm/s",
-                    px_ + velocity.x * lead, py_ + velocity.y * lead, speed * lead,
-                    std::hypot(px_ - visual_drop_.object().x, py_ - visual_drop_.object().y), speed);
+        if (visual_drop_.phase() == Phase::Approach) {
+            drop_command_altitude_ = drop_cruise_z_.value_or(drop_context_->cruise_z);
+            drop_command_speed_ = .10;
+            const auto entry = drop_entry_point(target.track_id, visual_drop_.object(), obs, t);
+            if (!entry) {
+                global_failed_ = true; global_has_ = false;
+                traj_.clear(); global_raw_.clear(); global_traj_.clear();
+                vision_last_event_ = "drop_no_safe_entry";
+                return recovery_velocity(obs, true);
             }
-            if (phase == Phase::Descend)
-                RCLCPP_INFO(get_logger(), "[探索投放] 投掷高度：目标(%.2f,%.2f) 处 SLAM Z 误差补偿 %+.3fm → 目标 Z=%.3f(起飞Z %.3f + %.2f %+.3f)",
-                    visual_drop_.object().x, visual_drop_.object().y, visual_drop_.z_compensation(),
-                    visual_drop_.altitude(drop_context_->home_z), drop_context_->home_z, visual_drop_.drop_height(), visual_drop_.z_compensation());
-            if (before == Phase::Sample && visual_drop_.refinement()) {
+            // 必须到选定点；受阻模式不能因途中穿过1米圆而绕过安全点。
+            if (std::hypot(entry->x-px_,entry->y-py_) <= goal_tol_ &&
+                drop_descent_line_clear({px_,py_}, visual_drop_.alignment_target(yaw_), obs)) {
+                // 提前交接下一目标时，上次回升可能尚未完成。采样锁当前Z，返回高度
+                // 仍沿用原巡航高度；否则每个新目标都会把“尚未爬完的高度”再降低一次。
+                visual_drop_.start_sample(*entry, pz_, yaw_, t, drop_cruise_z_);
+                drop_path_.clear(); drop_path_retry_ = -1;
+                RCLCPP_INFO(get_logger(), "[探索投放] %s采样：锁XY(%.3f,%.3f)，距物体%.2fm，保持yaw=%.1f°，实测XY速度%.3fm/s",
+                    drop_obstructed_approach_ ? "受阻安全点" : "正常接近点",
+                    entry->x,entry->y,std::hypot(entry->x-visual_drop_.object().x,entry->y-visual_drop_.object().y),
+                    yaw_*180.0/M_PI,std::hypot(v_fwd_est_,v_lat_est_));
+            } else {
+                vision_last_event_ = "drop_approach";
+                return drop_xy_velocity(*entry, obs, t, false);
+            }
+        }
+        visual_drop_.tick({px_,py_}, pz_, yaw_, t, drop_context_->home_z, drop_context_->height_tolerance);
+        if (visual_drop_.phase() == Phase::Validate) {
+            if (visual_drop_.refinement()) {
                 if (vision_queue_->refine_active(*visual_drop_.refinement(), true)) ++vision_near_confirmations_;
                 else visual_drop_.reject_refinement();
             }
+            // 用真实当前位置、实际yaw及刚得到的精确坐标核准；通过后整个下降不再绕障。
+            if (drop_descent_line_clear({px_,py_}, visual_drop_.alignment_target(yaw_), obs)) {
+                visual_drop_.authorize_descent();
+            } else {
+                visual_drop_.retry_approach();
+                drop_entry_.reset(); drop_approach_ = {}; drop_entry_time_ = -1; drop_leg_target_.reset();
+                drop_obstructed_approach_ = true;
+                drop_path_.clear(); drop_path_retry_ = -1;
+                drop_command_altitude_ = visual_drop_.return_z(); drop_command_speed_ = .10;
+                vision_last_event_ = "drop_reselect_after_sampling";
+                RCLCPP_WARN(get_logger(), "[探索投放] 采样后直线不可通行，保留区域#%llu，重新找1米圈安全点",
+                    static_cast<unsigned long long>(target.track_id));
+                return recovery_velocity(obs, true);
+            }
         }
-        vision_last_event_ = std::string("drop_") + VisualDrop::name(phase);
-        if (phase == Phase::Approach) {
-            // The tracker decelerates towards the sampling entry point on the
-            // validated route, not towards the object: crossing the sampling
-            // circle keeps drop_entry_inset_ of travel in hand, so the speed there
-            // is set by the entry cap instead of the endpoint braking curve. An
-            // object sitting inside an obstacle inflation is still approachable.
-            const Vec2 entry = drop_entry_point(target.track_id, visual_drop_.object(), obs, t);
-            return pd_to_point_avoid(entry, obs,
-                visual_drop_.approach_speed_limit({px_, py_}, v_goal_max_));
+        const auto phase = visual_drop_.phase();
+        if (phase != before) {
+            drop_path_.clear(); drop_path_retry_ = -1;
+            RCLCPP_INFO(get_logger(), "[探索投放] 区域#%llu %s -> %s；采样%d帧，坐标(%.3f,%.3f)，强制超时=%d",
+                static_cast<unsigned long long>(target.track_id), VisualDrop::name(before), VisualDrop::name(phase),
+                visual_drop_.samples(), visual_drop_.object().x, visual_drop_.object().y, visual_drop_.forced());
         }
+        vision_last_event_ = std::string("drop_")+VisualDrop::name(phase);
         if (phase == Phase::Done) {
-            const Vec2 result = drop_xy_velocity(visual_drop_.lidar_target(yaw_), obs, t, true);
+            const Vec2 result = drop_xy_velocity(visual_drop_.lidar_target(yaw_), obs, t, true, true);
             drop_cruise_z_ = visual_drop_.return_z();
             drop_command_altitude_ = *drop_cruise_z_;
             drop_command_speed_ = visual_drop_.vertical_limit(pz_, drop_context_->home_z, 0, 0);
@@ -2737,26 +2989,23 @@ private:
                 vision_candidates_->discard_visited(visited.track_id, visited.position, vision_queue_->blacklist_radius());
                 vision_applied_visits_ = vision_queue_->visited().size();
                 visual_drop_.finish_visit(); vision_near_->reset();
+                drop_entry_.reset(); drop_approach_ = {};
+                drop_obstructed_approach_ = false;
                 global_has_ = global_failed_ = false; global_tracker_->set_trajectory({});
                 plan_pending_ = true;
             }
             return result;
         }
         const Vec2 aim = visual_drop_.lidar_target(yaw_);
+        const bool committed = phase == Phase::Descend || phase == Phase::Send || phase == Phase::Wait || phase == Phase::Climb;
         const Vec2 velocity = drop_xy_velocity(aim, obs, t,
-            phase == Phase::Sample || phase == Phase::Wait || phase == Phase::Climb);
+            phase == Phase::Sample || phase == Phase::Wait || phase == Phase::Climb, committed);
         drop_command_altitude_ = visual_drop_.altitude(drop_context_->home_z);
-        const double distance = std::hypot(aim.x-px_, aim.y-py_);
+        const double distance = std::hypot(aim.x-px_,aim.y-py_);
         const double c = std::cos(yaw_), s = std::sin(yaw_);
         const double towards = distance > 1e-6 ?
-            ((c*velocity.x-s*velocity.y)*(aim.x-px_) + (s*velocity.x+c*velocity.y)*(aim.y-py_))/distance : .4;
+            ((c*velocity.x-s*velocity.y)*(aim.x-px_)+(s*velocity.x+c*velocity.y)*(aim.y-py_))/distance : .4;
         drop_command_speed_ = visual_drop_.vertical_limit(pz_, drop_context_->home_z, distance, towards);
-        // If no safe XY route exists, retain altitude until a path is available.
-        // The already-started four-second deadline remains irreversible.
-        if (phase == Phase::Descend && (global_failed_ || global_braking_blocked_)) {
-            if (!drop_pause_z_) drop_pause_z_ = pz_;
-            drop_command_altitude_ = *drop_pause_z_;
-        } else drop_pause_z_.reset();
         return velocity;
     }
 
@@ -3123,7 +3372,11 @@ private:
         explore_has_committed_ = false;
         global_raw_.clear();
         global_traj_.clear();
-        if (visual_drop_enabled_) visual_drop_.begin(active);
+        if (visual_drop_enabled_) {
+            visual_drop_.begin(active, yaw_);
+            drop_entry_.reset(); drop_approach_ = {}; drop_entry_time_ = -1; drop_leg_target_.reset();
+            drop_obstructed_approach_ = false;
+        }
         vision_near_->begin(active, current_time, std::max(active.confirmed_stamp, vision_last_frame_.stamp));
         vision_near_->position({px_, py_}, current_time);
         vision_last_event_ = "active_target_selected";
@@ -3453,6 +3706,8 @@ private:
                 visual_drop_.pose_interrupted();
                 // 无位姿：发零速度占位
                 last_command_world_ = {};
+                last_yaw_rate_=0;
+                yaw_command_history_.clear();
                 recovery_holding_ = false;
                 cmd_pub_->publish(cmd);
                 return;
@@ -3461,6 +3716,8 @@ private:
             if (!corridor_->active() && !pose_freshness_.fresh(steady_seconds(), ccfg_.pose_timeout)) {
                 visual_drop_.pose_interrupted();
                 last_command_world_ = {};
+                last_yaw_rate_=0;
+                yaw_command_history_.clear();
                 recovery_holding_ = false;
                 // The same odometry requirement applies before the corridor:
                 // neither flight control nor coverage can use a frozen pose.
@@ -3871,7 +4128,11 @@ private:
                 cmd.twist.linear.y = recovery.y;
             }
             // 机身已与拟合障碍重叠时禁止原地转向：转动中桨尖外廓大于机身半径，会扫到柱子(r57)。
-            if (!obstacle_segment_clear({px_, py_}, {px_, py_}, obstacles, ggcfg_))
+            const auto drop_phase = visual_drop_.phase();
+            const bool drop_committed = visual_drop_enabled_ && vision_target_active &&
+                (drop_phase == VisualDrop::Phase::Descend || drop_phase == VisualDrop::Phase::Send ||
+                 drop_phase == VisualDrop::Phase::Wait || drop_phase == VisualDrop::Phase::Climb);
+            if (!drop_committed && !obstacle_segment_clear({px_, py_}, {px_, py_}, obstacles, ggcfg_))
                 cmd.twist.angular.z = 0.0;
             } // 常规探索/归航；走廊任务独立处理墙与门。
 
@@ -3887,6 +4148,8 @@ private:
             const double command_c = std::cos(yaw_), command_s = std::sin(yaw_);
             last_command_world_ = {command_c * cmd.twist.linear.x - command_s * cmd.twist.linear.y,
                                   command_s * cmd.twist.linear.x + command_c * cmd.twist.linear.y};
+            last_yaw_rate_=cmd.twist.angular.z;
+            remember_yaw_command(last_yaw_rate_);
 
             if (++diagnostic_ticks_ % 10 == 0) {
                 publish_diagnostics = true;
@@ -3999,6 +4262,13 @@ private:
                 number("visual_drop_forced", visual_drop_.forced());
                 number("visual_drop_altitude", drop_command_altitude_);
                 number("visual_drop_vertical_limit", drop_command_speed_);
+                value("visual_drop_entry_reason", drop_approach_.reason);
+                number("visual_drop_obstructed_approach", drop_obstructed_approach_);
+                number("visual_drop_entry_valid", drop_entry_.has_value());
+                if (drop_entry_) {
+                    number("visual_drop_entry_x", drop_entry_->x);
+                    number("visual_drop_entry_y", drop_entry_->y);
+                }
                 number("replan_checks", replan_checks_);
                 number("candidate_skips", candidate_skips_);
                 number("active_band", cur_band_);
@@ -4175,7 +4445,6 @@ private:
     bool vision_collection_active_ = false;
     double vision_pose_timeout_ = params::VISION_POSE_TIMEOUT_S;
     std::vector<int> vision_id_blacklist_;
-    double drop_sample_slide_s_ = params::VISUAL_DROP_SAMPLE_SLIDE_S, drop_sample_slide_max_m_ = 0.20;
     std::vector<Vec2> vision_hints_;          // 已安排近看的视觉线索位置(每次任务清空)
     std::vector<double> vision_hint_times_;   // 与 vision_hints_ 一一对应的产生时刻(steady)
     std::vector<int> vision_hint_unmarks_;    // 每条线索已恢复未扫的次数(最多 2)
@@ -4198,10 +4467,13 @@ private:
     VisualDrop visual_drop_;
     std::optional<acfly_interfaces::msg::ExplorationContext> drop_context_;
     std::optional<acfly_interfaces::msg::DropStatus> drop_status_;
-    std::optional<double> drop_cruise_z_, drop_pause_z_;
+    std::optional<double> drop_cruise_z_;
     double drop_command_altitude_ = 0, drop_command_speed_ = .10, drop_path_retry_ = -1;
     Path2 drop_path_;
-    double drop_entry_inset_ = params::VISUAL_DROP_ENTRY_INSET_M, drop_entry_time_ = -1;
+    double drop_entry_radius_ = params::VISUAL_DROP_ENTRY_M, drop_entry_time_ = -1;
+    bool drop_obstructed_approach_ = false;
+     // 所选入口是否保留到终点的完整规划余量
+    DropApproach drop_approach_;
     std::optional<Vec2> drop_entry_;
     Vec2 drop_entry_object_{};
     std::uint64_t drop_entry_track_ = 0;
@@ -4308,6 +4580,11 @@ private:
     TrackerGains global_gains_{};
     double xy_brake_accel_ = params::XY_BRAKE_ACCEL;
     Vec2 last_command_world_{};
+    std::optional<Vec2> drop_leg_target_;
+    Vec2 drop_leg_anchor_{};
+    std::deque<double> yaw_command_history_;
+    std::uint64_t drop_leg_track_=0;
+    double drop_leg_heading_=0;
     Vec2 recovery_anchor_{};
     bool recovery_holding_ = false, recovery_requested_ = false;
     std::string recovery_status_ = "none";
