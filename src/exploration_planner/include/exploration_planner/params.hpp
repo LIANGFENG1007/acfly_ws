@@ -153,7 +153,7 @@ inline constexpr double CORRIDOR_CLOUD_WINDOW_S = 20.00; // 累计真实墙面�
 inline constexpr double CORRIDOR_POSE_TIMEOUT_S = 0.30; // 本机连续未收到新有效里程计帧的时长；探索/归航/通道共用
 inline constexpr double CORRIDOR_Z_BELOW = 0.30; // 相对当前飞机高度的点云截取下界(m)
 inline constexpr double CORRIDOR_Z_ABOVE = 0.30; // 相对当前飞机高度的点云截取上界(m)
-// ★走廊低空穿越★：终点前 HOME_STRAIGHT_APPROACH_M 内，安全直线接近时同步降高；
+// ★走廊低空穿越★：先到终点周围 HOME_STRAIGHT_APPROACH_M 半径上的安全入口，再直线斜降；
 //   XY 到点立即转到 CORRIDOR_INITIAL_YAW_DEG，转向期间继续降高并保持 XY 纠偏。
 //   航向和高度都到位后才横移进入口、穿门、到 H；走廊全程保持该高度。
 inline constexpr bool   CORRIDOR_LOWER_ENABLED = true;
@@ -383,10 +383,9 @@ inline constexpr double REQUIRED_PLAN_RESERVE_M = 0.08; // 必达点(归航/插�
                                                     //   离线复现：预留 ≥0.05 后平滑曲线即可通过标准余量验收。验收余量不变。
 inline constexpr double REQUIRED_SLOW_RADIUS_M = 1.20; // 必达点线性减速半径下限(m)：覆盖 1.0m 末端批准直线+余量。
 inline constexpr double REQUIRED_SLOW_V = 0.60; // 必达点减速半径处的速度(m/s)：半径内线性停车斜率=此值/半径，与 V_GOAL_MAX 解耦；半径外按减速度反推
-inline constexpr double HOME_SLOW_RADIUS_M = 1.50; // 归航终点专用减速半径(m)：V_GOAL_MAX 0.75 时 1.2 m/0.6 进末端 1.0 m 直线仍约 0.7 m/s，刹停投影出胶囊→急刹反推，
-inline constexpr double HOME_SLOW_V = 0.45;        //   终点前 0.5~1.5 m 倾角高频 0.84~1.15°；1.5 m/0.45 后降到 0.17°、急刹 0 次(仿真第 11 轮)。投放接近不用它(否则每局接近多 4 s)
-                                                    //   原约 0.72m：进末端直线时仍 0.45m/s、航向差 0.3rad，刹停投影(0.43m)偏出 0.1m 胶囊→急刹反推(r11)
-inline constexpr double HOME_STRAIGHT_APPROACH_M = 1.00; // 距终点此距离(m)内且直线安全：保持进入时的yaw，用XY速度对准；开启走廊降高时同步下降。0=关闭末段锁航向/同步降高，整条路线仍优先走安全直线
+inline constexpr double HOME_SLOW_RADIUS_M = 1.50; // 接近终点安全入口/绕障路点的减速范围(m)，不作为下降触发距离
+inline constexpr double HOME_SLOW_V = 0.45;        // 接近安全入口时的速度上限(m/s)，与位置误差PD共同减速；关闭安全入口时仍用于旧归航跟踪器
+inline constexpr double HOME_STRAIGHT_APPROACH_M = 1.00; // 终点安全入口圆半径(m)：同视觉目标按最近可达路程选点，到入口才锁实际yaw并直线斜降；已在圈内且直降安全则就地开始。0=关闭安全入口/同步降高，使用普通必达点避障
 inline constexpr double HOME_APPROACH_V = 0.40;          // 终点直线接近的水平速度上限(m/s)，与视觉投放对准段一致；漂移纠偏不受机头夹角门控
 inline constexpr double REQUIRED_DRIFT_KD = 0.80; // 必达点(归航/插点/视觉)跟踪的横漂阻尼，保持探索改 0.4 之前的值
 inline constexpr double XY_BRAKE_ACCEL = 0.80; // 刹车/反向纠偏的指令变化上限(m/s²)，普通加速仍用CARLIKE_MAX_ACCEL

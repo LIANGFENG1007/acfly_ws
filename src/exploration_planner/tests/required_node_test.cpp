@@ -1987,44 +1987,69 @@ void visual_sampling_brake_preserves_correction()
 void home_visibility_shortcut_regression()
 {
     ExplorationNode node;
-    node.timer_->cancel();
-    node.visual_drop_enabled_=false;
+    node.timer_->cancel();node.vision_reader_.reset();node.visual_drop_enabled_=false;
     const Vec2 goal{6.7,0};
     for (double distance : {1.3,2.0,4.0,5.8}) {
         const Vec2 start{goal.x-distance,0};
-        reset(node,start);
-        node.reset_home_approach();
+        reset(node,start);node.goal_=goal;node.reset_home_approach();
         node.homing_=node.has_goal_=node.has_pose_=true;
-        node.goal_=node.global_target_=goal;
-        node.v_fwd_est_=.2;
-        node.global_tracker_->set_trajectory(node.make_polyline_trajectory({start,goal}));
-        double prior=0;
-        for (int i=0;i<40;++i) prior=node.global_tracker_->update(start.x,start.y,0,.2,0,node.goal_tol_,0).v_fwd;
-        require(prior>.1,"visibility regression needs an already moving controller");
-        const Path2 detour{start,{start.x+.4,.8},{goal.x-.4,.8},goal};
-        node.global_raw_=detour;
-        node.global_traj_=node.make_polyline_trajectory(detour);
-        node.global_tracker_->set_trajectory(node.global_traj_);
-        node.global_has_=true;
+        node.yaw_=M_PI/2;
         const auto command=node.home_target_velocity({});
-        require(node.global_raw_.size()==2 && !node.global_failed_ && !node.home_approach_active_,
-                "clear home chord kept chasing old corners until a distance threshold");
-        require(command.x >= prior-node.global_gains_.max_decel*node.global_gains_.dt-1e-6,
-                "visibility shortcut reset velocity or inserted a zero-speed tick");
-        const Vec2 anchor=node.global_raw_.front();
+        require(node.home_entry_plan_.ok && node.global_raw_.size()==2 && !node.global_failed_ && !node.home_approach_active_,
+                "clear home approach must go directly to the near circle entry");
+        require(std::hypot(node.home_entry_plan_.entry.x-(goal.x-1),node.home_entry_plan_.entry.y)<1e-9,
+                "clear home approach selected an unnecessary far-side entry");
+        require(command.y<0 && node.last_yaw_rate_<0,
+                "home approach locked yaw early or gated XY while heading was misaligned");
+        const auto original=node.home_entry_plan_.path;
+        const auto searches=node.global_path_searches_;
         node.px_+=.01;node.home_target_velocity({});
-        require(std::hypot(node.global_raw_.front().x-anchor.x,node.global_raw_.front().y-anchor.y)<1e-9,
-                "visible home line was reset on every control tick");
-        const Obstacles blocked{{(start.x+goal.x)/2,0,.1}};
-        node.home_target_velocity(blocked);
-        require(!node.global_failed_ && node.global_raw_.size()>2 &&
-                required_path_clear({node.px_,node.py_},node.global_raw_,goal,blocked,node.required_config()),
-                "a newly blocked direct line failed to restore safe obstacle avoidance");
-        node.home_target_velocity({});
-        require(node.global_raw_.size()==2 && !node.global_failed_,
-                "obstacle removal left the old home detour committed");
+        require(node.home_entry_plan_.path.size()==original.size() &&
+            std::hypot(node.home_entry_plan_.path.front().x-original.front().x,
+                       node.home_entry_plan_.path.front().y-original.front().y)<1e-9 &&
+            node.global_path_searches_==searches,"safe home entry was replanned on normal movement");
     }
-    std::cout << "home visibility: distance-independent shortcut, motion continuity, no repeated reset and new obstacle checks passed\n";
+    for (double side : {-1.0,1.0}) {
+        reset(node,{2,side*.2});node.goal_={5,0};node.reset_home_approach();node.homing_=true;
+        const Obstacles obstacles{{4.2,0,.15},{3.1,-side*1.1,.2}};
+        node.home_target_velocity(obstacles);
+        require(node.home_entry_plan_.ok && !node.home_approach_active_ && !node.global_failed_,
+                "obstructed home approach did not find an alternate entry");
+        const auto entry=node.home_entry_plan_.entry;
+        require(std::abs(std::hypot(entry.x-5,entry.y)-1)<1e-8 && std::abs(entry.y)>.5,
+                "obstructed home entry is not on the one-metre circle");
+        require(drop_descent_clear(entry,node.goal_,obstacles,node.required_config(),node.goal_tol_,node.exec_config().inflate),
+                "home entry checked only the point, not the whole descent envelope");
+        double length=0;
+        for(size_t i=1;i<node.home_entry_plan_.path.size();++i) {
+            auto a=node.home_entry_plan_.path[i-1],b=node.home_entry_plan_.path[i];
+            length+=std::hypot(b.x-a.x,b.y-a.y);
+            require(obstacle_escape_clear(a,b,obstacles,node.home_transit_config()),"home entry route crosses an obstacle");
+        }
+        require(length<4,"home entry took an unnecessary far-side detour");
+        node.px_=entry.x;node.py_=entry.y;node.yaw_=side*.6;
+        node.home_target_velocity(obstacles);
+        require(node.home_approach_active_ && node.home_approach_yaw_==node.yaw_,
+                "reaching safe home entry failed to capture actual yaw");
+    }
+    reset(node,{2,0});node.goal_={5,0};node.reset_home_approach();node.homing_=true;
+    node.home_target_velocity({{5,0,.2}});
+    require(node.global_failed_ && node.global_goal_blocked_ && !node.home_approach_active_,
+            "occupied home endpoint fabricated an entry or began descent");
+    // The boundary is a task limit, not a physical wall; the whole descent must
+    // still stay inside it, and the intermediate point must have arrival room.
+    reset(node,{3,3});node.goal_={node.ggcfg_.max_x-.02,node.ggcfg_.max_y-.02};
+    node.reset_home_approach();node.homing_=true;node.home_target_velocity({});
+    require(node.home_entry_plan_.ok && !node.global_failed_ &&
+        drop_descent_clear(node.home_entry_plan_.entry,node.goal_,{},node.required_config(),node.goal_tol_,node.exec_config().inflate),
+        "home circle search rejected a valid near-boundary endpoint");
+    node.home_straight_approach_m_=0;
+    reset(node,{2,0});node.goal_={5,0};node.reset_home_approach();node.homing_=true;
+    node.home_target_velocity({});
+    require(!node.home_entry_plan_.ok && !node.home_approach_active_ && !node.global_failed_ &&
+        std::hypot(node.global_raw_.back().x-5,node.global_raw_.back().y)<1e-9,
+        "disabling home entry broke the legacy checked endpoint path");
+    std::cout << "home safe entry: direct/blocked/mirrored/boundary routes, nearest entry, yaw and XY continuity passed\n";
 }
 
 void home_straight_descent_regression()
@@ -2067,16 +2092,12 @@ void home_straight_descent_regression()
     node.home_target_velocity({});node.update_home_descent();
     require(node.home_approach_active_ && node.drop_command_altitude_==.05,
             "distance jitter reset the latched approach/descent");
-    // New obstacle: no shortcut through it and no cruise-height bounce.
+    // Once the whole actual descent is approved, map changes do not interrupt it.
     node.py_=goal.y-.8;node.pz_=.72;
-    node.home_target_velocity({{goal.x,goal.y-.4,.05}});node.update_home_descent();
-    require(!node.home_approach_active_ && node.home_descent_pause_z_ &&
-            node.drop_command_altitude_==.72,"blocked home approach continued descending or climbed to cruise");
-    node.pz_=.70;node.home_target_velocity({{goal.x,goal.y-.4,.05}});node.update_home_descent();
-    require(node.drop_command_altitude_==.72,"blocked descent anchor followed drift");
-    node.home_target_velocity({});node.update_home_descent();
-    require(node.home_approach_active_ && !node.home_descent_pause_z_ && node.drop_command_altitude_==.05,
-            "safe home route did not resume descent");
+    command=node.home_target_velocity({{goal.x,goal.y-.4,.05}});node.update_home_descent();
+    require(node.home_approach_active_ && !node.global_failed_ && !node.global_braking_blocked_ &&
+            node.drop_command_altitude_==.05 && command.y>0,
+            "committed home descent was interrupted by a changed obstacle fit");
     // Remote endpoint and disabled corridor may not descend early.
     mission();node.py_=goal.y-1.2;node.home_target_velocity({});node.update_home_descent();
     require(!node.home_approach_active_ && !node.home_descent_started_,"descent started outside configured distance");
@@ -2087,8 +2108,8 @@ void home_straight_descent_regression()
         require(std::abs((p.p.x-line_start.x)*(goal.y-line_start.y)-
                          (p.p.y-line_start.y)*(goal.x-line_start.x))<1e-9,
                 "trajectory smoothing curved a clear home straight line");
-    mission();node.py_=goal.y-1.01;node.home_target_velocity({});node.update_home_descent();
-    require(!node.home_descent_started_,"home descent started before entering one metre");
+    mission();node.py_=goal.y-1.11;node.home_target_velocity({});node.update_home_descent();
+    require(!node.home_descent_started_,"home descent started before reaching the selected entry tolerance");
     node.py_=goal.y-.99;node.home_target_velocity({});node.update_home_descent();
     require(node.home_descent_started_,"safe home approach failed to start descent inside one metre");
     // Whole-route straight flight near an edge, with drift correction outside
@@ -2135,9 +2156,9 @@ void home_straight_descent_regression()
     node.yaw_=node.ccfg_.initial_yaw;node.on_timer();
     require(node.corridor_->phase()==CorridorPhase::Entry,"aligned heading and height failed to release entry");
     ++message->header.stamp.sec;node.on_goal(message);
-    require(!node.home_approach_active_ && !node.home_descent_started_ && !node.home_descent_pause_z_,
+    require(!node.home_approach_active_ && !node.home_descent_started_ && !node.home_entry_plan_.ok && !node.home_leg_target_,
             "new mission retained old home approach / descent state");
-    std::cout << "home approach: direct XY, yaw lock, descent, obstacle pause, moving XY handoff and corridor gates passed\n";
+    std::cout << "home approach: direct XY, yaw lock, descent, committed straight motion, moving XY handoff and corridor gates passed\n";
 }
 
 void visual_safe_entry_regressions()

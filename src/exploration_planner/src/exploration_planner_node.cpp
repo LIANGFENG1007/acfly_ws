@@ -2569,6 +2569,17 @@ private:
         return rotation+std::max(0.0,gains_.smith_yaw_time-yaw_command_history_.size()*dt)*yaw_rate_est_;
     }
 
+    // 视觉/终点接近共用转向响应预测；转向不作为 XY 速度的开关。
+    double approach_yaw_rate(double heading) const
+    {
+        const double error = wrap_pi(heading-yaw_-pending_yaw_rotation());
+        const double accel = std::max(1e-3,gains_.max_yaw_accel);
+        const double braking = std::sqrt(2*accel*std::abs(error));
+        const double desired = std::clamp(std::clamp(gains_.kp_yaw*error,-braking,braking)-
+            gains_.kd_yaw*yaw_rate_est_,-gains_.max_yaw_rate,gains_.max_yaw_rate);
+        return last_yaw_rate_+std::clamp(desired-last_yaw_rate_,-accel*gains_.dt,accel*gains_.dt);
+    }
+
     bool drop_escape_velocity_clear(Vec2 velocity, const Obstacles& obs) const
     {
         const double speed=std::hypot(velocity.x,velocity.y);
@@ -2714,13 +2725,7 @@ private:
             // 直接变成满角速度，等机头转过头后再反向拉回。XY继续独立反馈。
             // 与原跟踪器共用 Smith 时间的语义：预测尚未体现到定位中的已发指令。
             // 不能用同一段滞后的SLAM角速度同时做长外推和阻尼，会形成来回摆动。
-            const double error=wrap_pi(heading-yaw_-pending_yaw_rotation());
-            const double accel=std::max(1e-3,gains_.max_yaw_accel);
-            const double braking=std::sqrt(2*accel*std::abs(error));
-            const double desired_rate=std::clamp(std::clamp(gains_.kp_yaw*error,-braking,braking)-
-                gains_.kd_yaw*yaw_rate_est_,-gains_.max_yaw_rate,gains_.max_yaw_rate);
-            command.yaw_rate=last_yaw_rate_+std::clamp(desired_rate-last_yaw_rate_,
-                -accel*gains_.dt,accel*gains_.dt);
+            command.yaw_rate=approach_yaw_rate(heading);
         } else drop_leg_target_.reset();
         if (!committed) {
             // 规划器已允许沿当前段单调退出拟合圈，速度守卫也必须使用同一
@@ -3077,81 +3082,219 @@ private:
     {
         home_approach_active_ = home_descent_started_ = false;
         home_approach_yaw_ = 0.0;
-        home_descent_pause_z_.reset();
+        home_entry_plan_ = {};
+        home_entry_goal_ = goal_;
+        home_leg_target_.reset();
+        home_entry_retry_ = -1;
     }
 
-    // Like visual-drop alignment, keep the entry yaw while XY corrects in any
-    // direction. A new obstacle cancels the shortcut and restores checked A*.
+    GlobalConfig home_transit_config() const
+    {
+        auto cfg = required_config();
+        // 终点可靠任务边界；实体障碍仍使用完整机体和原规划余量。
+        cfg.wall_margin = required_field_margin(cfg);
+        cfg.required_goal_field_margin = cfg.wall_margin + goal_tol_;
+        cfg.head_cone_half = cfg.head_cone_radius = 0;
+        return cfg;
+    }
+
+    bool select_home_entry(const Obstacles& obs)
+    {
+        const Vec2 cur{px_,py_};
+        const auto transit = home_transit_config();
+        auto execution = transit;
+        execution.inflate = exec_config().inflate;
+        const auto line_clear = [&](Vec2 a, Vec2 b, const GlobalConfig& cfg) {
+            return obstacle_escape_clear(a,b,obs,cfg) && field_motion_clear(a,b,cfg);
+        };
+        const auto descent_clear = [&](Vec2 entry, double tolerance) {
+            return drop_descent_clear(entry,goal_,obs,required_config(),tolerance,exec_config().inflate);
+        };
+        const bool had_entry = home_entry_plan_.ok;
+        const bool at_entry = had_entry &&
+            std::hypot(cur.x-home_entry_plan_.entry.x,cur.y-home_entry_plan_.entry.y)<=goal_tol_;
+        // 一旦进入已选入口容差，按实际位置核准；不因未用到的误差包络补一段横移。
+        const bool entry_clear = had_entry &&
+            (descent_clear(home_entry_plan_.entry,goal_tol_) ||
+             (at_entry && descent_clear(home_entry_plan_.entry,0) && descent_clear(cur,0)));
+        bool missed_leg = false;
+        if (home_leg_target_ && had_entry) {
+            const double distance = std::hypot(cur.x-home_leg_target_->x,cur.y-home_leg_target_->y);
+            const bool intermediate = std::hypot(home_leg_target_->x-home_entry_plan_.entry.x,
+                                                 home_leg_target_->y-home_entry_plan_.entry.y)>1e-6;
+            if (intermediate && distance<=goal_tol_) {
+                auto& route = home_entry_plan_.path;
+                auto reached = std::find_if(route.begin()+1,route.end(),[&](Vec2 p) {
+                    return std::hypot(p.x-home_leg_target_->x,p.y-home_leg_target_->y)<1e-6;
+                });
+                if (reached!=route.end()) { route.erase(route.begin(),reached+1);route.insert(route.begin(),cur); }
+                home_leg_target_.reset();
+            } else if (distance>goal_tol_) {
+                missed_leg = (cur.x-home_leg_target_->x)*std::cos(home_leg_heading_)+
+                             (cur.y-home_leg_target_->y)*std::sin(home_leg_heading_)>0;
+            }
+        }
+        Vec2 from = cur;
+        bool route_clear = entry_clear && !missed_leg && home_entry_plan_.path.size()>1;
+        for (size_t i=1; route_clear && i<home_entry_plan_.path.size(); ++i) {
+            route_clear = line_clear(from,home_entry_plan_.path[i],execution);
+            from = home_entry_plan_.path[i];
+        }
+        if (route_clear) return true;
+
+        // 同视觉入口：最后直线上的微小入口修正保持原航向；累计位移受
+        // 本航段最初入口的到点容差限制，不能把大幅换路伪装成小修正。
+        if (had_entry && !missed_leg && home_leg_target_ &&
+            std::hypot(home_leg_target_->x-home_entry_plan_.entry.x,
+                       home_leg_target_->y-home_entry_plan_.entry.y)<1e-6) {
+            auto adjusted = plan_drop_approach(cur,goal_,goal_,obs,execution,required_config(),
+                home_straight_approach_m_,goal_tol_,exec_config().inflate);
+            if (adjusted.ok && adjusted.path.size()==2 &&
+                std::hypot(adjusted.entry.x-home_leg_anchor_.x,adjusted.entry.y-home_leg_anchor_.y)<=goal_tol_ &&
+                (adjusted.entry.x-cur.x)*std::cos(home_leg_heading_)+
+                (adjusted.entry.y-cur.y)*std::sin(home_leg_heading_)>0) {
+                adjusted.arrival_heading = home_leg_heading_;
+                adjusted.reason = "continue_checked_home_final";
+                home_entry_plan_ = std::move(adjusted);
+                home_leg_target_ = home_entry_plan_.entry;
+                return true;
+            }
+        }
+        // 入口因新点云失效时，延续仍安全的中间航段，只重选其后的入口。
+        // 旧入口已经失效时不先飞到旧入口，更不回追已越过的路点。
+        if (had_entry && !missed_leg && home_leg_target_ &&
+            std::hypot(home_leg_target_->x-home_entry_plan_.entry.x,
+                       home_leg_target_->y-home_entry_plan_.entry.y)>1e-6 &&
+            line_clear(cur,*home_leg_target_,execution)) {
+            auto continued = plan_drop_approach(*home_leg_target_,goal_,goal_,obs,transit,
+                required_config(),home_straight_approach_m_,goal_tol_,exec_config().inflate);
+            if (continued.ok) {
+                continued.path.insert(continued.path.begin(),cur);
+                continued.reason = "continue_checked_home_leg";
+                home_entry_plan_ = std::move(continued);
+                return true;
+            }
+        }
+        const double t = steady_seconds();
+        home_leg_target_.reset();
+        home_entry_plan_ = {};
+        if (!had_entry && t<home_entry_retry_) return false;
+        home_entry_retry_ = t+.5;
+        // 已在圈内且实际整条下降线安全时不倒退凑半径，也无需为已知终点取样。
+        if (std::hypot(cur.x-goal_.x,cur.y-goal_.y)<=home_straight_approach_m_ && descent_clear(cur,0)) {
+            home_entry_plan_ = {true,cur,{cur,cur},"home_current_point_inside_circle",yaw_};
+        } else {
+            ++astar_searches_;
+            ++global_path_searches_;
+            home_entry_plan_ = plan_drop_approach(cur,goal_,goal_,obs,transit,required_config(),
+                home_straight_approach_m_,goal_tol_,exec_config().inflate);
+        }
+        if (!home_entry_plan_.ok) return false;
+        RCLCPP_INFO(get_logger(), "[终点接近] 安全入口(%.3f,%.3f)，距终点%.2fm，来源=%s；到入口后直线斜降",
+            home_entry_plan_.entry.x,home_entry_plan_.entry.y,
+            std::hypot(home_entry_plan_.entry.x-goal_.x,home_entry_plan_.entry.y-goal_.y),home_entry_plan_.reason);
+        return true;
+    }
+
     Vec2 home_target_velocity(const Obstacles& obs)
     {
-        const Vec2 cur{px_, py_};
-        const double distance = std::hypot(goal_.x - px_, goal_.y - py_);
-        const Path2 direct{cur, goal_};
-        const bool eligible = home_straight_approach_m_ > 0.0 &&
-            (home_approach_active_ || distance <= home_straight_approach_m_);
-        const auto cfg = home_approach_active_ ? exec_config() : required_config();
-        if (!eligible || !required_path_clear(cur, direct, goal_, obs, cfg)) {
-            if (home_approach_active_) {
-                home_approach_active_ = false;
-                global_has_ = global_failed_ = false;
+        if (home_straight_approach_m_<=0) return pd_to_point_avoid(goal_,obs);
+        if (std::hypot(goal_.x-home_entry_goal_.x,goal_.y-home_entry_goal_.y)>1e-6) reset_home_approach();
+        const Vec2 cur{px_,py_};
+        Vec2 carrot = goal_;
+        if (!home_approach_active_) {
+            if (!select_home_entry(obs)) {
+                auto endpoint = exec_config();
+                global_goal_blocked_ = !drop_descent_clear(goal_,goal_,obs,endpoint);
+                global_target_ = goal_;
+                hold_required_path("home_no_safe_entry");
+                return {};
+            }
+            const Vec2 entry = home_entry_plan_.entry;
+            if (std::hypot(cur.x-entry.x,cur.y-entry.y)<=goal_tol_ &&
+                drop_descent_clear(cur,goal_,obs,required_config(),0,exec_config().inflate)) {
+                home_approach_active_ = true;
+                home_approach_yaw_ = yaw_;
+                home_leg_target_.reset();
                 global_tracker_->set_trajectory({});
                 required_goal_holding_ = false;
+                required_blocked_time_valid_ = false;
+                RCLCPP_INFO(get_logger(), "[终点接近] 已到安全入口，核准实际下降线，保持当前yaw直线前往终点");
+            } else {
+                auto& route = home_entry_plan_.path;
+                const auto transit = home_transit_config();
+                auto execution = transit;execution.inflate = exec_config().inflate;
+                // 整条当前航段执行完才换下一段，避免逐帧可见性造成左右切换。
+                if (!home_leg_target_) {
+                    for (size_t i=route.size(); i-->1;) {
+                        const auto& cfg = i==1 ? execution : transit;
+                        if (!obstacle_escape_clear(cur,route[i],obs,cfg) || !field_motion_clear(cur,route[i],cfg)) continue;
+                        home_leg_target_ = route[i];
+                        home_leg_anchor_ = route[i];
+                        home_leg_heading_ = std::atan2(route[i].y-cur.y,route[i].x-cur.x);
+                        route.erase(route.begin(),route.begin()+i);
+                        route.insert(route.begin(),cur);
+                        break;
+                    }
+                }
+                if (!home_leg_target_) {
+                    home_entry_plan_ = {};home_entry_retry_ = -1;
+                    global_target_ = goal_;hold_required_path("home_entry_route_blocked");
+                    return {};
+                }
+                carrot = *home_leg_target_;
             }
-            return pd_to_point_avoid(goal_, obs);
-        }
-        if (!home_approach_active_) {
-            home_approach_active_ = true;
-            home_approach_yaw_ = yaw_;
-            global_tracker_->set_trajectory({});
-            required_goal_holding_ = false;
-            required_blocked_time_valid_ = false;
-            RCLCPP_INFO(get_logger(), "[终点接近] 距离 %.2fm，保持当前朝向，切换安全XY直线对准", distance);
         }
         const double c = std::cos(yaw_), s = std::sin(yaw_);
-        const Vec2 measured{c*v_fwd_est_-s*v_lat_est_, s*v_fwd_est_+c*v_lat_est_};
-        Vec2 desired{kp_goal_*(goal_.x-px_)-kd_goal_*measured.x,
-                     kp_goal_*(goal_.y-py_)-kd_goal_*measured.y};
-        const double cap = std::min(v_goal_max_, home_approach_speed_);
+        const Vec2 measured{c*v_fwd_est_-s*v_lat_est_,s*v_fwd_est_+c*v_lat_est_};
+        Vec2 desired{kp_goal_*(carrot.x-px_)-kd_goal_*measured.x,
+                     kp_goal_*(carrot.y-py_)-kd_goal_*measured.y};
+        const double fraction = std::clamp(std::hypot(carrot.x-px_,carrot.y-py_)/home_slow_radius_,0.0,1.0);
+        const double cap = home_approach_active_ ? std::min(v_goal_max_,home_approach_speed_) :
+            std::min(v_goal_max_,home_slow_speed_+(v_goal_max_-home_slow_speed_)*fraction*fraction);
         const auto limit = [cap](Vec2& v) {
-            const double speed = std::hypot(v.x, v.y);
-            if (speed > cap) { v.x *= cap/speed; v.y *= cap/speed; }
+            const double speed = std::hypot(v.x,v.y);
+            if (speed>cap) { v.x*=cap/speed;v.y*=cap/speed; }
         };
         limit(desired);
-        desired = slew_velocity(last_command_world_, desired, measured,
-                                gains_.max_accel, xy_brake_accel_, gains_.dt);
+        desired = slew_velocity(last_command_world_,desired,measured,gains_.max_accel,xy_brake_accel_,gains_.dt);
         limit(desired);
-        global_target_ = goal_;
-        global_connector_start_ = cur;
-        global_raw_ = direct;
-        global_traj_ = make_polyline_trajectory(direct);
-        traj_ = global_traj_; last_look_ = goal_; look_valid_ = true;
-        global_has_ = true; global_failed_ = global_goal_blocked_ = false;
-        global_at_goal_ = distance <= goal_tol_;
+        global_target_ = home_approach_active_ ? goal_ : home_entry_plan_.entry;
+        global_raw_ = home_approach_active_ ? Path2{cur,goal_} : home_entry_plan_.path;
+        global_connector_start_ = global_raw_[global_raw_.size()-2];
+        global_traj_ = make_polyline_trajectory(global_raw_);
+        traj_ = global_traj_;last_look_ = carrot;look_valid_ = true;
+        global_has_ = true;global_failed_ = global_goal_blocked_ = false;
+        global_at_goal_ = home_approach_active_ && std::hypot(goal_.x-px_,goal_.y-py_)<=goal_tol_;
         VelCmd command;
-        command.v_fwd = c*desired.x+s*desired.y;
-        command.v_lat = -s*desired.x+c*desired.y;
-        command.yaw_rate = std::clamp(gains_.kp_yaw*wrap_pi(home_approach_yaw_-yaw_) -
-            gains_.kd_yaw*yaw_rate_est_, -gains_.max_yaw_rate, gains_.max_yaw_rate);
-        return guard_required_command(command, obs, false);
+        command.v_fwd = c*desired.x+s*desired.y;command.v_lat = -s*desired.x+c*desired.y;
+        command.yaw_rate = approach_yaw_rate(home_approach_active_ ? home_approach_yaw_ : home_leg_heading_);
+        if (!home_approach_active_) {
+            if (!obstacle_segment_clear(cur,cur,obs,exec_config()) && drop_escape_velocity_clear(desired,obs)) {
+                global_braking_blocked_ = command_projection_blocked_ = measured_projection_blocked_ = false;
+                required_blocked_time_valid_ = false;
+                global_block_reason_ = "home_monotonic_escape";last_yaw_rate_ = 0;
+                return {command.v_fwd,command.v_lat};
+            }
+            return guard_required_command(command,obs,false);
+        }
+        // 同视觉目标：整条下降线获准后执行完整动作，地图拟合变化不插入绕路/悬停。
+        // XY/yaw速度反馈、限幅及上层定位/任务有效期检查继续生效。
+        global_braking_blocked_ = command_projection_blocked_ = measured_projection_blocked_ = false;
+        required_blocked_time_valid_ = false;global_block_reason_.clear();
+        last_yaw_rate_ = command.yaw_rate;
+        return {command.v_fwd,command.v_lat};
     }
 
     void update_home_descent()
     {
         if (!corridor_enabled_ || corridor_disabled_for_goal_ || !corridor_lower_enabled_ ||
-            !corridor_->configured()) return;
-        const bool safe_approach = home_approach_active_ && !global_failed_ && !global_braking_blocked_;
-        if (!home_descent_started_ && safe_approach) {
+            !corridor_->configured() || !home_approach_active_) return;
+        if (!home_descent_started_) {
             home_descent_started_ = true;
-            RCLCPP_INFO(get_logger(), "[终点接近] 同步降到走廊 Z=%.3f；XY到点即转向，继续降高", corridor_flight_z_);
+            RCLCPP_INFO(get_logger(), "[终点接近] 从核准入口同步降到走廊 Z=%.3f；XY到点即转向，继续降高",corridor_flight_z_);
         }
-        if (!home_descent_started_) return;
-        // If the last straight segment is lost, pause Z at one fixed altitude
-        // while the existing obstacle recovery handles XY. Never climb back to
-        // the cruise height just because a guard rejected one control tick.
-        if (!safe_approach) {
-            if (!home_descent_pause_z_) home_descent_pause_z_ = pz_;
-        } else home_descent_pause_z_.reset();
-        drop_command_altitude_ = home_descent_pause_z_.value_or(corridor_flight_z_);
+        drop_command_altitude_ = corridor_flight_z_;
         drop_command_speed_ = corridor_descend_speed_;
     }
 
@@ -3976,7 +4119,7 @@ private:
                 // 插点活动中：命令已在上面 POI 状态机里写好，这里不再覆盖。
             } else if (has_goal_ && homing_) {
                 // ---- 归航：直奔真实终点(不夹取)，平滑刹停。终点可能藏在障碍后 → 全局 A* 绕障。 ----
-                Vec2 vb = home_target_velocity(obstacles);   // 远段绕障，末段保持朝向并用XY对准
+                Vec2 vb = home_target_velocity(obstacles);   // 先到安全圆周入口，再锁yaw直线斜降
                 update_home_descent();
                 if (global_failed_) {
                     // 贴障无路先后退脱困(与探索分支同一套)，退出后下一规划周期重试；否则原地保持。
@@ -4132,7 +4275,8 @@ private:
             const bool drop_committed = visual_drop_enabled_ && vision_target_active &&
                 (drop_phase == VisualDrop::Phase::Descend || drop_phase == VisualDrop::Phase::Send ||
                  drop_phase == VisualDrop::Phase::Wait || drop_phase == VisualDrop::Phase::Climb);
-            if (!drop_committed && !obstacle_segment_clear({px_, py_}, {px_, py_}, obstacles, ggcfg_))
+            const bool home_committed = homing_ && home_approach_active_;
+            if (!drop_committed && !home_committed && !obstacle_segment_clear({px_, py_}, {px_, py_}, obstacles, ggcfg_))
                 cmd.twist.angular.z = 0.0;
             } // 常规探索/归航；走廊任务独立处理墙与门。
 
@@ -4304,7 +4448,10 @@ private:
                 number("required_at_goal", global_at_goal_);
                 number("home_straight_approach", home_approach_active_);
                 number("home_descent_started", home_descent_started_);
-                number("home_descent_paused", home_descent_pause_z_.has_value());
+                number("home_safe_entry_valid", home_entry_plan_.ok);
+                number("home_safe_entry_x", home_entry_plan_.entry.x);
+                number("home_safe_entry_y", home_entry_plan_.entry.y);
+                value("home_safe_entry_reason", home_entry_plan_.reason);
                 number("smooth_fallbacks", smooth_fallbacks_);
                 value("smooth_failure_reason", smooth_failure_reason_);
                 const Obstacles observed_obstacles = obs_map_->snapshot();
@@ -4639,7 +4786,10 @@ private:
     double home_straight_approach_m_ = params::HOME_STRAIGHT_APPROACH_M;
     double home_approach_speed_ = params::HOME_APPROACH_V, home_approach_yaw_ = 0.0;
     bool home_approach_active_ = false, home_descent_started_ = false;
-    std::optional<double> home_descent_pause_z_;
+    DropApproach home_entry_plan_;
+    Vec2 home_entry_goal_{}, home_leg_anchor_{};
+    std::optional<Vec2> home_leg_target_;
+    double home_leg_heading_ = 0.0, home_entry_retry_ = -1;
     int    cur_band_ = -1;             // 上层扫描条带进度（-1=未初始化，由 plan_explore 维护）
     rclcpp::Time last_plan_time_;      // 上次重规划时刻（构造里用 now() 初始化）
     rclcpp::Time last_candidate_time_;
