@@ -288,15 +288,9 @@ void DroneController::tick()
         return;
     }
 
-    // IDLE 模式（任务未启动 / 已停止）：★不发任何 setpoint★
-    //   按需求(2026-07-28)去掉"OFFBOARD 前的零速度占位预热"——雷达就绪 + 飞手手动切到
-    //   OFFBOARD 后，BOOT_CHECK 当拍就走到 takeoff()，从那一拍起才开始发数据。
-    //   ★这意味着切 OFFBOARD 那一刻本程序还没发过任何 setpoint★：
-    //     · 若飞控要求"切 OFFBOARD 前必须已有 setpoint 流"，它会拒绝切换/立刻退出；
-    //       表现为切不进 OFFBOARD 或刚进就掉出来。真出现这种情况把
-    //       params::OFFBOARD_PREHEAT 改回 true 即可恢复占位流。
-    //     · 任务中止(stop()→IDLE)后同样不再发 → 飞控按其失联保护动作(通常自行降落/
-    //       保持)，本程序不再干预。
+    // IDLE（任务未启动 / 已停止）：按 OFFBOARD_PREHEAT 选择发零速度占位或不发。
+    // 首次起飞在自检通过、手动解锁且进入 OFFBOARD 后才启动起飞动作。
+    // 预热占位不会请求解锁，也不会给出爬升目标。
     if (action_mode_ == ActionMode::IDLE) {
         if (params::OFFBOARD_PREHEAT) {
             // 预热流(可选)：零速度占位，语义=原地不动，仅为满足飞控对 setpoint 流的要求

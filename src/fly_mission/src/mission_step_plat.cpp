@@ -279,8 +279,8 @@ void FlyMissionNode::step_plat_wait()
 //
 //  流程：等位姿 → [可选]重记 home → 复位重试计数 → 起 setpoint 流 → 预热
 //        → 切 OFFBOARD → 解锁 → TAKEOFF_AGAIN
-//  ★顺序与 BOOT_CHECK 一致(先模式后解锁)★，区别是 OFFBOARD 这次由程序自己请求
-//    (第一次是飞手手动拨的，落地后没人再去拨)。切 OFFBOARD 前飞控通常要求已有
+//  此处是落地后的自主再起飞；首次 BOOT_CHECK 则等待飞手手动解锁、再切 OFFBOARD。
+//    自主再起飞的 OFFBOARD 和解锁均由程序请求。切 OFFBOARD 前飞控通常要求已有
 //    setpoint 流，故先 takeoff() 把流起来、预热 PREHEAT_S 再请求。
 //  ★此期间尚未解锁，桨不转、飞机不会动★；解锁成功的那一拍 PD 已在命令爬升。
 //
@@ -307,7 +307,7 @@ void FlyMissionNode::step_rearm()
         //   home(原点) 当目标 → 一边爬升一边横拉回原点，贴地拖行很危险。
         //   注意"飞回原点"用的是 target_xy_slam(0,0) 绝对坐标，不受 home 影响。
         drone_.capture_home();
-        drone_.reset_arm_offboard_retry();    // 复位第一次起飞用掉的重试计数
+        drone_.reset_arm_offboard_retry();    // 每轮自主再起飞前复位重试计数
         rearm_start_  = now();
         rearm_inited_ = true;
     }

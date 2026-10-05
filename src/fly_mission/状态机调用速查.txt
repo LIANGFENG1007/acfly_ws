@@ -653,10 +653,10 @@
   is_reached_find()          -- 找图专用：容差换成 FF_TOL_XY(0.10)，比正常 TOL_XY(0.15)紧
   注意：同一拍内不要既调 is_reached() 又调 is_reached_tol()——它们共用 settle 计时。
 
-BOOT_CHECK 现状(检测链 + 两声蜂鸣 + 等启动指令)：
+BOOT_CHECK 现状(检测链 + 两声蜂鸣 + 可选启动指令 + 手动解锁/OFFBOARD)：
   实现在 mission_step_basic.cpp 的 step_boot_check()，返回 true = 全部通过可起飞。
-  顺序：飞控连接 => 雷达位姿 => BEEP(1) => 等启动指令 => BEEP(2)
-        => 等飞手拨 OFFBOARD => 自动解锁 => capture_home()
+  顺序：飞控连接 => 雷达位姿 => BEEP(1) => 可选启动指令 => BEEP(2)
+        => 等手动解锁 => 等飞手拨 OFFBOARD => capture_home()
   case 里只有：
     case MissionState::BOOT_CHECK:
         if (step_boot_check()) state_ = MissionState::TAKEOFF;
@@ -675,7 +675,7 @@ BOOT_CHECK 现状(检测链 + 两声蜂鸣 + 等启动指令)：
   为什么走 UDP：跨机 ROS 话题的 DDS 发现是全连接的，mavros 50+ 插件节点会把 WiFi
   组播打满，饿死飞控串口链路，setpoint 发不出去。
 
-  等待期间尚未解锁、也还没到 OFFBOARD 检查 => 桨不转，可安全长时间等；
+  等待期间程序不请求解锁、不启动起飞；实际解锁状态由飞手控制。
   每 3s 打一次提示，把发送命令直接打在日志里(不用记)。
   没插 Arduino => 只打告警，任务照常继续(蜂鸣器不是必需件)。
 
@@ -751,8 +751,8 @@ BOOT_CHECK 现状(检测链 + 两声蜂鸣 + 等启动指令)：
 ============================================================================
   当前流程(step_wait_after_takeoff() 里 next = EXPLORATION，MISSION2_ENABLE=false)：
 
-      BOOT_CHECK          飞控+雷达就绪 => BEEP(1) => 等UDP启动指令 => BEEP(2)
-                          => 等飞手拨OFFBOARD => 自动解锁 => 记home
+      BOOT_CHECK          飞控+雷达就绪 => BEEP(1) => 可选UDP启动指令 => BEEP(2)
+                          => 等手动解锁 => 等飞手拨OFFBOARD => 记home
       TAKEOFF             起飞到 1.5m
       WAIT_AFTER_TAKEOFF  悬停 0.5s => 退出起飞段位置环 => 按 next 分岔
       EXPLORATION         自主探索(算法给速度，终点 7.0/4.0)

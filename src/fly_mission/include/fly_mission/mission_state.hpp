@@ -15,7 +15,7 @@ namespace fly_mission {
 //  任务全部状态
 // ────────────────────────────────────────────────────────────────────────
 enum class MissionState {
-    BOOT_CHECK,                 // 检测：连接 + 雷达 → BEEP① → BEEP② → OFFBOARD + 解锁
+    BOOT_CHECK,                 // 检测：连接 + 雷达 → BEEP① → BEEP② → 手动解锁 → OFFBOARD
                                 //   (中间那道"等启动指令"由 params::START_CMD_REQUIRED 控制，当前关)
     TAKEOFF,                    // 起飞到 1m
     WAIT_AFTER_TAKEOFF,
@@ -74,7 +74,7 @@ int32_t telemetry_status(MissionState s);
 // ★该状态是否要做"失锁/飞手接管"判定★。
 //   下面这些状态【本来就处于 未解锁 或 非 OFFBOARD】，必须放行，否则 0.5s 去抖一到就被
 //   误判成"飞手接管"→ stop() + FINISHED，二次起飞永远走不到：
-//     BOOT_CHECK      —— 还没解锁、等飞手切 OFFBOARD
+//     BOOT_CHECK      —— 等待手动解锁，再等飞手切 OFFBOARD
 //     LAND / LAND_THEN_WAIT —— 降落触底会上锁(LAND 到位判定本身就要求 !armed)
 //     WAIT_TRIGGER    —— 已落地上锁，在地面等触发命令(可能等很久)
 //     REARM           —— 正在自己切 OFFBOARD + 解锁，成功前必然不满足

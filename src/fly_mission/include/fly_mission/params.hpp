@@ -63,9 +63,9 @@ inline constexpr int    TIMER_PERIOD_MS      = 20;     // 50Hz
 
 // ---------------------------------------------------------------------------
 // ★★★ OFFBOARD setpoint 预热流 ★★★
-//   false = ★当前★ 不预热：IDLE(任务未启动/已停止) 与 无位姿 时【什么都不发】。
-//           雷达就绪 + 飞手手动切 OFFBOARD → BOOT_CHECK 当拍走到 takeoff()，
-//           从那一拍起才开始发 setpoint（"直接发数据起飞"）。
+//   false = 不预热：IDLE(任务未启动/已停止) 与 无位姿 时【什么都不发】。
+//           自检通过 + 手动解锁 + OFFBOARD 后进入 TAKEOFF，
+//           起飞动作启动后才开始发 setpoint。
 //   true  = 预热：上述两种情况每拍发零速度 setpoint 占位(原行为)。
 //
 //   ★关掉的风险★：许多固件(PX4 系)要求【切 OFFBOARD 之前已有 setpoint 流】，
@@ -325,7 +325,7 @@ inline constexpr int    CAR_UDP_PORT = 9870;
 //   ★本项只决定"启动指令从哪来"，不决定"要不要等启动指令"★——后者见下面的
 //   START_CMD_REQUIRED(当前 false，即不等启动指令，本项只用于命令 2)。
 //   BOOT_CHECK 流程(START_CMD_REQUIRED=true 时)：
-//     飞控+雷达就绪 → BEEP① → ★等启动指令★ → BEEP② → 等 OFFBOARD → 解锁
+//     飞控+雷达就绪 → BEEP① → ★等启动指令★ → BEEP② → 等手动解锁 → 等 OFFBOARD → 起飞
 //   true  = ★当前★ 走【UDP 单播】收命令(端口 CMD_UDP_PORT)，不订阅 /mission/start。
 //   false = 走 ROS 话题 /mission/start (Int32 data==1)，旧行为逐位一致。
 //
@@ -344,14 +344,13 @@ inline constexpr int    CMD_UDP_PORT  = 9871;
 
 // ---------------------------------------------------------------------------
 // ★★★ 起飞前是否需要"启动指令"这道门 ★★★
-//   true  = 旧行为：飞控+雷达就绪 → BEEP① → ★等启动指令(UDP/话题)★ → BEEP② → 等 OFFBOARD
+//   true  = 飞控+雷达就绪 → BEEP① → ★等启动指令(UDP/话题)★ → BEEP② → 等手动解锁 → 等 OFFBOARD
 //   false = ★当前★ 省掉启动指令：飞控+雷达就绪 → BEEP① → (隔 BOOT_BEEP_GAP_S) → BEEP②
-//           → 直接等 OFFBOARD。两声连响就是"自检全过，可以拨 OFFBOARD 了"。
+//           → 等手动解锁 → 等 OFFBOARD。两声连响表示"自检通过，可以手动解锁再拨 OFFBOARD"。
 //
-//   ★为什么去掉是安全的★：起飞的真正闸门不是启动指令，而是【飞手手动拨 OFFBOARD】——
-//   程序只在检测到 OFFBOARD 之后才请求解锁。少了启动指令，桨也不会自己转。
+//   无论本开关取何值，首次起飞都不请求解锁；只有当前已解锁且为 OFFBOARD 才开始起飞。
 //
-//   ★改回 true 的场合★：需要"人在远端确认后飞机才进入待拨 OFFBOARD 状态"的流程
+//   ★改回 true 的场合★：需要"人在远端确认后飞机才进入等待手动解锁/OFFBOARD 状态"的流程
 //   (比如多机依次起飞、或裁判统一发令)。改回 true 后 udp_cmd_send <IP> start 照旧可用，
 //   收发两端代码都保留着，无需其它改动。
 //

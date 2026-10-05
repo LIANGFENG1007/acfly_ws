@@ -127,7 +127,7 @@ private:
     //  各状态的实现（switch 里每个 case 只调这些，实现分散在 mission_step_*.cpp）
     // ════════════════════════════════════════════════════════════════════
     // ── 基础流程：mission_step_basic.cpp ──
-    bool step_boot_check();          // 返回 true = 检测通过可起飞(失败会自己转 FINISHED)
+    bool step_boot_check();          // 等手动解锁，再确认 OFFBOARD；全部通过返回 true 可起飞
     void step_wait_after_takeoff();  // 起飞后悬停到位 → 退位置环 + 按选定分支初始化并切走
     void exploration(double gx, double gy);   // 首拍锁高+发红点/入口/H，之后转发算法命令
     void publish_exploration_corridor_route(bool force); // 配置变化时仍使用本次 goal 时间戳
@@ -207,6 +207,7 @@ private:
     // ---- BOOT_CHECK 的一次性日志标志 ----
     bool check_connected_done_ = false;
     bool check_pose_done_      = false;
+    bool check_armed_done_     = false;
     bool check_offboard_done_  = false;
 
     // ---- 追上判定(TRACK_CAR → LOCK_DROP) ----

@@ -89,10 +89,10 @@ FlyMissionNode::FlyMissionNode()
     // ★起飞前流程横幅★：START_CMD_REQUIRED 决定要不要等启动指令(见 params 该项说明)。
     if (params::START_CMD_REQUIRED) {
         RCLCPP_INFO(get_logger(),
-            "[启动] 起飞前流程：自检 → BEEP① → ★等启动指令★ → BEEP② → 等飞手拨 OFFBOARD → 自动解锁");
+            "[启动] 起飞前流程：自检 → BEEP① → ★等启动指令★ → BEEP② → 等手动解锁 → 等 OFFBOARD → 起飞");
     } else {
         RCLCPP_INFO(get_logger(),
-            "[启动] 起飞前流程：自检 → BEEP①+BEEP②(间隔 %.1fs) → 等飞手拨 OFFBOARD → 自动解锁"
+            "[启动] 起飞前流程：自检 → BEEP①+BEEP②(间隔 %.1fs) → 等手动解锁 → 等 OFFBOARD → 起飞"
             "（★不需要启动指令★；要改回需求指令模式见 params::START_CMD_REQUIRED）",
             params::BOOT_BEEP_GAP_S);
     }
@@ -103,7 +103,7 @@ FlyMissionNode::FlyMissionNode()
     //   ★收到一次就锁定★——对方会 1s 1 次持续发防丢包，之后的一律忽略，不会重复触发。
     if (params::CMD_USE_UDP) {
         // ★UDP 模式★：不订阅 ROS 话题(避免跨机 DDS 组播发现打爆 WiFi、拖垮 mavros)。
-        //   构造即 bind；失败只告警——不影响起飞(起飞闸门是飞手拨 OFFBOARD)，
+        //   构造即 bind；不需要启动指令时失败不影响起飞(闸门是手动解锁 + OFFBOARD)，
         //   但会收不到命令 2。收包在 on_timer 里 poll_udp_cmd()。
         cmd_rx_ = std::make_unique<udp_cmd::UdpCmdReceiver>(params::CMD_UDP_PORT);
         if (!cmd_rx_->ok()) {
@@ -245,7 +245,7 @@ void FlyMissionNode::on_timer()
 
     switch (state_) {
 
-    // ─── 检测：连接 + 雷达 → BEEP① → 等启动指令 → BEEP② → OFFBOARD + 解锁 ───
+    // ─── 检测：连接 + 雷达 → BEEP① → 可选启动指令 → BEEP② → 手动解锁 → OFFBOARD ───
     case MissionState::BOOT_CHECK:
         if (step_boot_check()) {
             RCLCPP_INFO(get_logger(), "[检测] 全部通过，开始起飞");

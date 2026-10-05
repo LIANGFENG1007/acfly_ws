@@ -90,7 +90,7 @@ bool FlyMissionNode::step_boot_check()
 
     // ── 等启动指令 ──：★仅 START_CMD_REQUIRED=true 时才有这道门★。
     //   ★收到一次即锁定★(start_recv_)，用户会 1s 1 次持续发防丢包，重复发直接忽略。
-    //   此时【尚未解锁、也还没到 OFFBOARD 检查】，桨不转，可安全长时间等。
+    //   等待期间不请求解锁、不下发起飞目标；实际解锁状态由飞手控制。
     if (params::START_CMD_REQUIRED && !start_recv_) {
         if (params::CMD_USE_UDP) {
             RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 3000,
@@ -104,7 +104,7 @@ bool FlyMissionNode::step_boot_check()
         return false;
     }
 
-    // ── BEEP② ──：确认音（只发一次）。响完这声就该由飞手拨 OFFBOARD。
+    // ── BEEP② ──：确认音（只发一次）。响完后由飞手先手动解锁，再拨 OFFBOARD。
     //   START_CMD_REQUIRED=true  → 含义是"收到启动指令了"，此处已放行，立即响。
     //   START_CMD_REQUIRED=false → 含义是"自检全过"，等 BOOT_BEEP_GAP_S 让两声可辨。
     //     ★这里 return false 是必须的★：本状态每拍都跑，不等够间隔就先别往下走，
@@ -118,29 +118,32 @@ bool FlyMissionNode::step_boot_check()
         beep2_sent_ = true;
         if (params::START_CMD_REQUIRED) {
             RCLCPP_INFO(get_logger(),
-                "[启动] 已收到启动指令并响第二声 → 请拨 OFFBOARD，之后自动解锁起飞");
+                "[启动] 已收到启动指令并响第二声 → 请先手动解锁，再拨 OFFBOARD 起飞");
         } else {
             RCLCPP_INFO(get_logger(),
-                "[启动] 自检通过，已响两声 → 请拨 OFFBOARD，之后自动解锁起飞");
+                "[启动] 自检通过，已响两声 → 请先手动解锁，再拨 OFFBOARD 起飞");
         }
     }
 
-    // 等飞手手动切到 OFFBOARD（此时 setpoint 占位流已经在发了）
+    // 先等飞手手动解锁。每拍核对当前状态，等待 OFFBOARD 时重新上锁就退回等待；
+    // check_armed_done_ 只用于日志，不能作为已经解锁的放行凭据。
+    if (!drone_.is_armed()) {
+        check_armed_done_ = false;
+        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 3000,
+            "[检测] 等待飞手手动解锁（程序不请求解锁）");
+        return false;
+    }
+    if (!check_armed_done_) {
+        RCLCPP_INFO(get_logger(), "[检测] 手动解锁：是 → 等待 OFFBOARD");
+        check_armed_done_ = true;
+    }
+
+    // 已解锁后再等飞手切到 OFFBOARD（按 OFFBOARD_PREHEAT 配置发送零速度占位流）。
     if (!drone_.is_offboard()) return false;
     if (!check_offboard_done_) {
         RCLCPP_INFO(get_logger(), "[检测] OFFBOARD：是");
         check_offboard_done_ = true;
     }
-
-    // 程序自动请求解锁（每秒重试，最多 5 次）
-    if (!drone_.is_armed()) {
-        if (!drone_.request_arm()) {
-            RCLCPP_ERROR(get_logger(), "[检测] 解锁失败，任务中止");
-            state_ = MissionState::FINISHED;
-        }
-        return false;
-    }
-    RCLCPP_INFO(get_logger(), "[检测] 解锁：是");
 
     drone_.capture_home();
     return true;

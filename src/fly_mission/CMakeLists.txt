@@ -62,6 +62,17 @@ install(DIRECTORY include/
 )
 
 if(BUILD_TESTING)
+  add_executable(manual_takeoff_test tests/manual_takeoff_test.cpp ${FLY_MISSION_MODULES})
+  target_compile_features(manual_takeoff_test PRIVATE cxx_std_17)
+  ament_target_dependencies(manual_takeoff_test
+    acfly_interfaces rclcpp geometry_msgs mavros_msgs nav_msgs std_msgs tf2)
+  target_link_libraries(manual_takeoff_test nlohmann_json::nlohmann_json)
+  target_link_options(manual_takeoff_test PRIVATE
+    -Wl,--wrap=open -Wl,--wrap=socket -Wl,--wrap=rcl_publish -Wl,--wrap=rcl_send_request)
+  add_test(NAME manual_takeoff_test COMMAND manual_takeoff_test)
+  set_tests_properties(manual_takeoff_test PROPERTIES
+    ENVIRONMENT "ROS_DOMAIN_ID=206;ROS_LOCALHOST_ONLY=1;ROS_LOG_DIR=/tmp/acfly-manual-takeoff-test-logs"
+    TIMEOUT 15)
   add_executable(exploration_handoff_test tests/exploration_handoff_test.cpp ${FLY_MISSION_MODULES})
   target_compile_features(exploration_handoff_test PRIVATE cxx_std_17)
   ament_target_dependencies(exploration_handoff_test
