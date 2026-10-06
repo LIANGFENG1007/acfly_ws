@@ -151,7 +151,9 @@ if(BUILD_TESTING)
   add_test(NAME visual_drop_node_test COMMAND required_node_test
     --ros-args -p visual_drop_enabled:=false -p viz:=false -p corridor_enabled:=false -p exploration_enabled:=true
     -p field_min_x:=0.0 -p field_min_y:=-5.0 -p field_max_x:=7.5 -p field_max_y:=5.0
-    -p fov_range:=3.0 -p v_max:=0.6)
+    -p fov_range:=3.0 -p v_max:=0.6 -p visual_drop_offset_m:=0.23)
+  # Recorded visual arrival-envelope fixtures use a 23 cm package offset.
+  # Keep their geometry independent of the operator's current flight offset.
   add_test(NAME exploration_corner_transition_test COMMAND required_node_test
     --ros-args -p viz:=false)
   set_tests_properties(exploration_corner_transition_test PROPERTIES

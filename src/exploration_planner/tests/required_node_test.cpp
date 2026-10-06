@@ -2052,6 +2052,110 @@ void home_visibility_shortcut_regression()
     std::cout << "home safe entry: direct/blocked/mirrored/boundary routes, nearest entry, yaw and XY continuity passed\n";
 }
 
+void home_recorded_return_corner_regression()
+{
+    ExplorationNode node;
+    node.timer_->cancel();node.vision_reader_.reset();node.visual_drop_enabled_=false;
+    // 2026-10-06 editor scene: the obstacle requires a detour, but the fixed
+    // circle sample added another turn from 3.3 to 10.6 degrees at descent.
+    for (double side : {-1.0,1.0}) {
+        node.ggcfg_={-.5,side>0 ? -3.8 : -4.6,9,side>0 ? 4.6 : 3.8,.04,.4,.1,.6};
+        const Vec2 start{3.3217917410421633,side*3.2837077396187264};
+        const Vec2 goal{7.75,side*4.3};
+        const Obstacles obs{{2.29375,side*3.19375,.33936536824085956},
+            {3.7,-side*2.175,.39316150714175185},
+            {4.8625,side*2.9875,.33936536824085956},
+            {8.81875,side*1.39375,.5}};
+        reset(node,start);node.goal_=goal;node.homing_=true;node.reset_home_approach();
+        node.home_target_velocity(obs);
+        const auto check_final_line=[&] {
+            const auto& plan=node.home_entry_plan_;
+            require(plan.ok && plan.path.size()>=2,"recorded home detour has no route");
+            const auto a=plan.path[plan.path.size()-2],e=plan.entry;
+            const double cross=(e.x-a.x)*(goal.y-e.y)-(e.y-a.y)*(goal.x-e.x);
+            require(std::abs(cross)<1e-9,
+                    "home safe entry inserts an avoidable corner before the descent");
+            require(std::abs(std::hypot(e.x-goal.x,e.y-goal.y)-1)<1e-9,
+                    "straightening moved the home descent outside the one-metre circle");
+            require(drop_descent_clear(e,goal,obs,node.required_config(),node.goal_tol_,node.exec_config().inflate),
+                    "straightened home descent did not validate the complete envelope");
+            for(size_t i=1;i<plan.path.size();++i)
+                require(obstacle_escape_clear(plan.path[i-1],plan.path[i],obs,node.home_transit_config()),
+                        "straightened home route cut through the obstacle");
+        };
+        check_final_line();
+        require(node.home_entry_plan_.path.size()==3,
+                "recorded obstacle detour was erased or kept redundant corners");
+        double length=0;
+        for(size_t i=1;i<node.home_entry_plan_.path.size();++i) {
+            const auto a=node.home_entry_plan_.path[i-1],b=node.home_entry_plan_.path[i];
+            length+=std::hypot(b.x-a.x,b.y-a.y);
+        }
+        require(length<3.60,"home straightening selected a farther circle entry");
+        require(node.home_curve_active_ && node.global_traj_.size()>10,
+                "home return still follows separate PD waypoints instead of a curve");
+        const auto trajectory=node.global_traj_;
+        const auto join=node.home_entry_plan_.path[1];
+        for(size_t i=1;i+1<trajectory.size();++i) {
+            require(std::hypot(trajectory[i].p.x-join.x,trajectory[i].p.y-join.y)>.001,
+                    "rounded home curve still passes through the sharp waypoint");
+            const auto a=trajectory[i-1].p,b=trajectory[i].p,c=trajectory[i+1].p;
+            require(std::abs(std::remainder(std::atan2(c.y-b.y,c.x-b.x)-std::atan2(b.y-a.y,b.x-a.x),2*M_PI))<.03,
+                    "home reference still contains a heading discontinuity");
+        }
+        const auto entry=node.home_entry_plan_.entry;
+        const auto searches=node.global_path_searches_;
+        bool checked_curve=false;
+        for(const auto& point:trajectory) {
+            node.px_=point.p.x;node.py_=point.p.y;node.yaw_=point.theta;
+            node.v_fwd_est_=.35;node.v_lat_est_=0;
+            node.last_command_world_={.35*std::cos(point.theta),.35*std::sin(point.theta)};
+            const auto command=node.home_target_velocity(obs);
+            if(std::abs(point.kappa)>.01) {
+                checked_curve=true;
+                require(std::hypot(command.x,command.y)>.1,
+                        "home curve brakes to zero at an intermediate waypoint");
+            }
+            if(std::hypot(point.p.x-goal.x,point.p.y-goal.y)>1+1e-9)
+                require(!node.home_approach_active_,"home lowering started outside one metre");
+            require(std::hypot(node.home_entry_plan_.entry.x-entry.x,node.home_entry_plan_.entry.y-entry.y)<1e-12 &&
+                    node.global_path_searches_==searches,"valid home curve was replanned during normal progress");
+        }
+        require(checked_curve && node.home_approach_active_,
+                "home curve failed to transition to straight descent at one metre");
+    }
+    std::cout << "recorded home return: mirrored obstacle detours and collinear descent handoff passed\n";
+}
+
+void home_virtual_boundary_drift_regression()
+{
+    ExplorationNode node;
+    node.timer_->cancel();node.vision_reader_.reset();
+    const Vec2 goal{5,node.ggcfg_.max_y-.3};
+    reset(node,{2,goal.y});node.goal_=goal;node.homing_=true;node.reset_home_approach();
+    node.home_target_velocity({});
+    require(node.home_curve_active_,"boundary drift fixture has no checked home curve");
+    node.px_+=.05;node.py_=node.ggcfg_.max_y+.03;
+    node.yaw_=0;node.v_fwd_est_=.2;node.v_lat_est_=.1;
+    node.last_command_world_={.2,-.05};
+    const auto command=node.home_target_velocity({});
+    require(command.x>0 && command.y<0 && !node.global_braking_blocked_ && !node.global_failed_,
+            "virtual boundary drift cleared XY instead of continuing home with inward correction");
+    const Vec2 stop{node.px_+.4,node.py_+.02};
+    require(node.required_motion_clear(stop,{}),"home stopping projection is still blocked by the virtual boundary");
+    require(!node.required_motion_clear(stop,{{stop.x,stop.y,.05}}),
+            "home virtual-boundary exception disabled real obstacle protection");
+    node.global_has_=false;
+    require(!node.required_motion_clear(stop,{}),"home boundary exception admitted an unplanned motion");
+    node.global_has_=true;node.homing_=false;
+    require(!node.required_motion_clear(stop,{}),"home boundary exception leaked into normal exploration");
+    node.homing_=true;
+    require(node.corridor_->configure({6,goal.y},{6,goal.y-3}),"boundary test corridor configuration failed");
+    node.corridor_->start(goal,node.steady_seconds());
+    require(!node.required_motion_clear(stop,{}),"home boundary exception leaked into corridor control");
+    std::cout << "home virtual boundary: drift correction, real obstacles and phase scope passed\n";
+}
+
 void home_straight_descent_regression()
 {
     ExplorationNode node;
@@ -2121,8 +2225,8 @@ void home_straight_descent_regression()
     node.py_-=.15;
     require(node.required_motion_clear({node.px_+.03,node.py_+.03},{}),
             "home line drift correction was rejected outside its narrow capsule");
-    require(!node.required_motion_clear({node.px_,node.ggcfg_.max_y+.01},{}),
-            "home correction waived actual field bounds");
+    require(node.required_motion_clear({node.px_,node.ggcfg_.max_y+.01},{}),
+            "checked home correction is blocked by a virtual field boundary");
     mission();node.corridor_disabled_for_goal_=true;
     node.home_target_velocity({});node.update_home_descent();
     require(!node.home_descent_started_,"disabled corridor triggered low flight");
@@ -2156,7 +2260,7 @@ void home_straight_descent_regression()
     node.yaw_=node.ccfg_.initial_yaw;node.on_timer();
     require(node.corridor_->phase()==CorridorPhase::Entry,"aligned heading and height failed to release entry");
     ++message->header.stamp.sec;node.on_goal(message);
-    require(!node.home_approach_active_ && !node.home_descent_started_ && !node.home_entry_plan_.ok && !node.home_leg_target_,
+    require(!node.home_approach_active_ && !node.home_descent_started_ && !node.home_entry_plan_.ok && !node.home_leg_target_ && !node.home_curve_active_,
             "new mission retained old home approach / descent state");
     std::cout << "home approach: direct XY, yaw lock, descent, committed straight motion, moving XY handoff and corridor gates passed\n";
 }
@@ -2965,6 +3069,8 @@ int main(int argc, char** argv)
             rclcpp::shutdown(); return 0;
         }
         home_visibility_shortcut_regression();
+        home_recorded_return_corner_regression();
+        home_virtual_boundary_drift_regression();
         home_straight_descent_regression();
         if (std::getenv("ACFLY_HOME_APPROACH_ONLY")) { rclcpp::shutdown(); return 0; }
         malformed_cloud_does_not_terminate_node();

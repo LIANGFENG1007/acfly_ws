@@ -179,6 +179,10 @@ public:
 
     // 最近一次用到的前瞻参考点（给可视化）
     Vec2 last_lookahead() const { return last_look_; }
+    // Geometric progress for callers that control world-XY velocity themselves.
+    // Uses the same bounded, monotone projection; does not run yaw/velocity PID.
+    void advance_reference(double px, double py) { if (!traj_.empty()) advance_to_nearest(px, py); }
+    TrajPoint reference_at(double s) const { return traj_.empty() ? TrajPoint{} : sample_at(s); }
     // 最近一拍航向律各分量(诊断/离线台架用，不参与控制)
     // limiter：本拍前进限速的主导约束 1=前瞻窗曲率 2=前瞻速度剖面 3=终点/尖角停车律 4=航向门
     //   5=横向加速度(曲率) 6=实测角速度 7=横向速度因子；0=非巡航分支。
