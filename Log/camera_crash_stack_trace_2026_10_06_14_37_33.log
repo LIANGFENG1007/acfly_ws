@@ -1,0 +1,18 @@
+Received signal: 11
+Stack trace (most recent call last):
+#15   Object "[0xffffffffffffffff]", at 0xffffffffffffffff, in 
+#14   Object "/opt/ros/humble/lib/rclcpp_components/component_container", at 0xaaaae0911daf, in 
+#13   Object "/lib/aarch64-linux-gnu/libc.so.6", at 0xffff84e574d7, in __libc_start_main
+#12   Object "/lib/aarch64-linux-gnu/libc.so.6", at 0xffff84e573ff, in 
+#11   Object "/opt/ros/humble/lib/rclcpp_components/component_container", at 0xaaaae0911bbb, in 
+#10   Object "/opt/ros/humble/lib/librclcpp.so", at 0xffff85371703, in rclcpp::executors::SingleThreadedExecutor::spin()
+#9    Object "/opt/ros/humble/lib/librclcpp.so", at 0xffff8536949f, in rclcpp::Executor::execute_any_executable(rclcpp::AnyExecutable&)
+#8    Object "/home/nvidia/ws_orbbec/install/orbbec_camera/lib/liborbbec_camera.so", at 0xffff7e0f6b57, in 
+#7    Object "/home/nvidia/ws_orbbec/install/orbbec_camera/lib/liborbbec_camera.so", at 0xffff7e0f651b, in 
+#6    Object "/home/nvidia/ws_orbbec/install/orbbec_camera/lib/liborbbec_camera.so", at 0xffff7e153a1b, in diagnostic_updater::Updater::update()
+#5    Object "/home/nvidia/ws_orbbec/install/orbbec_camera/lib/liborbbec_camera.so", at 0xffff7e152667, in diagnostic_updater::Updater::publish(std::vector<diagnostic_msgs::msg::DiagnosticStatus_<std::allocator<void> >, std::allocator<diagnostic_msgs::msg::DiagnosticStatus_<std::allocator<void> > > >&)
+#4    Object "/opt/ros/humble/lib/librcl.so", at 0xffff84d8eacb, in 
+#3    Object "/opt/ros/humble/lib/librcl.so", at 0xffff84d8e4b3, in rcl_publisher_is_valid
+#2    Object "/opt/ros/humble/lib/librcl.so", at 0xffff84d89e84, in rcl_publisher_is_valid_except_context
+#1    Object "linux-vdso.so.1", at 0xffff855167bb, in 
+#0    Object "/home/nvidia/ws_orbbec/install/orbbec_camera/lib/liborbbec_camera.so", at 0xffff7e0619e3, in signalHandler(int)

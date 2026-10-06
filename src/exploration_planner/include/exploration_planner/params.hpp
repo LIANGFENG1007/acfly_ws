@@ -67,7 +67,7 @@ inline constexpr double VISUAL_DROP_Z_COMP_MAX = 0.40;    // 补偿量限幅(m)�
 inline constexpr double VISUAL_DROP_XY_TOL_M = 0.10;     // 包裹水平到位容差(m)：经安装偏移补偿后的包裹XY距视觉目标≤此值即到位，不要求速度降到零
 inline constexpr double VISUAL_DROP_STABLE_S = 2.0;      // 提前投放所需连续稳定时间(s)：包裹XY和雷达Z均到位；超出任一容差则重新计这段时间
 inline constexpr double VISUAL_DROP_TIMEOUT_S = 4.0;      // 强制投放等待上限(s)：包裹XY首次到位即开始，漂移不重置；到时即发送，不再等待Z/稳定
-inline constexpr double VISUAL_DROP_OFFSET_M = 0.23;     // 包裹距雷达的水平安装距离(m)：第1个正前、第2个正左、第3个正右，按实际yaw旋转补偿
+inline constexpr double VISUAL_DROP_OFFSET_M = 0.28;     // 包裹距雷达的水平安装距离(m)：第1个正前、第2个正左、第3个正右，按实际yaw旋转补偿
 inline constexpr double VISUAL_DROP_DESCEND_MPS = 0.60;  // 投放下降速度上限(m/s)：根据剩余XY距离估计到达时间并调整限速，实际Z速度由主控PD计算
 inline constexpr double VISUAL_DROP_CLIMB_MPS = 0.60;    // 释放后回升速度上限(m/s)：锁定释放时XY，回到开始采样时的高度；持续输出XY纠偏速度
 inline constexpr double VISUAL_DROP_CLIMB_RELEASE_M = 0.50; // 0.35→0.5(2026-09-24 仿真第 15 轮：回升每局再省 1.8 s，倾角无变化)。 回升到离返回高度 <此值(m)就恢复探索，剩余高度边飞边爬(障碍点云按世界高度截取、柱子全高，低 0.35 m 不影响避障)。原来锁 XY 等高度进容差，每次约多等 2 s。0=旧行为
@@ -117,7 +117,7 @@ inline constexpr double CORRIDOR_MIN_GAP_EXTRA = 0.0; // 机宽以外额外要�
 inline constexpr double CORRIDOR_ENTRY_SPEED = 0.30;
 inline constexpr double CORRIDOR_CRUISE_SPEED = 0.30;
 inline constexpr double CORRIDOR_MIN_FORWARD_SPEED = 0.30; // ★隧道里前进速度下限(m/s)★ 2026-09-26 用户定(0.2→0.3)：整个隧道都不低于它(涡流里太慢推不动)；只在快到 H、门还没确认时减速
-inline constexpr double CORRIDOR_LATERAL_SPEED = 0.35;     // ★隧道里横向纠偏速度上限(m/s)★ 和前进分开算；门前 0.6 m 内要横移到门中心，门偏得多要调大
+inline constexpr double CORRIDOR_LATERAL_SPEED = 0.45;     // ★隧道里横向纠偏速度上限(m/s)★ 和前进分开算；门前 0.6 m 内要横移到门中心，门偏得多要调大
 inline constexpr double CORRIDOR_LATERAL_ACCEL = 0.60;     // 隧道里横向指令斜坡(m/s²)
 inline constexpr double CORRIDOR_H_APPROACH_M = 1.20;      // 离 H 只剩这么远(m)时直接朝 H 飞：隧道墙可能在 H 前就结束(实机 H 前 0.17 m 墙就没了)
 inline constexpr double CORRIDOR_GATE_SPEED = 0.30; // 正对门中心穿越的速度上限(m/s)
