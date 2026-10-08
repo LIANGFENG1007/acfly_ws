@@ -2052,6 +2052,109 @@ void home_visibility_shortcut_regression()
     std::cout << "home safe entry: direct/blocked/mirrored/boundary routes, nearest entry, yaw and XY continuity passed\n";
 }
 
+void avoidance_rejoin_regression()
+{
+    for(int side:{-1,1}) for(int owner:{0,1,2}) for(double tangential_drift:{0.0,.30}) {
+        ExplorationNode node;node.timer_->cancel();node.vision_reader_.reset();
+        reset(node,{2,side*.45});node.ggcfg_={-5,-5,8,5,.04,.4,.1,.6};
+        node.has_goal_=true;node.finished_=false;node.homing_=owner==1;
+        node.yaw_=.7;node.last_command_world_={};node.tracker_->set_trajectory({});
+        const Path2 route{{1,side*.9},{4,side*.9}};
+        const auto path=trajectory_from_polyline(route,.05,.349);
+        if(owner==0) node.tracker_->set_trajectory(path);
+        else if(owner==1) {node.global_raw_=route;node.global_traj_=path;node.global_has_=true;}
+        else {
+            // Enter via the real queue so the integration chooses visual ownership.
+            VisionCandidate candidate;candidate.confirmed=true;candidate.track_id=123;candidate.position={5,side*.9};
+            node.vision_queue_->enqueue({candidate},{2,side*.45});
+            node.vision_queue_->activate_next(0);
+            require(node.vision_queue_->active().has_value(),"rejoin visual queue fixture failed");
+            node.visual_drop_.begin(*node.vision_queue_->active(),node.yaw_);
+            node.drop_approach_={true,route.back(),route,"rejoin_fixture",0};
+        }
+        const Obstacles obstacles{{2,0,.2}};
+        auto selected=nearest_safe_rejoin({node.px_,node.py_},route,obstacles,node.ggcfg_);
+        require(selected && std::hypot(selected->x-2,selected->y-side*.9)<1e-9,
+                "rejoin did not select the nearest perpendicular point");
+        double vx=tangential_drift,vy=0;bool reached=false,started=false;Vec2 first{};
+        for(int tick=0;tick<1000;++tick) {
+            const double c=std::cos(node.yaw_),sn=std::sin(node.yaw_);
+            node.v_fwd_est_=c*vx+sn*vy;node.v_lat_est_=-sn*vx+c*vy;
+            geometry_msgs::msg::TwistStamped command;
+            const bool active=node.step_route_rejoin(obstacles,command);
+            if(!active) {reached=started;break;}
+            if(!started) {first=*node.route_rejoin_target_;started=true;}
+            require(std::hypot(node.route_rejoin_target_->x-first.x,node.route_rejoin_target_->y-first.y)<1e-9,
+                    "rejoin target moved while escaping");
+            Vec2 velocity{c*command.twist.linear.x-sn*command.twist.linear.y,
+                          sn*command.twist.linear.x+c*command.twist.linear.y};
+            require(velocity.y*side>=0 && std::abs(velocity.x)<1e-7 && command.twist.angular.z==0,
+                    "rejoin turned the head or continued forward instead of horizontal recovery");
+            require(obstacle_escape_clear({node.px_,node.py_},{node.px_+velocity.x*.2,node.py_+velocity.y*.2},
+                    obstacles,node.exec_config()),"rejoin velocity moved inward");
+            node.last_command_world_=velocity;
+            // Explicit hypothetical 0.15 m/s dead zone plus actuator inertia.
+            if(std::hypot(velocity.x,velocity.y)<.15) velocity={};
+            vx+=(1-std::exp(-.02/.4))*(velocity.x-vx);vy+=(1-std::exp(-.02/.4))*(velocity.y-vy);
+            node.px_+=vx*.02;node.py_+=vy*.02;
+        }
+        require(reached && std::abs(node.py_-side*.9)<=.05 && !node.route_rejoin_target_,
+                "rejoin stalled before returning to the line");
+        require(outside_obstacle_rings({node.px_,node.py_},obstacles,node.exec_config()),
+                "rejoin released inside the execution ring");
+    }
+    // Returning anywhere on the retained segment releases recovery, even when
+    // tangential drift has carried us well past the original perpendicular foot.
+    {
+        ExplorationNode node;node.timer_->cancel();node.vision_reader_.reset();
+        reset(node,{2.4,.9});node.ggcfg_={-5,-5,8,5,.04,.4,.1,.6};
+        node.has_goal_=true;node.homing_=false;node.finished_=false;
+        node.route_rejoin_path_={{1,.9},{4,.9}};node.route_rejoin_target_=Vec2{2,.9};
+        node.route_rejoin_owner_=0;
+        geometry_msgs::msg::TwistStamped command;
+        require(!node.step_route_rejoin({{2,0,.2}},command) && !node.route_rejoin_target_,
+                "rejoin chased an old perpendicular foot after already regaining the line");
+    }
+    const GlobalConfig cfg{-5,-5,8,5,.04,.4,.1,.6};
+    const Vec2 cur{0,0};
+    // Moving away from the first ring cannot enter the second one.
+    const Obstacles multiple{{0,-.45,.2},{0,1,.1}};
+    auto alternative=nearest_safe_rejoin(cur,{{-2,.9},{2,.9}},multiple,cfg);
+    require(alternative && std::abs(alternative->x)>.4 &&
+            obstacle_escape_clear(cur,*alternative,multiple,cfg),"rejoin crossed a second obstacle");
+    require(!nearest_safe_rejoin(cur,{{-1,-1},{1,-1}},{{0,-.45,.2}},cfg),
+            "rejoin accepted a route behind the obstacle");
+    std::cout<<"mirrored exploration/home/visual horizontal rejoin with dead zone and multiple obstacles passed\n";
+}
+
+void visual_curve_approach_regression()
+{
+    for(int side:{-1,1}) {
+        ExplorationNode node;node.timer_->cancel();node.vision_reader_.reset();
+        reset(node,{0,0});node.ggcfg_={-5,-5,8,5,.04,.4,.1,.6};node.homing_=false;
+        VisionVisitTarget visit;visit.track_id=71;visit.position={4,side*2.0};node.visual_drop_.begin(visit,0);
+        const Vec2 entry{3,side*2.0};
+        node.drop_entry_=entry;node.drop_entry_track_=71;node.drop_entry_object_=visit.position;
+        node.drop_approach_={true,entry,{{0,0},{2,0},{3,side*1.0},entry},"curve_fixture",side*M_PI/2};
+        node.prepare_drop_curve({});
+        require(node.drop_curve_active_,"visual detour did not become a continuous curve");
+        const auto curve=node.global_traj_;
+        require(node.global_tracker_->next_corner_distance()<0,"visual curve retained a waypoint stop");
+        require(std::abs(ExplorationNode::wrap_pi(curve.back().theta-side*M_PI/2))<1e-6,
+                "rounding changed the checked descent arrival tangent");
+        node.last_command_world_={.3,0};
+        for(const auto& point:curve) {
+            if(point.s>curve.back().s-1.3) break;
+            node.px_=point.p.x;node.py_=point.p.y;node.yaw_=point.theta;
+            const auto command=node.drop_xy_velocity(entry,{},point.s,false);
+            require(std::hypot(command.x,command.y)>.10,"interior curve point became a PD stop");
+            const double c=std::cos(node.yaw_),sn=std::sin(node.yaw_);
+            node.last_command_world_={c*command.x-sn*command.y,sn*command.x+c*command.y};
+        }
+    }
+    std::cout<<"mirrored visual curve interior flow and unchanged arrival tangent passed\n";
+}
+
 void home_recorded_return_corner_regression()
 {
     ExplorationNode node;
@@ -3045,6 +3148,8 @@ int main(int argc, char** argv)
     int result = 0;
     try {
         if (std::getenv("ACFLY_CORNER_TRANSITION_ONLY")) {
+            avoidance_rejoin_regression();
+            visual_curve_approach_regression();
             explore_corner_transition_regression();
             ExplorationNode node;
             node.timer_->cancel(); node.vision_reader_.reset();

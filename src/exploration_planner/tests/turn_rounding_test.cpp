@@ -349,11 +349,54 @@ void sampled_escape_validation()
     }
     std::cout << "recorded/mirrored margin escapes are independent of straight sampling density\n";
 }
+void external_recovery_history()
+{
+    auto config=gains();config.smith_time=.3;config.smith_yaw_time=.4;
+    TrajectoryTracker tracker(config);
+    tracker.set_trajectory(trajectory_from_polyline({{0,0},{5,0}},.05,.349));
+    for(int i=0;i<30;++i) tracker.update(1,.2,-.2,.3,.1,.08,.2);
+    for(int i=0;i<30;++i) tracker.record_external_command(0,0,0,0);
+    const auto command=tracker.update(1,0,0,0,0,.08,0);
+    require(std::abs(tracker.heading_error())<1e-9 && std::abs(command.yaw_rate)<1e-9 &&
+            command.v_fwd<=config.max_accel*config.dt+1e-9,
+            "tracker replayed stale cruise history after external recovery");
+    std::cout<<"external recovery ages command prediction and resumes acceleration correctly\n";
+}
+
+void short_shallow_rounds_and_resampling()
+{
+    // Captured 40 cm guide between 23/29 degree turns. It has ample turning
+    // radius but the old fixed 25 cm trim rejected both rounds.
+    const Path2 raw{{5,-2.765}, {3.776583,-3.141455}, {3.376583,-3.101455}, {2.3,-2.356}};
+    CornerRounding options;
+    const auto rounded=round_path_corners(raw,options,{});
+    require(!contains(rounded,raw[1]) && !contains(rounded,raw[2]),
+            "short shallow guides still force waypoint stops");
+    for(double spacing:{.02,.035,.05,.09}) {
+        const auto trajectory=trajectory_from_polyline(rounded,spacing,.349);
+        TrajectoryTracker tracker(gains());tracker.set_trajectory(trajectory);
+        require(tracker.next_corner_distance()<0,"safe short rounds retained a hard corner");
+    }
+    const auto arc=round_path_corners({{0,0},{2,0},{2,2}},options,{});
+    double reference_peak=0;
+    for(double spacing:{.09,.05,.035,.02}) {
+        const auto trajectory=trajectory_from_polyline(arc,spacing,.349);
+        double peak=0;
+        for(auto point:trajectory) {
+            peak=std::max(peak,std::abs(point.kappa));
+            if(point.p.x>1.3 && point.p.y>.02 && point.p.y<.7)
+                require(point.kappa>.1,"subdivision inserted zero-curvature holes in a turn");
+        }
+        if(reference_peak==0) reference_peak=peak;
+        require(std::abs(peak-reference_peak)<1e-9,"sampling changed the curvature speed limit");
+    }
+    std::cout<<"short shallow rounds and sampling-invariant curvature passed\n";
+}
 }  // namespace
 
 int main()
 {
-    try { ordinary_turns(); constrained_rounds(); preserved_stop(); drift_at_sharp_corner(); replan_keeps_current_heading(); sampled_escape_validation(); }
+    try { external_recovery_history(); short_shallow_rounds_and_resampling(); ordinary_turns(); constrained_rounds(); preserved_stop(); drift_at_sharp_corner(); replan_keeps_current_heading(); sampled_escape_validation(); }
     catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
     return 0;
 }

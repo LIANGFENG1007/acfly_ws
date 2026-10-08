@@ -349,7 +349,7 @@ inline constexpr double TURN_BLEND_MAX_ANGLE_DEG = 120.0; // 超此夹角不构�
 inline constexpr double CARLIKE_CONE_HOOK_DEG = 70.0;
 inline constexpr double CARLIKE_CONE_HOOK_WINDOW_M = 1.20;
 inline constexpr double CARLIKE_CONE_HOOK_KAPPA = 4.0; // 且执行曲线起步段最大曲率 ≥ 此值(1/m，半径≤0.25m)才算钩子；正常绕障弧 κ≈1~3，r01 钩子 κ=12
-inline constexpr double TURN_ROUND_MIN_M = 0.25; // 圆角切点距离下限(m)，更小则保留明确折点
+inline constexpr double TURN_ROUND_MIN_M = 0.25; // 大圆角因障碍逐步缩小时的切点距离下限(m)；短引导段可更小，由实际曲率/碰撞检查决定能否圆滑通过
 inline constexpr double TURN_ROUND_MAX_CURVATURE = 5.0; // 圆角最大允许曲率(1/m)，不靠微小急弯假装平滑
 inline constexpr int    CARLIKE_TURN_BLEND_SAMPLES = 12; // Bézier 过渡段采样点数
 
@@ -543,6 +543,8 @@ inline constexpr double RETREAT_TRIGGER_M  = 0.55; // 触发后退的贴障距�
                                                    //   ≥此说明不是贴脸卡死(真被围死)→直接走原放弃/悬停逻辑。须 > 物理禁入(障碍r被snapshot给)余量。
 inline constexpr double RETREAT_STEP_M     = 0.50; // 每次后退目标点距离(m)：朝远离障碍方向取此远的点当 PD 目标,低速退。
 inline constexpr double RETREAT_MAX_DIST   = 1.20; // 累计后退超此距离(m)仍无解 → 放弃后退,判真被围死。防无限后退。
+// 偏入障碍执行圈时，先水平回到原安全路线。仅此恢复阶段使用，不能覆盖普通避障限速。
+inline constexpr double ROUTE_REJOIN_MIN_MPS = 0.20; // 圈内回线速度下限(m/s)，受加速斜坡和RETREAT_V_MAX限制；出圈后按惯性减速，到线5cm内结束恢复
 inline constexpr double RETREAT_V_MAX      = 0.35; // 后退限速(m/s)：低速蹭出来,别猛退甩飞。
 // ★后退超时(2026-08)★ ← 修"界面冻结、终端反复刷'后退脱困(已退 0.00m)'、飞机悬在原地"
 //   两个 bug 叠加导致：

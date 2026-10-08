@@ -42,7 +42,6 @@ Path2 round_path_corners(const Path2& path, const CornerRounding& options,
     }
     if (clean.size() < 3 || options.max_distance <= 0.0) return clean;
     Path2 result{clean.front()};
-    const double minimum = std::max(1e-3, options.min_distance);
     for (size_t i = 1; i + 1 < clean.size(); ++i) {
         const Vec2 previous = clean[i - 1], vertex = clean[i], next = clean[i + 1];
         const double incoming = dist(previous, vertex), outgoing = dist(vertex, next);
@@ -54,6 +53,11 @@ Path2 round_path_corners(const Path2& path, const CornerRounding& options,
             // Each corner may use less than half of either adjacent segment,
             // so independently accepted neighboring rounds cannot overlap.
             double trim = std::min(options.max_distance, .45 * std::min(incoming, outgoing));
+            // A short guide is not necessarily a sharp turn. Two nearby shallow
+            // bends can have a large radius even when neither can spare 25 cm.
+            // Let the geometric curvature limit decide whether that round is
+            // flyable; retain the configured minimum when shrinking a larger one.
+            const double minimum = std::max(1e-3, std::min(options.min_distance, trim));
             while (trim >= minimum - 1e-9) {
                 const double half_cos = std::cos(angle * .5);
                 const double peak_curvature = std::sin(angle * .5) / (trim * half_cos * half_cos);
@@ -90,44 +94,59 @@ Path2 round_path_corners(const Path2& path, const CornerRounding& options,
 
 Trajectory trajectory_from_polyline(const Path2& path, double sample_distance, double sharp_angle)
 {
-    Trajectory result;
+    Trajectory guides;
     double arc = 0.0;
     for (const Vec2& point : path) {
-        if (result.empty()) {
-            result.push_back({point, 0.0, 0.0, arc});
+        if (guides.empty()) {
+            guides.push_back({point, 0.0, 0.0, arc});
             continue;
         }
-        const Vec2 start = result.back().p;
+        const Vec2 start = guides.back().p;
         const double length = dist(start, point);
         if (length < 1e-6) continue;
-        const int count = std::max(1, static_cast<int>(std::ceil(length / std::max(.005, sample_distance))));
-        // Sample every segment separately: even a very short segment endpoint
-        // is kept exactly, so a sharp fallback cannot lose its stop vertex.
-        for (int sample = 1; sample <= count; ++sample) {
-            const double t = static_cast<double>(sample) / count;
-            result.push_back({{start.x + t * (point.x - start.x), start.y + t * (point.y - start.y)},
-                              0.0, 0.0, arc + t * length});
-        }
         arc += length;
+        guides.push_back({point, 0.0, 0.0, arc});
     }
-    for (size_t i = 0; i < result.size(); ++i) {
-        const Vec2 a = result[i == 0 ? i : i - 1].p;
-        const Vec2 b = result[i].p;
-        const Vec2 c = result[i + 1 == result.size() ? i : i + 1].p;
+    std::vector<bool> sharp(guides.size(), false);
+    for (size_t i = 0; i < guides.size(); ++i) {
+        const Vec2 a = guides[i == 0 ? i : i - 1].p;
+        const Vec2 b = guides[i].p;
+        const Vec2 c = guides[i + 1 == guides.size() ? i : i + 1].p;
         const double ab = dist(a, b), bc = dist(b, c), ac = dist(a, c);
         const double incoming = ab > 1e-9 ? std::atan2(b.y - a.y, b.x - a.x) :
                                          std::atan2(c.y - b.y, c.x - b.x);
         const double outgoing = bc > 1e-9 ? std::atan2(c.y - b.y, c.x - b.x) : incoming;
         const double turn = wrap_pi(outgoing - incoming);
-        result[i].theta = incoming + .5 * turn;
+        guides[i].theta = incoming + .5 * turn;
+        sharp[i] = std::abs(turn) >= std::max(.01, sharp_angle);
         if (ab > 1e-9 && bc > 1e-9 && ac > 1e-9 &&
-            std::abs(turn) < std::max(.01, sharp_angle)) {
-            result[i].kappa = 2.0 * ((b.x - a.x) * (c.y - b.y) -
+            !sharp[i]) {
+            guides[i].kappa = 2.0 * ((b.x - a.x) * (c.y - b.y) -
                                     (b.y - a.y) * (c.x - b.x)) / (ab * bc * ac);
         }
         // At a discontinuous vertex the tracker already requires a complete
         // stop before advancing. Assigning it a fabricated radius would add a
         // long, sampling-dependent crawl to that explicit braking behavior.
+    }
+    if (guides.size() < 2) return guides;
+    Trajectory result{guides.front()};
+    for (size_t i = 1; i < guides.size(); ++i) {
+        const auto& a = guides[i-1]; const auto& b = guides[i];
+        const double length = b.s-a.s;
+        const double heading = std::atan2(b.p.y-a.p.y,b.p.x-a.p.x);
+        const int count = std::max(1, static_cast<int>(std::ceil(length/std::max(.005,sample_distance))));
+        // Compute curvature BEFORE subdivision. Otherwise a circular arc gains
+        // zero-curvature samples on chords and doubled curvature at their joins,
+        // making its speed depend on sampling spacing. Geometry stays identical;
+        // every true corner is preserved and still triggers explicit braking.
+        for (int sample = 1; sample < count; ++sample) {
+            const double t = static_cast<double>(sample)/count;
+            const double first = sharp[i-1] ? heading : a.theta;
+            const double last = sharp[i] ? heading : b.theta;
+            result.push_back({{a.p.x+t*(b.p.x-a.p.x),a.p.y+t*(b.p.y-a.p.y)},
+                first+t*wrap_pi(last-first),a.kappa+t*(b.kappa-a.kappa),a.s+t*length});
+        }
+        result.push_back(b);
     }
     return result;
 }

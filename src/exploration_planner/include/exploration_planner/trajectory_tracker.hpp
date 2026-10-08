@@ -137,6 +137,20 @@ public:
             alignment_hold_.set_velocity({c * v_fwd - s * v_lat, s * v_fwd + c * v_lat});
         }
     }
+    // A temporary external XY action pauses update(), but physical time still
+    // advances. Append its actual command so the Smith predictor cannot replay
+    // pre-recovery cruise commands when the route tracker resumes.
+    void record_external_command(double yaw, double v_fwd, double v_lat, double yaw_rate)
+    {
+        previous_forward_command_ = std::max(0.0, v_fwd);
+        previous_lateral_command_ = v_lat;
+        previous_yaw_command_ = yaw_rate;
+        const double keep = std::max(g_.smith_time, g_.smith_yaw_time);
+        if (keep <= 0.0 || traj_.empty()) return;
+        history_.push_back({v_fwd, v_lat, yaw_rate, yaw});
+        const size_t limit = static_cast<size_t>(std::ceil(keep / std::max(1e-3, g_.dt))) + 1;
+        while (history_.size() > limit) history_.pop_front();
+    }
     // 实测滑行方向不安全时由调用方结束定点滑行(恢复反推)。
     void end_hold_slide() { alignment_hold_.end_slide(); }
     bool hold_sliding() const { return (aligning_ || holonomic_hold_active_) && alignment_hold_.sliding(); }

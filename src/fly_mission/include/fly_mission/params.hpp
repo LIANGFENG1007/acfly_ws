@@ -252,10 +252,10 @@ inline constexpr double EXPLORE_LAND_HEADING_HANDOVER_SEC = 0.30; // H点降落�
 // 可用同名小写 ROS 参数在启动时覆盖；入口/H 也可在红点等待时用 ros2 param set 调整。
 // 以下使用现场给定坐标；若改为 NaN，表示未配置，飞机到红点后保高等待，不自动降落。
 inline constexpr double EXPLORE_GOAL_X = 7.75;   // 原探索终点（图中红点）；10x10 场地(f2484b7)。实机小场地为 (4.77, 2.3)
-inline constexpr double EXPLORE_GOAL_Y = 4.3;
+inline constexpr double EXPLORE_GOAL_Y = 4.0;
 inline constexpr bool   EXPLORE_CORRIDOR_ENABLED = true; // false: 红点完成后按旧流程降落
 inline constexpr double CORRIDOR_ENTRY_X = 9.47;  // 保持 -90 度朝向横移进入通道的第一个点 x；实机小场地为 5.7
-inline constexpr double CORRIDOR_ENTRY_Y = 4.3; // 进入通道的第一个点 y；实机小场地为 2.3
+inline constexpr double CORRIDOR_ENTRY_Y = 4.0; // 进入通道的第一个点 y；实机小场地为 2.3
 inline constexpr double CORRIDOR_H_X = 9.67;      // 穿过全部门后的 H 点 x；实机小场地为 5.7
 inline constexpr double CORRIDOR_H_Y = -1.4;     // 穿过全部门后的 H 点 y；实机小场地为 -1.0
 // ---------------------------------------------------------------------------

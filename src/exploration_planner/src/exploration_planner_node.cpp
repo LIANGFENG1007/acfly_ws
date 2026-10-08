@@ -63,6 +63,7 @@
 #include "exploration_planner/velocity_slew.hpp"
 #include "exploration_planner/visual_drop.hpp"
 #include "exploration_planner/drop_approach.hpp"
+#include "exploration_planner/route_rejoin.hpp"
 #include <acfly_interfaces/msg/exploration_context.hpp>
 #include <acfly_interfaces/msg/exploration_command.hpp>
 #include <acfly_interfaces/msg/drop_status.hpp>
@@ -827,12 +828,13 @@ private:
         visual_drop_.reset();
         coverage_closed_ = false;
         trail_.clear(); backtracking_ = false; backtrack_path_.clear();
+        route_rejoin_target_.reset();route_rejoin_path_.clear();
         no_route_since_ = last_explore_tick_ = -1.0;
         vision_hints_.clear();
         vision_hint_times_.clear();
         vision_hint_unmarks_.clear();
         drop_status_.reset();
-        drop_path_.clear(); drop_path_retry_ = -1; drop_entry_.reset(); drop_approach_ = {};
+        drop_path_.clear(); drop_path_retry_ = -1; drop_entry_.reset(); drop_curve_active_=drop_curve_attempted_=false; drop_approach_ = {};
         drop_entry_time_ = -1; drop_obstructed_approach_ = false;
         drop_cruise_z_.reset();
         reset_home_approach();
@@ -2462,6 +2464,112 @@ private:
         return {command.v_fwd, command.v_lat};
     }
 
+    // The recovery owns XY until the retained route is regained. Run before
+    // replanning/mission transitions so a drifted start cannot erase that route.
+    bool step_route_rejoin(const Obstacles& obs, geometry_msgs::msg::TwistStamped& cmd)
+    {
+        using Phase=VisualDrop::Phase;
+        const bool visual=vision_queue_ && vision_queue_->active();
+        const auto phase=visual_drop_.phase();
+        const bool permitted=has_goal_ && !finished_ && !corridor_->active() &&
+            !(homing_ && home_approach_active_) &&
+            !(visual && visual_drop_enabled_ && phase!=Phase::Approach) &&
+            poi_mode_!=PoiMode::WAIT_RELEASE;
+        const int owner=homing_ ? 1 : visual ? 2 : poi_mode_==PoiMode::GOTO_POI ? 3 : 0;
+        const uint64_t track=visual ? vision_queue_->active()->track_id : 0;
+        if(!permitted || (route_rejoin_target_ && (owner!=route_rejoin_owner_ || track!=route_rejoin_track_))) {
+            route_rejoin_target_.reset();route_rejoin_path_.clear();
+        }
+        if(!permitted) return false;
+        const Vec2 cur{px_,py_};
+        auto cfg=owner==0 ? explore_exec_config() : exec_config();
+        if(homing_) cfg.wall_margin=home_goal_wall_margin_;
+        const bool inside=!outside_obstacle_rings(cur,obs,cfg);
+        if(!route_rejoin_target_ && !inside) return false;
+        const auto valid=[&](Vec2 target) {
+            return outside_obstacle_rings(target,obs,cfg) &&
+                obstacle_escape_clear(cur,target,obs,cfg) && field_motion_clear(cur,target,cfg);
+        };
+        // Arrival means returning to the LINE. Inertia may carry the aircraft
+        // along it past the initially selected foot; chasing that old point
+        // would pull back, overshoot and circle despite having regained the route.
+        if(route_rejoin_target_ && route_distance(cur,route_rejoin_path_)<=.05 && !inside) {
+            route_rejoin_target_.reset();route_rejoin_path_.clear();
+            recovery_holding_=false;recovery_status_="route_rejoined";
+            // First resume the retained reference, then let periodic planning
+            // reassess it. Recovery time alone is not a reason to replace it.
+            if(owner==0 && tracker_->has_trajectory()) {
+                tracker_->advance_reference(px_,py_);
+                last_plan_time_=now();plan_pending_=false;
+            }
+            return false;
+        }
+        if(!route_rejoin_target_ || !valid(*route_rejoin_target_)) {
+            if(route_rejoin_path_.empty()) {
+                if(owner==0 && tracker_->has_trajectory()) route_rejoin_path_=tracker_->remaining_reference_path();
+                else if((home_curve_active_ || drop_curve_active_) && global_tracker_->has_trajectory())
+                    route_rejoin_path_=global_tracker_->remaining_reference_path();
+                else if(visual && phase==Phase::Approach) route_rejoin_path_=drop_approach_.path;
+                else if(homing_ && home_entry_plan_.ok) route_rejoin_path_=home_entry_plan_.path;
+                else route_rejoin_path_=global_raw_;
+            }
+            route_rejoin_target_=nearest_safe_rejoin(cur,route_rejoin_path_,obs,cfg);
+            if(!route_rejoin_target_) {route_rejoin_path_.clear();return false;}
+            route_rejoin_owner_=owner;route_rejoin_track_=track;
+            route_rejoin_bias_=0;
+            RCLCPP_WARN(get_logger(),"[避障回线] 偏入障碍执行圈，先水平回到安全路线(%.3f,%.3f)，再继续任务",
+                route_rejoin_target_->x,route_rejoin_target_->y);
+        }
+        Vec2 target=*route_rejoin_target_;
+        // Keep the selected local route, but permit tangential inertia along
+        // it. Correct toward its current perpendicular foot instead of adding
+        // a longitudinal reversal just to revisit the old foot. The half-metre
+        // neighbourhood prevents a nearby later leg from taking over recovery;
+        // the whole new connector still passes the same multi-obstacle check.
+        const auto foot=nearest_safe_rejoin(cur,route_rejoin_path_,obs,cfg);
+        if(foot && std::hypot(foot->x-target.x,foot->y-target.y)<=.5 &&
+           std::hypot(foot->x-cur.x,foot->y-cur.y)<std::hypot(target.x-cur.x,target.y-cur.y)) target=*foot;
+        const double distance=std::hypot(target.x-cur.x,target.y-cur.y);
+        const Vec2 direction{(target.x-cur.x)/std::max(1e-6,distance),(target.y-cur.y)/std::max(1e-6,distance)};
+        const double c=std::cos(yaw_),s=std::sin(yaw_);
+        const Vec2 measured{c*v_fwd_est_-s*v_lat_est_,s*v_fwd_est_+c*v_lat_est_};
+        const double cap=std::max(0.0,std::min(retreat_v_max_,owner==0 ? gains_.v_max : v_goal_max_));
+        const double toward=measured.x*direction.x+measured.y*direction.y;
+        // A short return uses an effective translation command until arrival,
+        // not an asymptotically vanishing PD velocity inside the obstacle ring.
+        const double minimum=inside ? std::clamp(params::ROUTE_REJOIN_MIN_MPS,0.0,cap) : 0.0;
+        const double predicted=std::max(0.0,distance-std::max(0.0,toward)*gains_.stop_anchor_latency);
+        // Outside the ring allow braking, but do not strand a dead-zone-limited
+        // aircraft just short of the line. Bounded integral compensation grows
+        // only while lateral response is small; it is removed during motion and
+        // reset at every new recovery, never inherited by normal flight.
+        if(!inside && toward<.05)
+            route_rejoin_bias_=std::min(std::min(params::ROUTE_REJOIN_MIN_MPS,cap),
+                route_rejoin_bias_+.5*kp_goal_*distance*gains_.dt);
+        else route_rejoin_bias_=std::max(0.0,route_rejoin_bias_-.10*gains_.dt);
+        const double speed=std::clamp(kp_goal_*predicted-kd_goal_*toward+route_rejoin_bias_,minimum,cap);
+        const double previous=std::max(0.0,last_command_world_.x*direction.x+last_command_world_.y*direction.y);
+        const double magnitude=std::min(speed,previous+xy_brake_accel_*gains_.dt);
+        Vec2 velocity{magnitude*direction.x,magnitude*direction.y};
+        const double horizon=std::min(.35,std::max(0.0,gains_.prediction_time))+
+            magnitude/(2*std::max(.01,xy_brake_accel_));
+        // Include stopping distance; a return vector must not run beyond its
+        // safe connector into another obstacle or configured wall.
+        const Vec2 projected{cur.x+velocity.x*horizon,cur.y+velocity.y*horizon};
+        if(!obstacle_escape_clear(cur,projected,obs,cfg) || !field_motion_clear(cur,projected,cfg)) {
+            route_rejoin_target_.reset();route_rejoin_path_.clear();return false;
+        }
+        cmd.twist.linear.x=c*velocity.x+s*velocity.y;
+        cmd.twist.linear.y=-s*velocity.x+c*velocity.y;
+        cmd.twist.angular.z=0;
+        last_look_=target;look_valid_=true;
+        recovery_requested_=true;recovery_status_="returning_to_safe_route";
+        global_block_reason_="returning_to_safe_route";
+        tracker_->record_external_command(yaw_,cmd.twist.linear.x,cmd.twist.linear.y,0);
+        global_tracker_->record_external_command(yaw_,cmd.twist.linear.x,cmd.twist.linear.y,0);
+        return true;
+    }
+
     Vec2 recovery_velocity(const Obstacles& obs, bool required_geometry)
     {
         recovery_requested_ = true;
@@ -2605,6 +2713,13 @@ private:
         // 路线采纳用完整规划余量，执行/选择下一可见路点用原有执行余量。
         // 否则风把飞机推离转角几厘米后，下一段永远不可见，PD只会停在旧转角。
         const auto cfg = approaching ? exec_config() : required_config();
+        if(approaching) {
+            if(!drop_curve_attempted_) prepare_drop_curve(obs);
+            if(drop_curve_active_) {
+                global_tracker_->advance_reference(px_,py_);
+                return approach_curve_velocity(obs,false);
+            }
+        }
         Path2 direct{cur, target};
         bool escape_direct = false;
         if (committed) {
@@ -2698,7 +2813,7 @@ private:
             }
         }
         if (!visible) {
-            if(approaching) { drop_entry_.reset();drop_approach_={};drop_entry_time_=-1;drop_leg_target_.reset(); }
+            if(approaching) { drop_entry_.reset(); drop_curve_active_=drop_curve_attempted_=false;drop_approach_={};drop_entry_time_=-1;drop_leg_target_.reset(); }
             global_failed_ = true; last_yaw_rate_ = 0; return recovery_velocity(obs, true);
         }
         last_look_ = carrot; look_valid_ = true;
@@ -2814,14 +2929,18 @@ private:
         if (same_target && drop_entry_ && (safe_entry(*drop_entry_,goal_tol_,cached_heading) || arrived_clear)) {
             // 校验实际将执行的剩余折线；不能先投影回旧路段，把获准的单调
             // 脱离障碍误判成回到圈内，也不能把已通过的路段重新插回控制目标。
-            Vec2 from=cur;bool clear=drop_approach_.path.size()>1;
-            for(size_t i=1;clear && i<drop_approach_.path.size();++i) {
-                const Vec2 to=drop_approach_.path[i];
+            const auto remaining=drop_curve_active_ ? global_tracker_->remaining_path(px_,py_) : drop_approach_.path;
+            Vec2 from=cur;bool clear=remaining.size()>1;
+            for(size_t i=1;clear && i<remaining.size();++i) {
+                const Vec2 to=remaining[i];
                 clear=obstacle_escape_clear(from,to,obs,exec_config()) && field_motion_clear(from,to,exec_config());
                 from=to;
             }
             if(clear) return drop_entry_;
         }
+        // A curve is retained for this selected entry until its real remaining
+        // route or descent envelope becomes invalid; no per-frame shortcutting.
+        drop_curve_active_=drop_curve_attempted_=false;
         const bool invalidated = same_target && drop_entry_.has_value();
         const bool continuing_final=invalidated && drop_leg_target_ && drop_leg_track_==track_id &&
             std::hypot(drop_leg_target_->x-drop_entry_->x,drop_leg_target_->y-drop_entry_->y)<1e-6;
@@ -2886,7 +3005,7 @@ private:
             }
             drop_obstructed_approach_ = true;
         }
-        drop_entry_.reset(); drop_approach_ = {};
+        drop_entry_.reset(); drop_curve_active_=drop_curve_attempted_=false; drop_approach_ = {};
         // 只给连续失败的搜索限频。已有路线失效时立即接上新路线，不能先回拉悬停半秒。
         if (!invalidated && same_target && drop_entry_time_ >= 0 && t-drop_entry_time_ < .5) return {};
         drop_entry_time_ = t; drop_entry_track_ = track_id; drop_entry_object_ = object;
@@ -2914,7 +3033,7 @@ private:
         const auto target = *vision_queue_->active();
         if (visual_drop_.phase() == Phase::Idle) {
             visual_drop_.begin(target, yaw_);
-            drop_entry_.reset(); drop_approach_ = {}; drop_entry_time_ = -1; drop_leg_target_.reset();
+            drop_entry_.reset(); drop_curve_active_=drop_curve_attempted_=false; drop_approach_ = {}; drop_entry_time_ = -1; drop_leg_target_.reset();
             drop_obstructed_approach_ = false;
         }
         if (!drop_context_valid()) {
@@ -2972,7 +3091,7 @@ private:
                 visual_drop_.authorize_descent();
             } else {
                 visual_drop_.retry_approach();
-                drop_entry_.reset(); drop_approach_ = {}; drop_entry_time_ = -1; drop_leg_target_.reset();
+                drop_entry_.reset(); drop_curve_active_=drop_curve_attempted_=false; drop_approach_ = {}; drop_entry_time_ = -1; drop_leg_target_.reset();
                 drop_obstructed_approach_ = true;
                 drop_path_.clear(); drop_path_retry_ = -1;
                 drop_command_altitude_ = visual_drop_.return_z(); drop_command_speed_ = .10;
@@ -3000,7 +3119,7 @@ private:
                 vision_candidates_->discard_visited(visited.track_id, visited.position, vision_queue_->blacklist_radius());
                 vision_applied_visits_ = vision_queue_->visited().size();
                 visual_drop_.finish_visit(); vision_near_->reset();
-                drop_entry_.reset(); drop_approach_ = {};
+                drop_entry_.reset(); drop_curve_active_=drop_curve_attempted_=false; drop_approach_ = {};
                 drop_obstructed_approach_ = false;
                 global_has_ = global_failed_ = false; global_tracker_->set_trajectory({});
                 plan_pending_ = true;
@@ -3129,13 +3248,51 @@ private:
         }
     }
 
-    bool home_curve_clear(const Path2& route, const Obstacles& obs, const GlobalConfig& cfg) const
+    bool approach_curve_clear(const Path2& route, const Obstacles& obs, const GlobalConfig& cfg) const
     {
         if(route.size()<2) return false;
         for(size_t i=1;i<route.size();++i)
             if(!obstacle_escape_clear(route[i-1],route[i],obs,cfg) ||
                !field_motion_clear(route[i-1],route[i],cfg)) return false;
         return true;
+    }
+
+    void prepare_drop_curve(const Obstacles& obs)
+    {
+        drop_curve_attempted_=true;drop_curve_active_=false;
+        // Direct approaches keep their existing arrival controller.
+        // Only a newly validated entry can start a curve. A leg already being
+        // flown keeps its commitment instead of acquiring a new tangent midway.
+        if(drop_approach_.path.size()<3 || !drop_entry_ || drop_leg_target_ ||
+           drop_entry_track_!=visual_drop_.target_id()) return;
+        const auto cfg=drop_transit_config();
+        CornerRounding options;
+        options.max_distance=std::max(turn_round_min_m_,turn_blend_m_);
+        options.min_distance=std::max(.001,turn_round_min_m_);
+        options.min_angle=.001;
+        options.max_curvature=turn_round_max_curvature_;
+        options.sample_distance=arc_ds_;
+        const auto rounded=round_path_corners(drop_approach_.path,options,[&](const Path2& piece) {
+            return approach_curve_clear(piece,obs,cfg);
+        });
+        if(!approach_curve_clear(rounded,obs,cfg)) return;
+        for(size_t i=1;i+1<rounded.size();++i) {
+            const auto a=rounded[i-1],b=rounded[i],c=rounded[i+1];
+            if(std::abs(wrap_pi(std::atan2(c.y-b.y,c.x-b.x)-std::atan2(b.y-a.y,b.x-a.x)))>=gains_.corner_stop_rad)
+                return;
+        }
+        auto candidate=trajectory_from_polyline(rounded,arc_ds_,gains_.corner_stop_rad);
+        if(candidate.size()<2 || candidate.back().s<=1e-6) return;
+        Path2 executed;
+        for(const auto& point:candidate) executed.push_back(point.p);
+        if(!approach_curve_clear(executed,obs,cfg)) return;
+        // Local rounding leaves the last straight tangent and the selected 1 m
+        // entry unchanged, including its package-offset descent validation.
+        global_traj_=std::move(candidate);global_raw_=std::move(executed);
+        global_tracker_->set_trajectory(global_traj_);
+        global_tracker_->advance_reference(px_,py_);
+        drop_leg_target_.reset();
+        drop_curve_active_=global_has_=true;global_failed_=false;
     }
 
     void prepare_home_curve(const Obstacles& obs)
@@ -3149,9 +3306,9 @@ private:
         options.max_curvature=turn_round_max_curvature_;
         options.sample_distance=arc_ds_;
         const auto rounded=round_path_corners(home_entry_plan_.path,options,[&](const Path2& piece) {
-            return home_curve_clear(piece,obs,cfg);
+            return approach_curve_clear(piece,obs,cfg);
         });
-        if(!home_curve_clear(rounded,obs,cfg)) return;
+        if(!approach_curve_clear(rounded,obs,cfg)) return;
         // 没有足够空间的硬折点不能假装成曲线高速切过去，保留原有逐段安全跟踪。
         for(size_t i=1;i+1<rounded.size();++i) {
             const auto a=rounded[i-1],b=rounded[i],c=rounded[i+1];
@@ -3163,7 +3320,7 @@ private:
         if(global_traj_.size()<2 || global_traj_.back().s<=1e-6) return;
         global_raw_.clear();
         for(const auto& point:global_traj_) global_raw_.push_back(point.p);
-        if(!home_curve_clear(global_raw_,obs,cfg)) return;
+        if(!approach_curve_clear(global_raw_,obs,cfg)) return;
         global_tracker_->set_trajectory(global_traj_);
         global_tracker_->advance_reference(px_,py_);
         home_curve_active_=global_has_=true;
@@ -3172,7 +3329,7 @@ private:
 
     // 沿核准曲线连续给世界系XY速度，机头只跟随曲线切线，不作为XY输出开关。
     // 安全入口只是下降触发点，不是停车目标；沿途路点也不逐个到点刹停。
-    Vec2 home_curve_velocity(const Obstacles& obs)
+    Vec2 approach_curve_velocity(const Obstacles& obs, bool home)
     {
         const double progress=global_tracker_->progress_distance();
         const auto reference=global_tracker_->reference_at(progress);
@@ -3186,7 +3343,8 @@ private:
         // 到入口连续接上下降速度，斜率在入口归零；不能以巡航速度冲到1米后
         // 再突然套下降限速。保留原减速范围，改变的是连续速度剖面而不是入口半径。
         const double entry_speed=std::min(v_goal_max_,home_approach_speed_);
-        double speed=entry_speed+(v_goal_max_-entry_speed)*fraction*fraction;
+        double speed=home ? entry_speed+(v_goal_max_-entry_speed)*fraction*fraction :
+            visual_drop_.approach_limit_at(global_tracker_->remaining_distance(),v_goal_max_);
         // 曲率和侧向加速度决定弯道限速，提前减速，不在路点处降到零。
         for(const auto& point:global_traj_) {
             if(point.s<progress) continue;
@@ -3201,6 +3359,14 @@ private:
         const double correction=-kp_goal_*error-kd_goal_*lateral;
         Vec2 desired{speed*std::cos(ahead.theta)+normal.x*correction,
                      speed*std::sin(ahead.theta)+normal.y*correction};
+        // Visual sampling must stop at the actual entry; intermediate curve
+        // samples are never independent position targets. Keep the last tangent
+        // as yaw reference while XY finishes the final centimetres.
+        if(!home && global_tracker_->remaining_distance()<=2*goal_tol_) {
+            const auto entry=drop_approach_.entry;
+            desired={kp_goal_*(entry.x-px_)-kd_goal_*measured.x,
+                     kp_goal_*(entry.y-py_)-kd_goal_*measured.y};
+        }
         const auto limit=[&](Vec2& v) {
             const double length=std::hypot(v.x,v.y);
             if(length>v_goal_max_) { v.x*=v_goal_max_/length;v.y*=v_goal_max_/length; }
@@ -3208,8 +3374,9 @@ private:
         limit(desired);
         desired=slew_velocity(last_command_world_,desired,measured,gains_.max_accel,xy_brake_accel_,gains_.dt);
         limit(desired);
-        global_target_=home_entry_plan_.entry;
-        global_connector_start_=home_entry_plan_.path[home_entry_plan_.path.size()-2];
+        const auto& plan=home ? home_entry_plan_ : drop_approach_;
+        global_target_=plan.entry;
+        global_connector_start_=plan.path[plan.path.size()-2];
         traj_=global_traj_;last_look_=ahead.p;look_valid_=true;
         global_has_=true;global_failed_=global_goal_blocked_=global_at_goal_=false;
         VelCmd command;
@@ -3217,7 +3384,7 @@ private:
         command.yaw_rate=approach_yaw_rate(ahead.theta);
         if(!obstacle_segment_clear({px_,py_},{px_,py_},obs,exec_config()) && drop_escape_velocity_clear(desired,obs)) {
             global_braking_blocked_=command_projection_blocked_=measured_projection_blocked_=false;
-            required_blocked_time_valid_=false;global_block_reason_="home_monotonic_escape";
+            required_blocked_time_valid_=false;global_block_reason_=home ? "home_monotonic_escape" : "drop_monotonic_escape";
             last_yaw_rate_=0;
             return {command.v_fwd,command.v_lat};
         }
@@ -3241,7 +3408,7 @@ private:
             const bool reached=std::hypot(cur.x-home_entry_plan_.entry.x,cur.y-home_entry_plan_.entry.y)<=goal_tol_ &&
                 std::hypot(cur.x-goal_.x,cur.y-goal_.y)<=home_straight_approach_m_+1e-9 && descent_clear(cur,0);
             if(global_has_ && (reached || (descent_clear(home_entry_plan_.entry,goal_tol_) &&
-               home_curve_clear(remaining,obs,execution)))) {
+               approach_curve_clear(remaining,obs,execution)))) {
                 global_tracker_->advance_reference(px_,py_);
                 return true;
             }
@@ -3363,7 +3530,7 @@ private:
                 required_blocked_time_valid_ = false;
                 RCLCPP_INFO(get_logger(), "[终点接近] 已到安全入口，核准实际下降线，保持当前yaw直线前往终点");
             } else if(home_curve_active_) {
-                return home_curve_velocity(obs);
+                return approach_curve_velocity(obs, true);
             } else if(entry_reached &&
                 drop_descent_clear(cur,goal_,obs,required_config(),0,exec_config().inflate)) {
                 // 无法圆角时的低速入口衔接也不能停在1米外无限逼近入口。
@@ -3666,7 +3833,7 @@ private:
         global_traj_.clear();
         if (visual_drop_enabled_) {
             visual_drop_.begin(active, yaw_);
-            drop_entry_.reset(); drop_approach_ = {}; drop_entry_time_ = -1; drop_leg_target_.reset();
+            drop_entry_.reset(); drop_curve_active_=drop_curve_attempted_=false; drop_approach_ = {}; drop_entry_time_ = -1; drop_leg_target_.reset();
             drop_obstructed_approach_ = false;
         }
         vision_near_->begin(active, current_time, std::max(active.confirmed_stamp, vision_last_frame_.stamp));
@@ -4085,6 +4252,8 @@ private:
                 grid_->fill_obstacle_cells(obstacles);
             }
 
+            const bool rejoining_route=step_route_rejoin(obstacles,cmd);
+            if(!rejoining_route) {
             // ============================================================
             // POI（途中必经点/插点）状态机 —— 优先级高于探索与归航判定。
             //   EXPLORE      : 无插点活动，走下面常规探索/归航。
@@ -4427,6 +4596,7 @@ private:
             const bool home_committed = homing_ && home_approach_active_;
             if (!drop_committed && !home_committed && !obstacle_segment_clear({px_, py_}, {px_, py_}, obstacles, ggcfg_))
                 cmd.twist.angular.z = 0.0;
+            } // Normal mission execution resumes after horizontal route recovery.
             } // 常规探索/归航；走廊任务独立处理墙与门。
 
             if (!recovery_requested_) {
@@ -4876,6 +5046,12 @@ private:
     TrackerGains global_gains_{};
     double xy_brake_accel_ = params::XY_BRAKE_ACCEL;
     Vec2 last_command_world_{};
+    std::optional<Vec2> route_rejoin_target_;
+    Path2 route_rejoin_path_;
+    int route_rejoin_owner_=0;
+    uint64_t route_rejoin_track_=0;
+    double route_rejoin_bias_=0;
+    bool drop_curve_active_=false, drop_curve_attempted_=false;
     std::optional<Vec2> drop_leg_target_;
     Vec2 drop_leg_anchor_{};
     std::deque<double> yaw_command_history_;
