@@ -10,6 +10,7 @@ namespace exploration {
 
 struct CorridorConfig {
     CorridorPerceptionConfig perception;
+    bool nearest_cardinal_yaw = true; // 到终点后选最近的 0/±90/180 度，并锁定到本次通道任务结束
     double initial_yaw = -1.5707963267948966;
     // 转向期间可同时降高；航向和外部高度反馈(set_altitude_ready)都到位才横移进入口。false=只等待航向
     bool descend_before_entry = false;
@@ -75,6 +76,8 @@ public:
     bool configured() const { return configured_; }
     // 转头已完成(之后走廊全程用走廊高度)；外部每拍告知实际高度是否已到走廊高度。
     bool rotationDone() const { return rotation_done_; }
+    bool headingSelected() const { return heading_selected_; }
+    double targetYaw() const { return target_yaw_; } // headingSelected() 后有效
     void set_altitude_ready(bool ready) { altitude_ready_ = ready; }
     bool active() const { return phase_ != CorridorPhase::Idle; }
     bool startedMoving() const;
@@ -97,6 +100,8 @@ private:
     bool waiting_for_evidence_ = false;
     bool heading_recovery_ = false;
     bool rotation_done_ = false, altitude_ready_ = true;
+    bool heading_selected_ = false;
+    double target_yaw_ = 0.0;
     struct Cloud { double stamp; Path2 points; };
     std::deque<Cloud> clouds_;
     Path2 points_;

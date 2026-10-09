@@ -2347,22 +2347,25 @@ void home_straight_descent_regression()
     require(node.corridor_->active() && node.corridor_->phase()==CorridorPhase::Rotate &&
             std::abs(last_control.altitude-.05)<1e-12,
             "home arrival waited for Z or zero speed, or lost descent during handoff");
-    node.px_=goal.x+.07;node.py_=goal.y;node.yaw_=0;node.pz_=.8;
+    node.px_=goal.x+.07;node.py_=goal.y;node.yaw_=20*M_PI/180.0;node.pz_=.8;
     node.v_fwd_est_=.03;node.v_lat_est_=0;
     node.on_timer();
     require(last_control.velocity.angular.z<0 && last_control.velocity.linear.x<0 &&
             last_control.altitude==.05 && last_control.vertical_speed_limit==node.corridor_descend_speed_,
             "rotation lost simultaneous XY correction / altitude descent");
     require(!node.corridor_->rotationDone(),"test must exercise descent before yaw completion");
-    node.yaw_=node.ccfg_.initial_yaw;node.on_timer();
+    require(node.corridor_->headingSelected() && std::abs(node.corridor_->targetYaw())<1e-12,
+            "home handoff failed to select nearest cardinal heading instead of fixed -90 degrees");
+    node.yaw_=node.corridor_->targetYaw();node.on_timer();
     require(node.corridor_->rotationDone() && node.corridor_->phase()==CorridorPhase::Rotate,
             "entry translation began before Z was ready");
     node.pz_=node.corridor_flight_z_;node.yaw_+=2*node.ccfg_.heading_tolerance;node.on_timer();
     require(node.corridor_->phase()==CorridorPhase::Rotate && last_control.velocity.angular.z<0,
             "entry used a stale aligned heading after yaw drift during descent");
-    node.yaw_=node.ccfg_.initial_yaw;node.on_timer();
+    node.yaw_=node.corridor_->targetYaw();node.on_timer();
     require(node.corridor_->phase()==CorridorPhase::Entry,"aligned heading and height failed to release entry");
     ++message->header.stamp.sec;node.on_goal(message);
+    require(!node.corridor_->headingSelected(),"new mission retained the previous corridor heading");
     require(!node.home_approach_active_ && !node.home_descent_started_ && !node.home_entry_plan_.ok && !node.home_leg_target_ && !node.home_curve_active_,
             "new mission retained old home approach / descent state");
     std::cout << "home approach: direct XY, yaw lock, descent, committed straight motion, moving XY handoff and corridor gates passed\n";

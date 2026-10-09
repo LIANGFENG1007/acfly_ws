@@ -108,7 +108,8 @@ inline constexpr double VISION_TARGET_STOP_SPEED_MPS = 0.05; // 兼容旧配置�
 // true: 到探索终点等待路线，然后转向、进入、穿门、到 H 才 finished。
 // false: 保留到探索终点即完成的流程。过门始终使用速度接口，以执行 0.3m/s 限速。
 inline constexpr bool CORRIDOR_ENABLED = true;
-inline constexpr double CORRIDOR_INITIAL_YAW_DEG = -90.0; // 首次转到此角度，随后入口/对中/穿门/前往H均保持此航向
+inline constexpr bool CORRIDOR_NEAREST_CARDINAL_YAW = true; // true: 到终点后转到最近的0/±90/180度，选一次并保持到H；false: 使用下面固定角度
+inline constexpr double CORRIDOR_INITIAL_YAW_DEG = -90.0; // 仅关闭最近转正时使用的固定航向(度)
 inline constexpr double CORRIDOR_WIDTH = 1.5; // 两侧墙搜索范围(m)，不把道路中线当成门中心
 inline constexpr double CORRIDOR_ROBOT_WIDTH = 0.64; // x500仿真含桨完整外廓(m)，实机按测量值调整
 // 实机 Point-LIO 默认输出；仿真 launch 在启动稠密转换节点后单独覆盖此参数。
@@ -154,7 +155,7 @@ inline constexpr double CORRIDOR_POSE_TIMEOUT_S = 0.30; // 本机连续未收到
 inline constexpr double CORRIDOR_Z_BELOW = 0.30; // 相对当前飞机高度的点云截取下界(m)
 inline constexpr double CORRIDOR_Z_ABOVE = 0.30; // 相对当前飞机高度的点云截取上界(m)
 // ★走廊低空穿越★：先到终点周围 HOME_STRAIGHT_APPROACH_M 半径上的安全入口，再直线斜降；
-//   XY 到点立即转到 CORRIDOR_INITIAL_YAW_DEG，转向期间继续降高并保持 XY 纠偏。
+//   XY 到点立即按上述航向策略转正，转向期间继续降高并保持 XY 纠偏。
 //   航向和高度都到位后才横移进入口、穿门、到 H；走廊全程保持该高度。
 inline constexpr bool   CORRIDOR_LOWER_ENABLED = true;
 inline constexpr double CORRIDOR_FLIGHT_Z = 0.05;      // 走廊飞行高度(绝对 SLAM Z，m)：用户从起点开雷达、带到终点实测的读数，已含该处漂移，不再矫正

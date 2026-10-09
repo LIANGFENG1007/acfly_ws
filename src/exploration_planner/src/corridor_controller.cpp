@@ -70,6 +70,10 @@ void CorridorController::start(const Vec2& red, double now)
     rotation_hold_.begin(red);
     heading_recovery_ = false;
     rotation_done_ = false;
+    heading_selected_ = false;
+    target_yaw_ = 0.0;
+    previous_yaw_rate_ = 0.0;
+    settled_since_ = -1.0;
     last_update_ = now;
     transition(configured_ ? CorridorPhase::Rotate : CorridorPhase::WaitRoute);
 }
@@ -167,7 +171,7 @@ CorridorCommand CorridorController::rotateAt(PositionHold& hold, const Vec2& pos
     cmd.lateral = correction.y;
     cmd.target = hold.anchor();
     cmd.path = {position, cmd.target};
-    const double desired = std::clamp(cfg_.yaw_kp * angle(cfg_.initial_yaw - yaw),
+    const double desired = std::clamp(cfg_.yaw_kp * angle(target_yaw_ - yaw),
                                       -cfg_.max_yaw_rate, cfg_.max_yaw_rate);
     const double step = cfg_.yaw_accel * dt;
     cmd.yaw_rate = std::clamp(desired, previous_yaw_rate_ - step, previous_yaw_rate_ + step);
@@ -189,7 +193,7 @@ CorridorCommand CorridorController::translate(const Vec2& position, double yaw,
                                              double vf, double vl, double dt,
                                              double longitudinal_limit, double min_forward)
 {
-    const double error = angle(cfg_.initial_yaw - yaw);
+    const double error = angle(target_yaw_ - yaw);
     const bool forward_phase = phase_ == CorridorPhase::Search ||
         phase_ == CorridorPhase::Approach || phase_ == CorridorPhase::Cross;
     // 隧道里往前走时不原地回正：边走边纠机头(2026-09-26 用户要求前进不停)
@@ -452,6 +456,15 @@ CorridorCommand CorridorController::updateMotion(const Vec2& position, double ya
         cmd.finished = true;
         return cmd;
     }
+    if (!heading_selected_) {
+        // 仅在本次通道开始后的首个有效位姿上选一次；转向/降高/横移中的漂移不能重选。
+        // 用世界系正方向，与通道前进轴分开。相同转角(±45/±135度)按远离0度取整确定方向。
+        const double quarter_turn = std::acos(-1.0) * 0.5;
+        target_yaw_ = cfg_.nearest_cardinal_yaw
+            ? angle(std::round(angle(yaw) / quarter_turn) * quarter_turn)
+            : angle(cfg_.initial_yaw);
+        heading_selected_ = true;
+    }
     if (phase_ == CorridorPhase::Rotate) {
         // Show measured walls and openings while yaw is in progress too.
         if (cloud_sequence_ != processed_sequence_ && now >= evidence_time_ &&
@@ -462,7 +475,7 @@ CorridorCommand CorridorController::updateMotion(const Vec2& position, double ya
         }
         auto cmd = rotateAt(rotation_hold_, position, yaw, vf, vl, dt);
         cmd.status = "Rotate to entry heading with XY hold";
-        const double error = angle(cfg_.initial_yaw - yaw);
+        const double error = angle(target_yaw_ - yaw);
         const bool heading_ready = std::fabs(error) <= cfg_.heading_tolerance;
         if (!rotation_done_ && stable(heading_ready, now)) rotation_done_ = true;
         // A heading reached earlier can drift while Z is still descending.
@@ -536,7 +549,7 @@ CorridorCommand CorridorController::updateMotion(const Vec2& position, double ya
             else {
                 auto cmd = translate(position, yaw, h_, cfg_.align_speed, vf, vl, dt);
                 if (stable(!cmd.path.empty() && distance(position, h_) <= cfg_.point_tolerance &&
-                    std::fabs(angle(cfg_.initial_yaw - yaw)) <= cfg_.heading_tolerance, now))
+                    std::fabs(angle(target_yaw_ - yaw)) <= cfg_.heading_tolerance, now))
                     transition(CorridorPhase::Done);
                 if (cmd.status.empty()) cmd.status = "Holding position at H";
                 return cmd;
@@ -569,7 +582,7 @@ CorridorCommand CorridorController::updateMotion(const Vec2& position, double ya
                 const bool centered = std::fabs(t - center_t) <= cfg_.center_tolerance &&
                     std::fabs(t + cfg_.center_prediction_time * lateral_speed - center_t) <= cfg_.center_tolerance;
                 // 对准到容差，或已经到门框前(边走边横移，不停下)，都进入穿门
-                if ((centered && std::fabs(angle(cfg_.initial_yaw - yaw)) <= cfg_.heading_tolerance) || s >= last_clear_s) {
+                if ((centered && std::fabs(angle(target_yaw_ - yaw)) <= cfg_.heading_tolerance) || s >= last_clear_s) {
                     transition(CorridorPhase::Cross);
                     continue;
                 }

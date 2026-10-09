@@ -11,6 +11,7 @@ void check(bool ok, const char* reason) { if (!ok) throw std::runtime_error(reas
 void corridor_drift()
 {
     CorridorConfig cfg;
+    cfg.nearest_cardinal_yaw = false; // 本用例继续覆盖显式固定-90度的兼容模式；四向就近转正见corridor_heading_test
     CorridorController controller(cfg);
     check(controller.configure({2, 0}, {2, -3}), "configure corridor");
     const Vec2 anchor{1, 0};
@@ -116,7 +117,7 @@ void sparse_cloud_window()
         walls.push_back({-.75, -i * .05}); walls.push_back({.75, -i * .05});
     }
     controller.observe(walls, .01, {0, 0});
-    controller.update({0, 0}, 0, 0, 0, .02, true);
+    controller.update({0, 0}, cfg.initial_yaw, 0, 0, .02, true);
     check(controller.observation().walls_observed, "walls are invisible throughout the yaw stage");
     controller.observe({}, .06);
     check(!controller.points().empty(), "one empty packet erased accumulated wall geometry");

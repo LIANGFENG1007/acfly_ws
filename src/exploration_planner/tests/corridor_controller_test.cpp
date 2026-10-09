@@ -32,6 +32,7 @@ struct Scene {
     CorridorPerception frame;
 
     explicit Scene(double separation, bool closed = false) {
+        config.nearest_cardinal_yaw = false; // 该历史用例明确要求固定-90度进入；新默认行为由corridor_heading_test覆盖
         config.perception.corridor_width = 1.5;
         config.perception.robot_width = 0.6; // Also verify the larger previous aircraft envelope.
         frame = CorridorPerception(config.perception);

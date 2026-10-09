@@ -176,6 +176,7 @@ public:
         gcfg_.max_y = dd("field_max_y", params::FIELD_MAX_Y);
         corridor_enabled_ = declare_parameter<bool>("corridor_enabled", params::CORRIDOR_ENABLED);
         corridor_cloud_topic_ = declare_parameter<std::string>("corridor_cloud_topic", params::CORRIDOR_CLOUD_TOPIC);
+        ccfg_.nearest_cardinal_yaw = declare_parameter<bool>("corridor_nearest_cardinal_yaw", params::CORRIDOR_NEAREST_CARDINAL_YAW);
         ccfg_.initial_yaw = dd("corridor_initial_yaw_deg", params::CORRIDOR_INITIAL_YAW_DEG) * M_PI / 180.0;
         ccfg_.entry_speed = dd("corridor_entry_speed", params::CORRIDOR_ENTRY_SPEED);
         ccfg_.cruise_speed = dd("corridor_cruise_speed", params::CORRIDOR_CRUISE_SPEED);
@@ -4202,8 +4203,14 @@ private:
                 }
                 if (corridor_lower_enabled_)
                     corridor_->set_altitude_ready(std::abs(pz_ - corridor_flight_z_) <= corridor_z_tol_);
+                const bool had_heading = corridor_->headingSelected();
                 corridor_command_ = corridor_->update({px_, py_}, yaw_, v_fwd_est_, v_lat_est_,
                                                        local_now, pose_fresh);
+                if (!had_heading && corridor_->headingSelected()) {
+                    RCLCPP_INFO(get_logger(), "[走廊转正] 当前 %.1f° → 锁定 %.1f°，最短转角 %.1f°；保持此航向进入口、穿门和到H",
+                        yaw_*180.0/M_PI, corridor_->targetYaw()*180.0/M_PI,
+                        wrap_pi(corridor_->targetYaw()-yaw_)*180.0/M_PI);
+                }
                 // XY到点后立即转向，下降与转向并行；入口横移仍等待航向和高度均到位。
                 if (corridor_lower_enabled_ && corridor_->configured()) {
                     drop_command_altitude_ = corridor_flight_z_;
