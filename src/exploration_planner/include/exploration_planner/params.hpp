@@ -109,8 +109,11 @@ inline constexpr double VISION_TARGET_STOP_SPEED_MPS = 0.05; // 兼容旧配置�
 // false: 保留到探索终点即完成的流程。通道控制接口由 CORRIDOR_POSITION_CONTROL 选择。
 inline constexpr bool CORRIDOR_ENABLED = true;
 inline constexpr bool CORRIDOR_POSITION_CONTROL = true; // 降高和转正完成后改发真实位置接口；探索/终点转向仍用速度
-inline constexpr double CORRIDOR_POSITION_LEAD_M = 0.40; // 位置参考最多领先实际XY距离(m)，限制目标跑远；不是速度PD
+inline constexpr double CORRIDOR_POSITION_LEAD_M = 0.60; // 动态位置目标的最大XY领先距离(m)，给飞控保留前进拉力；墙/门会进一步限制
 inline constexpr double CORRIDOR_POSITION_ACCEL_MPS2 = 0.30; // 位置参考加速度上限(m/s²)：入口/对门/出门时连续改变推进方向；实际纠偏由飞控负责
+inline constexpr double CORRIDOR_POSITION_LATERAL_GAIN = 1.00; // 横向偏离时，目标向中线另一侧额外延伸的比例；1=偏右4cm时请求向左补偿4cm
+inline constexpr double CORRIDOR_POSITION_LATERAL_MAX_M = 0.18; // 上述额外侧向补偿上限(m)，实际还会收紧到门宽减机宽后的余量
+inline constexpr double CORRIDOR_POSITION_LATERAL_BRAKE_S = 0.60; // 按已有横向速度提前收回补偿的时间(s)，减少回到中线后冲过头
 inline constexpr bool CORRIDOR_NEAREST_CARDINAL_YAW = true; // true: 到终点后转到最近的0/±90/180度，选一次并保持到H；false: 使用下面固定角度
 inline constexpr double CORRIDOR_INITIAL_YAW_DEG = -90.0; // 仅关闭最近转正时使用的固定航向(度)
 inline constexpr double CORRIDOR_WIDTH = 1.5; // 两侧墙搜索范围(m)，不把道路中线当成门中心

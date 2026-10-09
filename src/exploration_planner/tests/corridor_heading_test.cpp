@@ -245,7 +245,7 @@ void positionReferenceLag() {
         const double now=i*dt;
         if(i%5==1) c.observe(cloud,now,position);
         if(c.positionActive()) c.positionFeedback(true,{-2,0});
-        // 停住的飞机不能让参考点在40cm处走走停停；飞机缓慢跟上后再平滑推进。
+        // 停住的飞机不能让参考点在领先上限处走走停停；飞机缓慢跟上后再平滑推进。
         if(i>400) position.x+=.1*dt;
         const auto cmd=c.update(position,0,0,0,now,true);
         require(cmd.position_control,"lag fixture lost position interface");
@@ -259,7 +259,7 @@ void positionReferenceLag() {
         if(i>500 && cmd.target.x>parked_x+.1) resumed=true;
         previous=cmd.target;previous_velocity=v;
     }
-    require(parked_x>-1.61 && parked_x<=-1.60+1e-8 && resumed,
+    require(parked_x>-2+cfg.position_lead-.01 && parked_x<=-2+cfg.position_lead+1e-8 && resumed,
             "reference failed to stop at lead bound or resume following");
     std::cout<<"smooth reference lead limit and slow-aircraft recovery passed\n";
 }

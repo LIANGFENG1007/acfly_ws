@@ -179,6 +179,9 @@ public:
         ccfg_.position_control=declare_parameter<bool>("corridor_position_control",params::CORRIDOR_POSITION_CONTROL);
         ccfg_.position_lead=dd("corridor_position_lead_m",params::CORRIDOR_POSITION_LEAD_M);
         ccfg_.position_acceleration=dd("corridor_position_acceleration",params::CORRIDOR_POSITION_ACCEL_MPS2);
+        ccfg_.position_lateral_gain=dd("corridor_position_lateral_gain",params::CORRIDOR_POSITION_LATERAL_GAIN);
+        ccfg_.position_lateral_max=dd("corridor_position_lateral_max_m",params::CORRIDOR_POSITION_LATERAL_MAX_M);
+        ccfg_.position_lateral_brake=dd("corridor_position_lateral_brake_s",params::CORRIDOR_POSITION_LATERAL_BRAKE_S);
         corridor_cloud_topic_ = declare_parameter<std::string>("corridor_cloud_topic", params::CORRIDOR_CLOUD_TOPIC);
         ccfg_.nearest_cardinal_yaw = declare_parameter<bool>("corridor_nearest_cardinal_yaw", params::CORRIDOR_NEAREST_CARDINAL_YAW);
         ccfg_.initial_yaw = dd("corridor_initial_yaw_deg", params::CORRIDOR_INITIAL_YAW_DEG) * M_PI / 180.0;
@@ -4849,6 +4852,18 @@ private:
                     ? steady_seconds() - corridor_cloud_received_at_ : -1.0);
                 number("gates_passed", corridor_->gatesPassed());
                 number("corridor_position_active",corridor_->positionActive());
+                number("corridor_position_gate_aligned",corridor_->positionGateAligned());
+                number("corridor_position_recovering",corridor_->positionRecovering());
+                if(corridor_active && corridor_command_.position_control) {
+                    const auto entry=corridor_->entry(),end=corridor_->goal();
+                    const double length=std::hypot(end.x-entry.x,end.y-entry.y);
+                    if(length>1e-6) {
+                        const double ax=(end.x-entry.x)/length,ay=(end.y-entry.y)/length;
+                        const double dx=corridor_command_.target.x-px_,dy=corridor_command_.target.y-py_;
+                        number("corridor_position_forward_lead_m",dx*ax+dy*ay);
+                        number("corridor_position_lateral_pull_m",-dx*ay+dy*ax);
+                    }
+                }
                 value("control_interface",corridor_command_.position_control ? "position" : "velocity");
                 diagnostics.status.push_back(status);
             }

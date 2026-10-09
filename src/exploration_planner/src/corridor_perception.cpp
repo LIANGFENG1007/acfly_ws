@@ -326,6 +326,29 @@ CorridorObservation CorridorPerception::analyze(
     return result;
 }
 
+bool CorridorPerception::pathRecovering(const Path2& points, const Vec2& start,
+                                       const Vec2& end, double body_radius) {
+    if (!finite(start) || !finite(end) || !std::isfinite(body_radius) || body_radius <= 0.0) return false;
+    const double dx=end.x-start.x,dy=end.y-start.y,d2=dx*dx+dy*dy;
+    if(d2<1e-14) return pathClear(points,start,end,body_radius);
+    const double r2=body_radius*body_radius;
+    bool observed=false;
+    for(const auto& point:points) {
+        if(!finite(point)) continue;
+        observed=true;
+        const double x=start.x-point.x,y=start.y-point.y;
+        const double start2=x*x+y*y,away=x*dx+y*dy;
+        if(start2<=r2) {
+            // 距离平方是凸二次函数；起始导数非负，整段就不会更靠近已侵入的点。
+            if(away < -1e-12 || (x+dx)*(x+dx)+(y+dy)*(y+dy)<=start2+1e-14) return false;
+        } else {
+            const double u=std::clamp(-away/d2,0.0,1.0);
+            if((x+u*dx)*(x+u*dx)+(y+u*dy)*(y+u*dy)<=r2) return false;
+        }
+    }
+    return observed;
+}
+
 bool CorridorPerception::pathClear(const Path2& points, const Vec2& start,
                                   const Vec2& end, double body_radius) {
     if (!finite(start) || !finite(end) || !std::isfinite(body_radius) || body_radius <= 0.0) return false;

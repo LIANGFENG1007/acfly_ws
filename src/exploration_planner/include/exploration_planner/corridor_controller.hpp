@@ -12,8 +12,11 @@ struct CorridorConfig {
     CorridorPerceptionConfig perception;
     bool nearest_cardinal_yaw = true; // 到终点后选最近的 0/±90/180 度，并锁定到本次通道任务结束
     bool position_control = false; // 主节点参数默认开启；独立旧速度控制用例可关闭
-    double position_lead = .40;
+    double position_lead = .60;
     double position_acceleration = .30; // 位置参考的加速度上限；不用于飞控速度/PID接口
+    double position_lateral_gain = 1.0; // 中线另一侧的额外位置补偿/当前横向误差
+    double position_lateral_max = .18; // 额外横向位置补偿上限，另受门洞机体余量限制
+    double position_lateral_brake = .60; // 根据已有横向速度提前收回位置补偿(s)
     double initial_yaw = -1.5707963267948966;
     // 转向期间可同时降高；航向和外部高度反馈(set_altitude_ready)都到位才横移进入口。false=只等待航向
     bool descend_before_entry = false;
@@ -95,6 +98,8 @@ public:
     const CorridorObservation& observation() const { return observation_; }
     const CorridorObservation& gate() const { return locked_gate_; }
     bool gateLocked() const { return gate_locked_; }
+    bool positionGateAligned() const { return position_gate_aligned_; }
+    bool positionRecovering() const { return position_recovering_; }
     int gatesPassed() const { return gates_passed_; }
 
 private:
@@ -111,6 +116,7 @@ private:
     double target_yaw_ = 0.0;
     bool position_active_ = false, position_ready_ = false, position_waiting_ = false;
     bool position_gate_aligned_ = false, position_gate_approach_ = false;
+    bool position_recovering_ = false;
     Vec2 position_reference_;
     Vec2 position_reference_velocity_; // 仅用于生成连续切向的位置点，不作为速度指令发送
     struct Cloud { double stamp; Path2 points; };

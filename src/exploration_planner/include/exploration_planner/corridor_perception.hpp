@@ -67,6 +67,9 @@ public:
     // Callers must also require current observation and measured wall support.
     static bool pathClear(const Path2& points, const Vec2& start,
                           const Vec2& end, double body_radius);
+    // 起点已与点云机体包络重叠时，允许间距单调增加的脱离段；不允许侵入任何其他点。
+    static bool pathRecovering(const Path2& points, const Vec2& start,
+                               const Vec2& end, double body_radius);
 
 private:
     CorridorPerceptionConfig config_;
