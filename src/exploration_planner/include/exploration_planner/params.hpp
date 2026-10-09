@@ -109,11 +109,12 @@ inline constexpr double VISION_TARGET_STOP_SPEED_MPS = 0.05; // 兼容旧配置�
 // false: 保留到探索终点即完成的流程。通道控制接口由 CORRIDOR_POSITION_CONTROL 选择。
 inline constexpr bool CORRIDOR_ENABLED = true;
 inline constexpr bool CORRIDOR_POSITION_CONTROL = true; // 降高和转正完成后改发真实位置接口；探索/终点转向仍用速度
-inline constexpr double CORRIDOR_POSITION_LEAD_M = 0.60; // 动态位置目标的最大XY领先距离(m)，给飞控保留前进拉力；墙/门会进一步限制
-inline constexpr double CORRIDOR_POSITION_ACCEL_MPS2 = 0.30; // 位置参考加速度上限(m/s²)：入口/对门/出门时连续改变推进方向；实际纠偏由飞控负责
-inline constexpr double CORRIDOR_POSITION_LATERAL_GAIN = 1.00; // 横向偏离时，目标向中线另一侧额外延伸的比例；1=偏右4cm时请求向左补偿4cm
+inline constexpr double CORRIDOR_POSITION_LEAD_M = 1.00; // 动态位置目标最大XY领先距离(m)，为低响应飞控保留前进拉力；墙/门会进一步限制
+inline constexpr double CORRIDOR_POSITION_ACCEL_MPS2 = 0.60; // 位置参考加速度上限(m/s²)：更快建立前进/纠偏目标，仍连续变向；不是飞控PID
+inline constexpr double CORRIDOR_POSITION_LATERAL_GAIN = 1.50; // 额外侧向补偿比例；右偏4cm且横向静止时请求向中线左侧延伸6cm，另受门宽限制
 inline constexpr double CORRIDOR_POSITION_LATERAL_MAX_M = 0.18; // 上述额外侧向补偿上限(m)，实际还会收紧到门宽减机宽后的余量
-inline constexpr double CORRIDOR_POSITION_LATERAL_BRAKE_S = 0.60; // 按已有横向速度提前收回补偿的时间(s)，减少回到中线后冲过头
+inline constexpr double CORRIDOR_POSITION_LATERAL_BRAKE_S = 0.90; // 按已有横向速度提前收回补偿的时间(s)，与1.5倍侧向补偿配套，减少回正后反复摆动
+inline constexpr double CORRIDOR_POSITION_LATERAL_RESPONSE_S = 0.30; // 横向位置目标独立收敛时间(s)，越小越快拉出纠偏目标，仍受上述加速度/间距限制
 inline constexpr bool CORRIDOR_NEAREST_CARDINAL_YAW = true; // true: 到终点后转到最近的0/±90/180度，选一次并保持到H；false: 使用下面固定角度
 inline constexpr double CORRIDOR_INITIAL_YAW_DEG = -90.0; // 仅关闭最近转正时使用的固定航向(度)
 inline constexpr double CORRIDOR_WIDTH = 1.5; // 两侧墙搜索范围(m)，不把道路中线当成门中心
@@ -122,14 +123,14 @@ inline constexpr double CORRIDOR_ROBOT_WIDTH = 0.64; // x500仿真含桨完整�
 inline constexpr const char* CORRIDOR_CLOUD_TOPIC = "/cloud_registered";
 inline constexpr double CORRIDOR_MIN_GAP_EXTRA = 0.0; // 机宽以外额外要求(m)，默认不额外膨胀
 // 位置接口下这是位置参考的推进速度(m/s)，实际速度与加减速由飞控位置环控制。
-inline constexpr double CORRIDOR_ENTRY_SPEED = 0.30;
-inline constexpr double CORRIDOR_CRUISE_SPEED = 0.30;
+inline constexpr double CORRIDOR_ENTRY_SPEED = 0.40;
+inline constexpr double CORRIDOR_CRUISE_SPEED = 0.45;
 // 下列速度下限/横向速度及加速度只用于旧速度接口；位置接口不在本机计算纠偏速度。
 inline constexpr double CORRIDOR_MIN_FORWARD_SPEED = 0.30; // ★隧道里前进速度下限(m/s)★ 2026-09-26 用户定(0.2→0.3)：整个隧道都不低于它(涡流里太慢推不动)；只在快到 H、门还没确认时减速
 inline constexpr double CORRIDOR_LATERAL_SPEED = 0.45;     // ★隧道里横向纠偏速度上限(m/s)★ 和前进分开算；门前 0.6 m 内要横移到门中心，门偏得多要调大
 inline constexpr double CORRIDOR_LATERAL_ACCEL = 0.60;     // 隧道里横向指令斜坡(m/s²)
 inline constexpr double CORRIDOR_H_APPROACH_M = 1.20;      // 离 H 只剩这么远(m)时直接朝 H 飞：隧道墙可能在 H 前就结束(实机 H 前 0.17 m 墙就没了)
-inline constexpr double CORRIDOR_GATE_SPEED = 0.30; // 正对门中心穿越的速度上限(m/s)
+inline constexpr double CORRIDOR_GATE_SPEED = 0.40; // 正对门中心穿越时的位置参考推进速度(m/s)，实机速度取决于飞控响应
 inline constexpr double CORRIDOR_ALIGN_SPEED = 0.30;
 inline constexpr double CORRIDOR_YAW_KP = 1.60;
 inline constexpr double CORRIDOR_MAX_YAW_RATE = 0.60;
@@ -149,7 +150,7 @@ inline constexpr double CORRIDOR_APPROACH_M = 0.80; // 旧速度接口开始对�
 inline constexpr bool CORRIDOR_CONTINUOUS_APPROACH = true; // 持续前进并对门中心，原启动命令直接生效
 inline constexpr double CORRIDOR_CONTINUOUS_CENTER_RESERVE = 0.15; // 机体前缘之外的门前对中预留(m)
 inline constexpr double CORRIDOR_CONTINUOUS_TIME_MARGIN = 0.50; // 横向对中时间估计的附加余量(s)
-inline constexpr double CORRIDOR_MOVING_LOOKAHEAD = 0.80; // 穿门后接力用的移动前瞻(m)，避免追到临时点刹停
+inline constexpr double CORRIDOR_MOVING_LOOKAHEAD = 0.80; // 内部移动前瞻下限(m)；位置接口会按领先上限+参考收敛距离加长，实际发点仍受POSITION_LEAD限制
 inline constexpr double CORRIDOR_CENTER_PREDICTION_S = 0.40; // 对中放行同时检查预测横向漂移(s)
 inline constexpr double CORRIDOR_EXIT_M = 0.50; // 门后沿当前门中心直行此距离(m)再向下一门/H偏移；空间不足时缩短。
                                                 // 1.0→0.5(2026-09-23)：开口靠墙时(0.75m 开口/0.64m 机宽)出门段贴墙，r01 实测机身离墙 2.7cm 飞了 1m；
@@ -157,6 +158,8 @@ inline constexpr double CORRIDOR_EXIT_M = 0.50; // 门后沿当前门中心直�
 inline constexpr double CORRIDOR_CENTER_TOL = 0.15; // 穿越前对门中心横向误差(m)
 inline constexpr double CORRIDOR_GATE_ASSOC_M = 0.15;
 inline constexpr int CORRIDOR_CONFIRM_FRAMES = 3;
+inline constexpr double CORRIDOR_GATE_TRACK_TIMEOUT_S = 0.35; // 同一候选门短暂漏检保留时间(s)，超过则清除确认和候选显示
+inline constexpr double CORRIDOR_GATE_FILTER_S = 0.15; // 候选门坐标滤波时间(s)；确认后锁定当前门，避免中线随单帧跳动
 inline constexpr double CORRIDOR_CLOUD_TIMEOUT_S = 0.50; // 本机连续未收到新点云帧的时长，不与传感器时钟相减
 inline constexpr double CORRIDOR_CLOUD_WINDOW_S = 5.00; // 累计真实墙面点；新数据/门洞射线仍受独立超时检查
 inline constexpr double CORRIDOR_POSE_TIMEOUT_S = 0.30; // 本机连续未收到新有效里程计帧的时长；探索/归航/通道共用

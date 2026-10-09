@@ -12,11 +12,12 @@ struct CorridorConfig {
     CorridorPerceptionConfig perception;
     bool nearest_cardinal_yaw = true; // 到终点后选最近的 0/±90/180 度，并锁定到本次通道任务结束
     bool position_control = false; // 主节点参数默认开启；独立旧速度控制用例可关闭
-    double position_lead = .60;
-    double position_acceleration = .30; // 位置参考的加速度上限；不用于飞控速度/PID接口
-    double position_lateral_gain = 1.0; // 中线另一侧的额外位置补偿/当前横向误差
+    double position_lead = 1.00;
+    double position_acceleration = .60; // 位置参考的加速度上限；不用于飞控速度/PID接口
+    double position_lateral_gain = 1.5; // 中线另一侧的额外位置补偿/当前横向误差
     double position_lateral_max = .18; // 额外横向位置补偿上限，另受门洞机体余量限制
-    double position_lateral_brake = .60; // 根据已有横向速度提前收回位置补偿(s)
+    double position_lateral_brake = .90; // 根据已有横向速度提前收回位置补偿(s)，与增强后的侧向补偿配套
+    double position_lateral_response = .30; // 横向位置参考单独收敛时间(s)，不再共用前進减速时间
     double initial_yaw = -1.5707963267948966;
     // 转向期间可同时降高；航向和外部高度反馈(set_altitude_ready)都到位才横移进入口。false=只等待航向
     bool descend_before_entry = false;
@@ -52,6 +53,8 @@ struct CorridorConfig {
     double center_tolerance = 0.04;
     double gate_association = 0.15;
     int confirm_frames = 3;
+    double gate_track_timeout = .35; // 候选门允许的短暂漏检间隔，不能跨长期断流确认
+    double gate_filter_time = .15; // 候选门中心滤波时间(s)，锁定后不跟单帧抖动走
     double cloud_timeout = 0.50;
     double cloud_window = 0.30;
     double pose_timeout = 0.30;
@@ -98,6 +101,8 @@ public:
     const CorridorObservation& observation() const { return observation_; }
     const CorridorObservation& gate() const { return locked_gate_; }
     bool gateLocked() const { return gate_locked_; }
+    const CorridorObservation& displayGate() const;
+    int gateConfirmations() const { return confirmations_; }
     bool positionGateAligned() const { return position_gate_aligned_; }
     bool positionRecovering() const { return position_recovering_; }
     int gatesPassed() const { return gates_passed_; }
@@ -135,11 +140,14 @@ private:
     unsigned long cloud_sequence_ = 0, processed_sequence_ = 0;
     unsigned long candidate_sequence_ = 0;
     CorridorObservation observation_, candidate_, locked_gate_;
+    double candidate_time_ = -1e9;
     int confirmations_ = 0, gates_passed_ = 0;
     double passed_s_ = -1e9;
     double last_gate_back_ = -1e9;
     bool gate_locked_ = false;
     bool stable(bool condition, double now);
+    void confirmGate(const CorridorObservation& observed, double now);
+    void trackGate(const Vec2& position, double now);
     CorridorCommand updateMotion(const Vec2& position, double yaw, double vf, double vl,
                                  double now, bool pose_fresh);
     void transition(CorridorPhase phase);

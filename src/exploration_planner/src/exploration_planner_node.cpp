@@ -182,6 +182,7 @@ public:
         ccfg_.position_lateral_gain=dd("corridor_position_lateral_gain",params::CORRIDOR_POSITION_LATERAL_GAIN);
         ccfg_.position_lateral_max=dd("corridor_position_lateral_max_m",params::CORRIDOR_POSITION_LATERAL_MAX_M);
         ccfg_.position_lateral_brake=dd("corridor_position_lateral_brake_s",params::CORRIDOR_POSITION_LATERAL_BRAKE_S);
+        ccfg_.position_lateral_response=dd("corridor_position_lateral_response_s",params::CORRIDOR_POSITION_LATERAL_RESPONSE_S);
         corridor_cloud_topic_ = declare_parameter<std::string>("corridor_cloud_topic", params::CORRIDOR_CLOUD_TOPIC);
         ccfg_.nearest_cardinal_yaw = declare_parameter<bool>("corridor_nearest_cardinal_yaw", params::CORRIDOR_NEAREST_CARDINAL_YAW);
         ccfg_.initial_yaw = dd("corridor_initial_yaw_deg", params::CORRIDOR_INITIAL_YAW_DEG) * M_PI / 180.0;
@@ -217,6 +218,8 @@ public:
         ccfg_.center_tolerance = dd("corridor_center_tol", params::CORRIDOR_CENTER_TOL);
         ccfg_.gate_association = dd("corridor_gate_assoc_m", params::CORRIDOR_GATE_ASSOC_M);
         ccfg_.confirm_frames = declare_parameter<int>("corridor_confirm_frames", params::CORRIDOR_CONFIRM_FRAMES);
+        ccfg_.gate_track_timeout=dd("corridor_gate_track_timeout_s",params::CORRIDOR_GATE_TRACK_TIMEOUT_S);
+        ccfg_.gate_filter_time=dd("corridor_gate_filter_s",params::CORRIDOR_GATE_FILTER_S);
         ccfg_.cloud_timeout = dd("corridor_cloud_timeout_s", params::CORRIDOR_CLOUD_TIMEOUT_S);
         ccfg_.cloud_window = dd("corridor_cloud_window_s", params::CORRIDOR_CLOUD_WINDOW_S);
         ccfg_.pose_timeout = dd("corridor_pose_timeout_s", params::CORRIDOR_POSE_TIMEOUT_S);
@@ -702,7 +705,7 @@ public:
             corridor_visual.points = corridor_->points();
             corridor_visual.route = corridor_command_.path;
             corridor_visual.gates_passed = corridor_->gatesPassed();
-            const auto& door = corridor_->gateLocked() ? corridor_->gate() : corridor_->observation();
+            const auto& door = corridor_->displayGate();
             corridor_visual.gate_valid = door.gate_passable;
             corridor_visual.gate_center = door.gate_center;
             const double dx = corridor_visual.h.x - corridor_visual.entry.x;
@@ -4838,11 +4841,16 @@ private:
                 number("tracker_gate", tracker_->debug().gate);
                 number("tracker_lat_factor", tracker_->debug().lat_factor);
                 number("tracker_v_target", tracker_->debug().v_target);
-                const auto& gate = corridor_->gateLocked() ? corridor_->gate() : corridor_->observation();
+                const auto& gate = corridor_->displayGate();
                 number("gate_center_x", gate.gate_center.x);
                 number("gate_center_y", gate.gate_center.y);
                 number("gate_width", gate.gap_width);
                 value("gate_reason", gate.reason);
+                value("gate_raw_reason",corridor_->observation().reason);
+                number("gate_confirmations",corridor_->gateConfirmations());
+                number("gate_locked",corridor_->gateLocked());
+                number("gate_raw_center_x",corridor_->observation().gate_center.x);
+                number("gate_raw_center_y",corridor_->observation().gate_center.y);
                 value("corridor_cloud_topic", corridor_cloud_topic_);
                 value("corridor_cloud_filter", corridor_cloud_filter_reason_);
                 number("corridor_cloud_raw_points", corridor_cloud_raw_points_);

@@ -28,6 +28,7 @@ CorridorController::CorridorController(const CorridorConfig& config)
                    cfg_.heading_tolerance, cfg_.heading_stop, cfg_.point_tolerance,
                    cfg_.stop_speed, cfg_.lookahead, cfg_.approach_distance, cfg_.exit_distance,
                    cfg_.moving_lookahead, cfg_.center_prediction_time, cfg_.position_lead, cfg_.position_acceleration,
+                   cfg_.position_lateral_response,cfg_.gate_track_timeout,cfg_.gate_filter_time,
                    cfg_.center_tolerance, cfg_.gate_association, cfg_.cloud_timeout,
                    cfg_.pose_timeout, p.corridor_width, p.robot_width, p.cell_size, p.lookahead,
                    p.wall_min_span, p.max_wall_gap, p.gate_min_span, p.gate_cluster_depth,
@@ -80,6 +81,7 @@ void CorridorController::start(const Vec2& red, double now)
     position_reference_velocity_={};
     previous_yaw_rate_ = 0.0;
     settled_since_ = -1.0;
+    candidate_={};confirmations_=0;candidate_time_=-1e9;candidate_sequence_=0;
     last_update_ = now;
     transition(configured_ ? CorridorPhase::Rotate : CorridorPhase::WaitRoute);
 }
@@ -141,6 +143,71 @@ bool CorridorController::stable(bool condition, double now)
     if (!condition) { settled_since_ = -1.0; return false; }
     if (settled_since_ < 0.0) settled_since_ = now;
     return now - settled_since_ >= cfg_.settle_time;
+}
+
+const CorridorObservation& CorridorController::displayGate() const
+{
+    static const CorridorObservation empty;
+    if(last_update_<evidence_time_ || last_update_-evidence_time_>cfg_.cloud_timeout) return empty;
+    if(gate_locked_) {
+        if(observation_.reason=="gate_closed_or_too_narrow" &&
+           std::abs(observation_.gate_s-locked_gate_.gate_s)<=cfg_.gate_association) return empty;
+        return locked_gate_;
+    }
+    if(last_update_<candidate_time_ || last_update_-candidate_time_>std::min(cfg_.gate_track_timeout,cfg_.cloud_timeout)) return empty;
+    return candidate_;
+}
+
+void CorridorController::confirmGate(const CorridorObservation& observed,double now)
+{
+    if(!observed.gate_passable || observed.gate_s<=passed_s_ || candidate_sequence_==cloud_sequence_) return;
+    const bool tracked=candidate_.gate_passable && now>=candidate_time_ &&
+        now-candidate_time_<=std::min(cfg_.gate_track_timeout,cfg_.cloud_timeout);
+    const bool same=tracked &&
+        distance(candidate_.gate_center,observed.gate_center)<=cfg_.gate_association;
+    // 一帧不关联的新门不能把正在确认的标记换走；旧候选自然超时后才重新建立身份。
+    // 不更新时间，也不增加旧候选的确认次数，避免假目标靠反复噪声续命。
+    if(tracked && !same) return;
+    auto filtered=observed;
+    if(same) {
+        const double dt=std::max(.001,now-candidate_time_),alpha=dt/(cfg_.gate_filter_time+dt);
+        const double old_center=.5*(candidate_.gap_left+candidate_.gap_right);
+        const double new_center=.5*(observed.gap_left+observed.gap_right);
+        // 平滑中线，但保留的门洞必须完全落在本次实测开口内部，不能滤出更宽的假门。
+        const double center=std::clamp(old_center+alpha*(new_center-old_center),
+            observed.gap_right+cfg_.perception.robot_width*.5,observed.gap_left-cfg_.perception.robot_width*.5);
+        const double width=std::min(candidate_.gap_width+alpha*(observed.gap_width-candidate_.gap_width),
+            2*std::min(center-observed.gap_right,observed.gap_left-center));
+        filtered.gap_right=center-width*.5;filtered.gap_left=center+width*.5;filtered.gap_width=width;
+        filtered.gate_s=candidate_.gate_s+alpha*(observed.gate_s-candidate_.gate_s);
+        filtered.gate_depth=observed.gate_depth+2*std::abs(filtered.gate_s-observed.gate_s);
+        filtered.gate_center=perception_.toWorld(filtered.gate_s,center);
+        confirmations_=std::min(cfg_.confirm_frames,confirmations_+1);
+    } else confirmations_=1;
+    candidate_=filtered;candidate_time_=now;candidate_sequence_=cloud_sequence_;
+}
+
+void CorridorController::trackGate(const Vec2& position,double now)
+{
+    const double timeout=std::min(cfg_.gate_track_timeout,cfg_.cloud_timeout);
+    if(now<candidate_time_ || now-candidate_time_>timeout) {
+        candidate_={};confirmations_=0;candidate_time_=-1e9;
+    }
+    if(cloud_sequence_==processed_sequence_ || now<evidence_time_ ||
+       now-evidence_time_>cfg_.cloud_timeout || points_.empty()) return;
+    processed_sequence_=cloud_sequence_;
+    const auto analyze=[&](double minimum) {
+        return perception_.analyze(points_,position,minimum,&visibility_points_,
+            has_sensor_origin_ ? &sensor_origin_ : nullptr);
+    };
+    observation_=analyze(passed_s_);
+    const auto observed=gate_locked_ ? analyze(locked_gate_.gate_s+locked_gate_.gate_depth*.5+
+        std::max(cfg_.perception.cell_size,cfg_.perception.gate_cluster_depth)) : observation_;
+    if(observed.gate_passable) confirmGate(observed,now);
+    else if(observed.reason=="gate_closed_or_too_narrow") {
+        // 实测封闭是反证，不能靠短时保留继续显示为可通行；普通漏检才允许等待下一帧。
+        candidate_={};confirmations_=0;candidate_time_=-1e9;
+    }
 }
 
 CorridorCommand CorridorController::hold(const Vec2& position, const std::string& reason)
@@ -356,13 +423,11 @@ CorridorCommand CorridorController::forwardCorridor(const Vec2& position, double
             ++gates_passed_;
             // 下一扇门在锁定当前门期间一直在确认，保留它的确认次数；没有候选才重新看一眼
             if (!(candidate_.gate_passable && candidate_.gate_s > passed_s_)) {
-                confirmations_ = 0;
+                candidate_={};confirmations_=0;candidate_time_=-1e9;
                 observation_ = perception_.analyze(points_, position, passed_s_, &visibility_points_,
                     has_sensor_origin_ ? &sensor_origin_ : nullptr);
                 if (observation_.gate_passable && observation_.gate_s > passed_s_) {
-                    candidate_ = observation_;
-                    candidate_sequence_ = cloud_sequence_;
-                    confirmations_ = 1;
+                    confirmGate(observation_,last_update_);
                 }
             }
         }
@@ -392,7 +457,14 @@ CorridorCommand CorridorController::forwardCorridor(const Vec2& position, double
     }
     phase_ = phase;   // 只用于显示/日志，不重置计时和机头状态
     // 4. 纵向目标总在前方；快到 H 且前面没有要对准的门时指向 H，让它减速停到 H
-    Vec2 target = perception_.toWorld(s + cfg_.moving_lookahead, t_ref);
+    // moving_lookahead 是内部追踪终点，不是实际发送点。位置模式要为参考收敛留出距离，
+    // 否则旧的 0.8 m 内部终点会把调大的 position_lead 截短，飞机仍拉不开位置差。
+    // 最终输出仍由 positionCommand 限制在 position_lead 内，包含减速停止距离。
+    const double reference_speed=std::max(cfg_.cruise_speed,cfg_.gate_speed);
+    const double moving_ahead=position_active_ ? std::max(cfg_.moving_lookahead,
+        cfg_.position_lead+reference_speed*std::max(.5,reference_speed/cfg_.position_acceleration))
+        : cfg_.moving_lookahead;
+    Vec2 target = perception_.toWorld(s + moving_ahead, t_ref);
     if (position_active_ && gate_locked_) {
         const double front=locked_gate_.gate_s-locked_gate_.gate_depth*.5;
         const double back=locked_gate_.gate_s+locked_gate_.gate_depth*.5;
@@ -430,7 +502,7 @@ CorridorCommand CorridorController::forwardCorridor(const Vec2& position, double
                 cfg_.position_lateral_brake*cross_speed,
                 -std::min(cfg_.position_lateral_max,room),std::min(cfg_.position_lateral_max,room));
             target=perception_.toWorld(position_gate_aligned_
-                ? std::max(back+cfg_.exit_distance,s+cfg_.moving_lookahead) : staging,center-extra);
+                ? std::max(back+cfg_.exit_distance,s+moving_ahead) : staging,center-extra);
             status=position_gate_aligned_ ? "Position: crossing door" :
                 (in_alignment_zone ? "Position: aligning before door" : "Position: diagonally approaching door");
         }
@@ -445,7 +517,8 @@ CorridorCommand CorridorController::forwardCorridor(const Vec2& position, double
             cfg_.position_lateral_brake*cross_speed,-cfg_.position_lateral_max,cfg_.position_lateral_max);
         target=perception_.toWorld(perception_.longitudinal(target),t_ref-extra);
     }
-    auto cmd = translate(position, yaw, target, cfg_.cruise_speed, vf, vl, dt, -1.0, cfg_.min_forward_speed);
+    const double speed=position_active_ && phase==CorridorPhase::Cross ? cfg_.gate_speed : cfg_.cruise_speed;
+    auto cmd = translate(position, yaw, target, speed, vf, vl, dt, -1.0, cfg_.min_forward_speed);
     if (cmd.status.empty()) cmd.status = status;
     return cmd;
 }
@@ -499,7 +572,18 @@ CorridorCommand CorridorController::positionCommand(const Vec2& position,const V
         acceleration*acceleration*dt*dt-acceleration*dt*previous_speed+2*acceleration*remaining_lead))
         -acceleration*dt);
     const double scale=d>1e-9 ? std::min({speed/d,lead_speed/d,1.0/approach_time}) : 0.0;
-    const Vec2 desired{dx*scale,dy*scale};
+    Vec2 desired{dx*scale,dy*scale};
+    const bool corridor_forward=phase_==CorridorPhase::Search || phase_==CorridorPhase::Approach || phase_==CorridorPhase::Cross;
+    if(corridor_forward) {
+        const double length=perception_.length();
+        const Vec2 axis{(h_.x-entry_.x)/length,(h_.y-entry_.y)/length},normal{-axis.y,axis.x};
+        // 侧向拉回不必等待纵向目标的慢收敛，但输出仍是连续XYZ位置点。
+        const double along=std::clamp((dx*axis.x+dy*axis.y)/approach_time,-speed,speed);
+        const double cross=std::clamp((dx*normal.x+dy*normal.y)/cfg_.position_lateral_response,-speed,speed);
+        desired={axis.x*along+normal.x*cross,axis.y*along+normal.y*cross};
+        const double v=std::hypot(desired.x,desired.y),limit=std::min(speed,lead_speed);
+        if(v>limit && v>1e-12){desired.x*=limit/v;desired.y*=limit/v;}
+    }
     const auto slew=[&](const Vec2& requested) {
         const double x=requested.x-position_reference_velocity_.x;
         const double y=requested.y-position_reference_velocity_.y;
@@ -635,6 +719,8 @@ CorridorCommand CorridorController::updateMotion(const Vec2& position, double ya
         cmd.finished = true;
         return cmd;
     }
+    // 转头、降高等待及位置交接时也提前跟踪门，不等飞到入口后重新累计确认。
+    trackGate(position,now);
     if(position_active_ && (!position_ready_ || (cfg_.descend_before_entry && !altitude_ready_)))
         return hold(position,!position_ready_ ? "Position: waiting for main handover" : "Position: restoring corridor height");
     if (!heading_selected_) {
@@ -647,13 +733,6 @@ CorridorCommand CorridorController::updateMotion(const Vec2& position, double ya
         heading_selected_ = true;
     }
     if (phase_ == CorridorPhase::Rotate) {
-        // Show measured walls and openings while yaw is in progress too.
-        if (cloud_sequence_ != processed_sequence_ && now >= evidence_time_ &&
-            now - evidence_time_ <= cfg_.cloud_timeout && !points_.empty()) {
-            processed_sequence_ = cloud_sequence_;
-            observation_ = perception_.analyze(points_, position, passed_s_, &visibility_points_,
-                has_sensor_origin_ ? &sensor_origin_ : nullptr);
-        }
         auto cmd = rotateAt(rotation_hold_, position, yaw, vf, vl, dt);
         cmd.status = "Rotate to entry heading with XY hold";
         const double error = angle(target_yaw_ - yaw);
@@ -699,28 +778,8 @@ CorridorCommand CorridorController::updateMotion(const Vec2& position, double ya
                                     has_sensor_origin_ ? &sensor_origin_ : nullptr);
     };
     auto confirm = [&](const CorridorObservation& observed) {
-        if (!observed.gate_passable || observed.gate_s <= passed_s_) return;
-        if (candidate_sequence_ == cloud_sequence_) return;
-        if (candidate_.gate_passable && distance(candidate_.gate_center, observed.gate_center) <= cfg_.gate_association)
-            ++confirmations_;
-        else confirmations_ = 1;
-        candidate_ = observed;
-        candidate_sequence_ = cloud_sequence_;
+        confirmGate(observed,now);
     };
-    const bool new_cloud = processed_sequence_ != cloud_sequence_;
-    if (new_cloud) {
-        processed_sequence_ = cloud_sequence_;
-        observation_ = analyze(passed_s_);
-        if (!gate_locked_) {
-            if (observation_.gate_passable) confirm(observation_);
-            else confirmations_ = 0;
-        } else {
-            const double back = locked_gate_.gate_s + locked_gate_.gate_depth * 0.5;
-            const auto next = analyze(back + std::max(resolution, cfg_.perception.gate_cluster_depth));
-            if (next.gate_passable) confirm(next);
-            else if (candidate_.gate_s > back) confirmations_ = 0;
-        }
-    }
 
     // Intermediate waypoints are passed within this tick; only H has a dwell.
     for (int handoff = 0; handoff < 5; ++handoff) {

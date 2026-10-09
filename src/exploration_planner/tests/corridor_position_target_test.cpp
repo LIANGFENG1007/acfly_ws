@@ -7,6 +7,7 @@
 #include <vector>
 #include "exploration_planner/corridor_perception.hpp"
 #include "exploration_planner/position_hold.hpp"
+#include "exploration_planner/params.hpp"
 // Seed the measured failure state without pretending to replay unrecorded LiDAR frames.
 #define private public
 #include "exploration_planner/corridor_controller.hpp"
@@ -20,6 +21,8 @@ double norm(Vec2 p){return std::hypot(p.x,p.y);}
 CorridorConfig config() {
     CorridorConfig cfg;cfg.position_control=true;cfg.settle_time=0;
     cfg.perception.robot_width=.64;cfg.center_tolerance=.15;cfg.approach_distance=.8;
+    cfg.entry_speed=params::CORRIDOR_ENTRY_SPEED;cfg.cruise_speed=params::CORRIDOR_CRUISE_SPEED;
+    cfg.gate_speed=params::CORRIDOR_GATE_SPEED;
     cfg.center_prediction_time=.4;cfg.exit_distance=.5;return cfg;
 }
 void seed(CorridorController& c,Vec2 position,bool gate) {
@@ -104,12 +107,13 @@ void weakResponseProgress() {
         const auto cmd=c.forwardCorridor(p,0,v.x,v.y,dt);
         const Vec2 desired{.5*(cmd.target.x-p.x),.5*(cmd.target.y-p.y)};
         v.x+=(1-std::exp(-dt/.65))*(desired.x-v.x);v.y+=(1-std::exp(-dt/.65))*(desired.y-v.y);
-        if(i==500)start_s=-p.y;
-        if(i>=500){lead_sum+=p.y-cmd.target.y;++n;}
+        if(i==250)start_s=-p.y;
+        if(i>=250 && i<550){lead_sum+=p.y-cmd.target.y;++n;}
         p.x+=v.x*dt;p.y+=v.y*dt;
+        if(i==549)break;
     }
-    const double speed=(-p.y-start_s)/(400*dt),lead=lead_sum/n;
-    require(lead>.35 && speed>.17,"weak-response aircraft received insufficient forward lead");
+    const double speed=(-p.y-start_s)/(300*dt),lead=lead_sum/n;
+    require(lead>.75 && speed>.37,"weak-response aircraft received insufficient forward lead");
     std::cout<<"weak response mean forward lead="<<lead<<" mean speed="<<speed<<'\n';
 }
 void noisyLeadLimit() {
@@ -125,7 +129,7 @@ void noisyLeadLimit() {
         require(norm(cmd.target)<config().position_lead+.006,"braking expanded the old lead envelope");
         previous=cmd.target;previous_v=v;
     }
-    require(-cmd.target.y>.55,"lead-limit recovery pulled reference back to the aircraft");
+    require(-cmd.target.y>config().position_lead-.05,"lead-limit recovery pulled reference back to the aircraft");
     std::cout<<"5mm pose jitter at lead limit retains continuous reference\n";
 }
 void delayedWind(double side,double gain) {
