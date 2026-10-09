@@ -11,6 +11,9 @@ namespace exploration {
 struct CorridorConfig {
     CorridorPerceptionConfig perception;
     bool nearest_cardinal_yaw = true; // 到终点后选最近的 0/±90/180 度，并锁定到本次通道任务结束
+    bool position_control = false; // 主节点参数默认开启；独立旧速度控制用例可关闭
+    double position_lead = .40;
+    double position_acceleration = .30; // 位置参考的加速度上限；不用于飞控速度/PID接口
     double initial_yaw = -1.5707963267948966;
     // 转向期间可同时降高；航向和外部高度反馈(set_altitude_ready)都到位才横移进入口。false=只等待航向
     bool descend_before_entry = false;
@@ -54,6 +57,7 @@ struct CorridorConfig {
 enum class CorridorPhase { Idle, WaitRoute, Rotate, Entry, Search, Approach, Cross, Finish, Done };
 
 struct CorridorCommand {
+    bool position_control = false;
     double forward = 0.0;
     double lateral = 0.0;
     double yaw_rate = 0.0;
@@ -78,6 +82,9 @@ public:
     bool rotationDone() const { return rotation_done_; }
     bool headingSelected() const { return heading_selected_; }
     double targetYaw() const { return target_yaw_; } // headingSelected() 后有效
+    bool positionActive() const { return position_active_; }
+    void positionFeedback(bool ready, const Vec2& anchor);
+    void positionFeedbackTimeout(const Vec2& position);
     void set_altitude_ready(bool ready) { altitude_ready_ = ready; }
     bool active() const { return phase_ != CorridorPhase::Idle; }
     bool startedMoving() const;
@@ -102,6 +109,10 @@ private:
     bool rotation_done_ = false, altitude_ready_ = true;
     bool heading_selected_ = false;
     double target_yaw_ = 0.0;
+    bool position_active_ = false, position_ready_ = false, position_waiting_ = false;
+    bool position_gate_aligned_ = false, position_gate_approach_ = false;
+    Vec2 position_reference_;
+    Vec2 position_reference_velocity_; // 仅用于生成连续切向的位置点，不作为速度指令发送
     struct Cloud { double stamp; Path2 points; };
     std::deque<Cloud> clouds_;
     Path2 points_;
@@ -134,6 +145,7 @@ private:
                               double speed, double vf, double vl, double dt,
                               double longitudinal_limit = -1.0, double min_forward = 0.0);
     CorridorCommand forwardCorridor(const Vec2& position, double yaw, double vf, double vl, double dt);
+    CorridorCommand positionCommand(const Vec2& position, const Vec2& target, double speed, double dt);
     double approachForwardLimit(double lateral_error, double lateral_speed,
                                 double remaining_distance) const;
 };

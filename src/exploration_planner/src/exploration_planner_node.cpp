@@ -16,6 +16,7 @@
 // ============================================================================
 
 #include <rclcpp/rclcpp.hpp>
+#include <acfly_interfaces/msg/exploration_control_status.hpp>
 #include <geometry_msgs/msg/point_stamped.hpp>
 #include <geometry_msgs/msg/twist_stamped.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
@@ -175,6 +176,9 @@ public:
         gcfg_.max_x = dd("field_max_x", params::FIELD_MAX_X);
         gcfg_.max_y = dd("field_max_y", params::FIELD_MAX_Y);
         corridor_enabled_ = declare_parameter<bool>("corridor_enabled", params::CORRIDOR_ENABLED);
+        ccfg_.position_control=declare_parameter<bool>("corridor_position_control",params::CORRIDOR_POSITION_CONTROL);
+        ccfg_.position_lead=dd("corridor_position_lead_m",params::CORRIDOR_POSITION_LEAD_M);
+        ccfg_.position_acceleration=dd("corridor_position_acceleration",params::CORRIDOR_POSITION_ACCEL_MPS2);
         corridor_cloud_topic_ = declare_parameter<std::string>("corridor_cloud_topic", params::CORRIDOR_CLOUD_TOPIC);
         ccfg_.nearest_cardinal_yaw = declare_parameter<bool>("corridor_nearest_cardinal_yaw", params::CORRIDOR_NEAREST_CARDINAL_YAW);
         ccfg_.initial_yaw = dd("corridor_initial_yaw_deg", params::CORRIDOR_INITIAL_YAW_DEG) * M_PI / 180.0;
@@ -507,6 +511,18 @@ public:
 
         // ---- ROS 接口 ----
         control_pub_ = create_publisher<acfly_interfaces::msg::ExplorationCommand>("/exploration/control", rclcpp::QoS(1));
+        control_status_sub_=create_subscription<acfly_interfaces::msg::ExplorationControlStatus>(
+            "/exploration/control_status",rclcpp::QoS(1),
+            [this](const acfly_interfaces::msg::ExplorationControlStatus::SharedPtr msg) {
+                std::lock_guard<std::mutex> lk(mtx_);
+                const double age=(now()-rclcpp::Time(msg->header.stamp)).seconds();
+                if(msg->mission!=goal_header_ || msg->header.frame_id!="camera_init" ||
+                   !std::isfinite(age) || age<-.05 || age>.3 ||
+                   !std::isfinite(msg->hold_position.x) || !std::isfinite(msg->hold_position.y) ||
+                   (control_status_ && control_status_->mission==goal_header_ &&
+                    rclcpp::Time(msg->header.stamp)<=rclcpp::Time(control_status_->header.stamp))) return;
+                control_status_=*msg;control_status_received_=steady_seconds();
+            });
         context_sub_ = create_subscription<acfly_interfaces::msg::ExplorationContext>(
             "/exploration/context", rclcpp::QoS(1).transient_local(),
             [this](const acfly_interfaces::msg::ExplorationContext::SharedPtr msg) {
@@ -891,6 +907,7 @@ private:
         global_traj_.clear();
         corridor_disabled_for_goal_ = false;
         corridor_->reset();
+        control_status_.reset();control_status_received_=-1;
         cloud_freshness_ = SensorFreshness{};
         corridor_command_ = {};
         apply_corridor_route();
@@ -4203,6 +4220,14 @@ private:
                 }
                 if (corridor_lower_enabled_)
                     corridor_->set_altitude_ready(std::abs(pz_ - corridor_flight_z_) <= corridor_z_tol_);
+                const bool feedback_fresh=control_status_ && control_status_->mission==goal_header_ &&
+                    local_now>=control_status_received_ && local_now-control_status_received_<=.3 &&
+                    (now()-rclcpp::Time(control_status_->header.stamp)).seconds()>=-.05 &&
+                    (now()-rclcpp::Time(control_status_->header.stamp)).seconds()<=.3;
+                if(feedback_fresh && control_status_->position_active)
+                    corridor_->positionFeedback(control_status_->ready,
+                        {control_status_->hold_position.x,control_status_->hold_position.y});
+                else corridor_->positionFeedbackTimeout({px_,py_});
                 const bool had_heading = corridor_->headingSelected();
                 corridor_command_ = corridor_->update({px_, py_}, yaw_, v_fwd_est_, v_lat_est_,
                                                        local_now, pose_fresh);
@@ -4823,6 +4848,8 @@ private:
                 number("corridor_cloud_receive_age_s", corridor_cloud_received_at_ >= 0.0
                     ? steady_seconds() - corridor_cloud_received_at_ : -1.0);
                 number("gates_passed", corridor_->gatesPassed());
+                number("corridor_position_active",corridor_->positionActive());
+                value("control_interface",corridor_command_.position_control ? "position" : "velocity");
                 diagnostics.status.push_back(status);
             }
             if (publish_finished) completed_goal = goal_header_;
@@ -4830,6 +4857,13 @@ private:
                 control.header = cmd.header; control.mission = goal_header_; control.velocity = cmd.twist;
                 control.altitude = drop_command_altitude_; control.vertical_speed_limit = drop_command_speed_;
                 control.release_index = visual_drop_.release_index(); control.target_id = visual_drop_.target_id();
+                if(corridor_active && corridor_command_.position_control) {
+                    control.control_mode=acfly_interfaces::msg::ExplorationCommand::POSITION;
+                    control.header.frame_id="camera_init";
+                    control.position.x=corridor_command_.target.x;control.position.y=corridor_command_.target.y;
+                    control.position.z=control.altitude;control.yaw=corridor_->targetYaw();
+                    control.release_index=0;control.target_id=0;control.velocity=geometry_msgs::msg::Twist();
+                }
                 publish_control = true;
             }
         }
@@ -4951,6 +4985,9 @@ private:
     Vec2 drop_entry_object_{};
     std::uint64_t drop_entry_track_ = 0;
     rclcpp::Publisher<acfly_interfaces::msg::ExplorationCommand>::SharedPtr control_pub_;
+    rclcpp::Subscription<acfly_interfaces::msg::ExplorationControlStatus>::SharedPtr control_status_sub_;
+    std::optional<acfly_interfaces::msg::ExplorationControlStatus> control_status_;
+    double control_status_received_=-1;
     rclcpp::Subscription<acfly_interfaces::msg::ExplorationContext>::SharedPtr context_sub_;
     rclcpp::Subscription<acfly_interfaces::msg::DropStatus>::SharedPtr drop_status_sub_;
     bool corridor_disabled_for_goal_ = false;

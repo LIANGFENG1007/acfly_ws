@@ -117,9 +117,11 @@ void movingRotation() {
 }
 
 // 同一组真实墙点/门点，不同机头朝向下的世界系轨迹必须完全一致。
-Path2 fly(double yaw, double corridor_angle) {
+Path2 fly(double yaw, double corridor_angle, bool position_mode=false) {
     CorridorConfig cfg;
     cfg.nearest_cardinal_yaw=params::CORRIDOR_NEAREST_CARDINAL_YAW;
+    cfg.position_control=position_mode;
+    cfg.position_acceleration=params::CORRIDOR_POSITION_ACCEL_MPS2;
     cfg.perception.robot_width=params::CORRIDOR_ROBOT_WIDTH;
     cfg.perception.corridor_width=params::CORRIDOR_WIDTH;
     cfg.approach_distance=params::CORRIDOR_APPROACH_M;
@@ -145,17 +147,43 @@ Path2 fly(double yaw, double corridor_angle) {
     }
     CorridorController controller(cfg);controller.configure(entry,goal);controller.start({0,0},0);
     Vec2 position{},velocity{};Path2 track;bool finished=false;
-    double minimum_clearance=10;
+    double minimum_clearance=10,first_position=-1;Vec2 handover_anchor{};
+    Vec2 last_reference{},last_reference_velocity{};
+    bool have_reference=false;double peak_reference_acceleration=0;
     const double response=1-std::exp(-dt/.15);
     for(int tick=1;tick<=5000;++tick) {
         const double now=tick*dt;
         if(tick%5==1) controller.observe(cloud,now,position);
         const double vf=std::cos(yaw)*velocity.x+std::sin(yaw)*velocity.y;
         const double vl=-std::sin(yaw)*velocity.x+std::cos(yaw)*velocity.y;
+        if(controller.positionActive()) controller.positionFeedback(now-first_position>=.4,handover_anchor);
         const auto cmd=controller.update(position,yaw,vf,vl,now,true);
         require(std::abs(angle(controller.targetYaw()-yaw))<1e-12 && std::abs(cmd.yaw_rate)<1e-12,
                 "corridor tried to change the selected heading");
-        const auto desired=world(cmd,yaw);
+        Vec2 desired=world(cmd,yaw);
+        if(cmd.position_control) {
+            require(cmd.forward==0 && cmd.lateral==0 && cmd.yaw_rate==0,"position mode produced custom velocity command");
+            if(first_position<0) {first_position=now;handover_anchor=position;}
+            require(std::hypot(cmd.target.x-position.x,cmd.target.y-position.y)<=cfg.position_lead+.02,
+                    "position reference ran away from the aircraft");
+            if(have_reference) {
+                const Vec2 reference_velocity{(cmd.target.x-last_reference.x)/dt,(cmd.target.y-last_reference.y)/dt};
+                const double acceleration=std::hypot(reference_velocity.x-last_reference_velocity.x,
+                                                      reference_velocity.y-last_reference_velocity.y)/dt;
+                peak_reference_acceleration=std::max(peak_reference_acceleration,acceleration);
+                require(acceleration<=cfg.position_acceleration+1e-6,
+                        "position reference made an abrupt turn/stop across entry or door phases: "+std::to_string(acceleration));
+                last_reference_velocity=reference_velocity;
+                require(CorridorPerception::pathClear(cloud,last_reference,cmd.target,cfg.perception.robot_width*.5),
+                        "smoothed reference cut through a door frame");
+                if(cmd.status=="Position: aligning before door")
+                    require(frame.longitudinal(cmd.target)>=frame.longitudinal(last_reference)-1e-9,
+                            "door alignment pulled the smooth reference back to an old staging point");
+            }
+            last_reference=cmd.target;have_reference=true;
+            // Independent toy FCU response. Production corridor emits only the position, never this velocity.
+            desired={1.2*(cmd.target.x-position.x),1.2*(cmd.target.y-position.y)};
+        }
         velocity.x+=response*(desired.x-velocity.x);velocity.y+=response*(desired.y-velocity.y);
         position.x+=velocity.x*dt;position.y+=velocity.y*dt;track.push_back(position);
         for(const auto& p : cloud)
@@ -164,16 +192,16 @@ Path2 fly(double yaw, double corridor_angle) {
     }
     require(finished && controller.gatesPassed()==2, "two doors and H not completed");
     require(minimum_clearance>cfg.perception.robot_width*.5, "body intersected a door or wall");
-    std::cout << "heading=" << yaw*180/pi << " corridor rotation=" << corridor_angle*180/pi
+    std::cout << "position_mode=" << position_mode << " heading=" << yaw*180/pi << " corridor rotation=" << corridor_angle*180/pi
               << " seconds=" << track.size()*dt << " gates=" << controller.gatesPassed()
-              << " clearance=" << minimum_clearance << '\n';
+              << " clearance=" << minimum_clearance << " reference_accel=" << peak_reference_acceleration << '\n';
     return track;
 }
 void frameInvariance() {
-    for(double rotation : {0.,rad(23)}) {
-        const auto reference=fly(-pi/2,rotation);
+    for(bool position_mode : {false,true}) for(double rotation : {0.,rad(23)}) {
+        const auto reference=fly(-pi/2,rotation,position_mode);
         for(double yaw : {0.,pi/2,pi}) {
-            const auto result=fly(yaw,rotation);
+            const auto result=fly(yaw,rotation,position_mode);
             require(reference.size()==result.size(), "body heading changed world-route timing");
             for(size_t i=0;i<result.size();++i)
                 require(std::hypot(reference[i].x-result[i].x,reference[i].y-result[i].y)<1e-8,
@@ -181,10 +209,100 @@ void frameInvariance() {
         }
     }
 }
+
+void positionHandover() {
+    CorridorConfig cfg;cfg.position_control=true;cfg.descend_before_entry=true;cfg.settle_time=0;
+    CorridorController c(cfg);c.configure({1,0},{1,-6});c.start({0,0},0);c.set_altitude_ready(false);
+    auto cmd=c.update({0,0},rad(20),0,0,.02,true);
+    require(!cmd.position_control && cmd.yaw_rate<0,"position interface activated before turning");
+    cmd=c.update({0,0},0,0,0,.04,true);
+    require(!cmd.position_control && c.rotationDone(),"position interface activated before height readiness");
+    c.set_altitude_ready(true);cmd=c.update({.05,.02},0,0,0,.06,true);
+    require(cmd.position_control && cmd.target.x==.05 && cmd.target.y==.02,"first requested position jumped to entry");
+    cmd=c.update({.10,.02},0,0,0,.08,true);
+    require(cmd.target.x==.05,"waiting for acknowledgement followed drift");
+    c.positionFeedback(false,{.08,.02});cmd=c.update({.12,.02},0,0,0,.10,true);
+    require(cmd.target.x==.08,"planner failed to use the main controller's fixed handover anchor");
+    c.positionFeedback(true,{.08,.02});c.set_altitude_ready(false);
+    cmd=c.update({.12,.02},0,0,0,.12,true);
+    require(cmd.position_control && cmd.forward==0 && cmd.lateral==0,"height recovery reverted to velocity mode");
+    c.positionFeedbackTimeout({.13,.02});cmd=c.update({.14,.02},0,0,0,.14,true);
+    require(cmd.target.x==.13,"lost feedback did not stop forward reference advancement");
+    c.positionFeedbackTimeout({.15,.02});cmd=c.update({.15,.02},0,0,0,.16,true);
+    require(cmd.target.x==.13,"lost feedback repeatedly moved the holding anchor");
+    c.reset();require(!c.positionActive(),"reset retained position control request");
+    std::cout<<"position handover sequencing, drop-height wait, missing ACK and reset passed\n";
+}
+
+void positionReferenceLag() {
+    CorridorConfig cfg;cfg.position_control=true;cfg.settle_time=0;cfg.position_acceleration=.3;
+    CorridorController c(cfg);c.configure({0,0},{0,-6});c.start({-2,0},0);
+    Vec2 position{-2,0},previous=position,previous_velocity{};
+    Path2 cloud;
+    for(int i=0;i<=240;++i) {cloud.push_back({-.75,-.5-i*.025});cloud.push_back({.75,-.5-i*.025});}
+    double parked_x=0;bool resumed=false;
+    for(int i=1;i<=700;++i) {
+        const double now=i*dt;
+        if(i%5==1) c.observe(cloud,now,position);
+        if(c.positionActive()) c.positionFeedback(true,{-2,0});
+        // 停住的飞机不能让参考点在40cm处走走停停；飞机缓慢跟上后再平滑推进。
+        if(i>400) position.x+=.1*dt;
+        const auto cmd=c.update(position,0,0,0,now,true);
+        require(cmd.position_control,"lag fixture lost position interface");
+        const Vec2 v{(cmd.target.x-previous.x)/dt,(cmd.target.y-previous.y)/dt};
+        require(std::hypot(v.x-previous_velocity.x,v.y-previous_velocity.y)/dt<=cfg.position_acceleration+1e-6,
+                "reference snapped at maximum lead or when aircraft resumed tick="+std::to_string(i)+
+                " accel="+std::to_string(std::hypot(v.x-previous_velocity.x,v.y-previous_velocity.y)/dt)+" "+cmd.status);
+        require(std::hypot(cmd.target.x-position.x,cmd.target.y-position.y)<=cfg.position_lead+1e-8,
+                "reference lead grew beyond configured limit");
+        if(i==400) parked_x=cmd.target.x;
+        if(i>500 && cmd.target.x>parked_x+.1) resumed=true;
+        previous=cmd.target;previous_velocity=v;
+    }
+    require(parked_x>-1.61 && parked_x<=-1.60+1e-8 && resumed,
+            "reference failed to stop at lead bound or resume following");
+    std::cout<<"smooth reference lead limit and slow-aircraft recovery passed\n";
+}
+
+void earlyDiagonalApproach() {
+    for(double side : {-1.,1.}) for(bool blocked : {false,true}) {
+        CorridorConfig cfg;cfg.position_control=true;cfg.settle_time=0;
+        cfg.approach_distance=.8;cfg.center_tolerance=.15;cfg.perception.robot_width=.64;
+        CorridorPerception frame(cfg.perception);frame.setFrame({0,0},{0,-6});
+        Path2 cloud;
+        for(int i=20;i<=260;++i) {
+            cloud.push_back(frame.toWorld(i*.025,-.75));cloud.push_back(frame.toWorld(i*.025,.75));
+        }
+        const double center=side*.2;
+        for(int i=0;i<=60;++i) {
+            const double lateral=-.75+i*.025;
+            if(std::abs(lateral-center)>=.45) cloud.push_back(frame.toWorld(2.,lateral));
+        }
+        // 中线可走，但提前斜向门中心的整段会擦到这一个实测障碍点。
+        if(blocked) cloud.push_back(frame.toWorld(.75,side*.39));
+        CorridorController c(cfg);c.configure({0,0},{0,-6});c.start({0,0},0);
+        double lateral=0;bool seen=false;
+        for(int tick=1;tick<=100;++tick) {
+            const double now=tick*dt;
+            if(tick%5==1)c.observe(cloud,now,{0,0});
+            if(c.positionActive())c.positionFeedback(true,{0,0});
+            const auto cmd=c.update({0,0},0,0,0,now,true);
+            if(c.gateLocked())seen=true;
+            require(cmd.position_control,"diagonal approach lost position interface");
+            lateral=frame.lateral(cmd.target);
+            require(CorridorPerception::pathClear(cloud,{0,0},cmd.target,.32),
+                    "early diagonal reference intersected measured obstacle");
+        }
+        require(seen,"diagonal fixture did not confirm the door");
+        if(blocked)require(std::abs(lateral)<1e-8,"early diagonal ignored a blocking measured point");
+        else require(lateral*side>.025,"clear door waited for fixed approach distance instead of approaching diagonally");
+    }
+    std::cout<<"early left/right diagonal approach and blocked-segment rejection passed\n";
+}
 }
 
 int main() {
-    try {selection();movingRotation();frameInvariance();}
+    try {selection();movingRotation();positionHandover();positionReferenceLag();earlyDiagonalApproach();frameInvariance();}
     catch(const std::exception& e) {std::cerr << "FAIL: " << e.what() << '\n';return 1;}
     std::cout << "corridor nearest-heading tests passed\n";
 }

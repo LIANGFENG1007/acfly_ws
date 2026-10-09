@@ -2359,13 +2359,47 @@ void home_straight_descent_regression()
     node.yaw_=node.corridor_->targetYaw();node.on_timer();
     require(node.corridor_->rotationDone() && node.corridor_->phase()==CorridorPhase::Rotate,
             "entry translation began before Z was ready");
+    require(last_control.control_mode==acfly_interfaces::msg::ExplorationCommand::VELOCITY,
+            "position interface engaged before descent was complete");
     node.pz_=node.corridor_flight_z_;node.yaw_+=2*node.ccfg_.heading_tolerance;node.on_timer();
     require(node.corridor_->phase()==CorridorPhase::Rotate && last_control.velocity.angular.z<0,
             "entry used a stale aligned heading after yaw drift during descent");
+    require(last_control.control_mode==acfly_interfaces::msg::ExplorationCommand::VELOCITY,
+            "position interface engaged before heading was complete");
     node.yaw_=node.corridor_->targetYaw();node.on_timer();
     require(node.corridor_->phase()==CorridorPhase::Entry,"aligned heading and height failed to release entry");
+    require(last_control.control_mode==acfly_interfaces::msg::ExplorationCommand::POSITION &&
+            last_control.header.frame_id=="camera_init" && last_control.position.x==node.px_ &&
+            last_control.position.y==node.py_ && last_control.position.z==.05 &&
+            last_control.altitude==.05 && last_control.yaw==node.corridor_->targetYaw() &&
+            last_control.release_index==0 && last_control.velocity==geometry_msgs::msg::Twist(),
+            "position handover envelope lost current XY / target height / absolute yaw");
+    const auto anchor=last_control.position;
+    node.px_+=.05;node.pz_=-.05;node.on_timer();
+    require(last_control.position==anchor && node.corridor_command_.status=="Position: waiting for main handover",
+            "planner advanced position without main handover or followed dropped height");
+    auto feedback=std::make_shared<acfly_interfaces::msg::ExplorationControlStatus>();
+    feedback->header.frame_id="camera_init";feedback->header.stamp=node.now();
+    feedback->mission=node.goal_header_;feedback->position_active=true;feedback->ready=false;
+    feedback->hold_position=anchor;feedback->hold_position.x+=.02;
+    const auto deliver=[&] {
+        std::shared_ptr<void> raw=feedback;node.control_status_sub_->handle_message(raw,rclcpp::MessageInfo{});
+    };
+    deliver();node.on_timer();
+    require(last_control.position.x==feedback->hold_position.x && last_control.position.z==.05,
+            "planner did not use main's actual captured handover anchor");
+    feedback->ready=true;deliver();
+    require(!node.control_status_->ready,"duplicate feedback stamp was accepted");
+    feedback->header.stamp=node.now();++feedback->mission.stamp.sec;deliver();
+    require(!node.control_status_->ready,"other mission released the position handover");
+    feedback->mission=node.goal_header_;feedback->header.stamp=node.now()-rclcpp::Duration::from_seconds(1);deliver();
+    require(!node.control_status_->ready,"stale feedback released the position handover");
+    feedback->header.stamp=node.now();deliver();node.on_timer();
+    require(node.corridor_command_.status=="Position: restoring corridor height" && last_control.position.z==.05,
+            "height loss failed to hold XY with unchanged target Z after main readiness");
     ++message->header.stamp.sec;node.on_goal(message);
     require(!node.corridor_->headingSelected(),"new mission retained the previous corridor heading");
+    require(!node.control_status_ && !node.corridor_->positionActive(),"new mission retained old interface feedback");
     require(!node.home_approach_active_ && !node.home_descent_started_ && !node.home_entry_plan_.ok && !node.home_leg_target_ && !node.home_curve_active_,
             "new mission retained old home approach / descent state");
     std::cout << "home approach: direct XY, yaw lock, descent, committed straight motion, moving XY handoff and corridor gates passed\n";

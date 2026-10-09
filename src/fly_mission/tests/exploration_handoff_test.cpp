@@ -70,9 +70,12 @@ Target last_output;
 acfly_interfaces::msg::ExplorationContext last_context;
 acfly_interfaces::msg::DropStatus last_status;
 unsigned status_count=0;
+acfly_interfaces::msg::ExplorationControlStatus control_status;
+unsigned output_count=0;
 extern "C" rcl_ret_t __wrap_rcl_publish(const rcl_publisher_t* publisher,const void* msg,rmw_publisher_allocation_t*) {
     const std::string topic=rcl_publisher_get_topic_name(publisher);
-    if(topic=="/mavros/setpoint_raw/local") last_output=*static_cast<const Target*>(msg);
+    if(topic=="/mavros/setpoint_raw/local") {last_output=*static_cast<const Target*>(msg);++output_count;}
+    if(topic=="/exploration/control_status") control_status=*static_cast<const acfly_interfaces::msg::ExplorationControlStatus*>(msg);
     if(topic=="/exploration/context") last_context=*static_cast<const acfly_interfaces::msg::ExplorationContext*>(msg);
     if(topic=="/exploration/drop_status") {last_status=*static_cast<const acfly_interfaces::msg::DropStatus*>(msg);++status_count;}
     return RCL_RET_OK; // Never send test flight messages over DDS.
@@ -151,6 +154,67 @@ int main(int argc,char** argv) {
         time(101.59);pose();node->on_timer();
         require(last_output.velocity.z>0 && std::abs(last_output.velocity.x-.06)<1e-6,
                 "fresh command failed to resume after cached command expiry");
+        // Real interface handover: final MAVROS mask, uninterrupted publisher,
+        // fixed XY anchor, immediate height recovery, and one-way mode latch.
+        time(102);odom->pose.pose.position.x=4;odom->pose.pose.position.y=2;odom->pose.pose.position.z=.02;pose();
+        command->header.stamp=node->now();command->header.frame_id="camera_init";
+        command->control_mode=acfly_interfaces::msg::ExplorationCommand::POSITION;
+        command->position.x=5;command->position.y=2;command->position.z=.05;command->altitude=.05;
+        command->yaw=M_PI/2;command->release_index=0;
+        const auto valid_position=[&](const auto& c) {
+            return valid_exploration_control(c,node->exploration_goal_header_,node->now().seconds(),
+                params::EXPLORE_CMD_TIMEOUT_S,params::MAX_SPEED_Z);
+        };
+        require(valid_position(*command),"valid position envelope rejected");
+        auto invalid=*command;invalid.header.frame_id="base_link";
+        require(!valid_position(invalid),"position envelope accepted body coordinates");
+        invalid=*command;invalid.position.z=-.03;
+        require(!valid_position(invalid),"position envelope accepted conflicting target heights");
+        invalid=*command;invalid.yaw=std::numeric_limits<double>::quiet_NaN();
+        require(!valid_position(invalid),"position envelope accepted nonfinite yaw");
+        invalid=*command;invalid.control_mode=2;
+        require(!valid_position(invalid),"position envelope accepted unknown interface");
+        invalid=*command;invalid.release_index=1;invalid.target_id=1;
+        require(!valid_position(invalid),"corridor position envelope allowed package release");
+        receive();
+        const auto before=output_count;node->on_timer();
+        require(output_count==before+1 && !control_status.ready,"handover skipped a publish or claimed readiness early");
+        time(102.02);pose();node->on_timer();
+        const auto position_mask=Target::IGNORE_VX|Target::IGNORE_VY|Target::IGNORE_VZ|
+            Target::IGNORE_AFX|Target::IGNORE_AFY|Target::IGNORE_AFZ|Target::IGNORE_YAW_RATE;
+        require(last_output.type_mask==position_mask && last_output.position.x==4 && last_output.position.y==2 &&
+                last_output.position.z==.05 && last_output.velocity.x==0 && last_output.velocity.z==0 &&
+                std::abs(last_output.yaw-M_PI/2)<1e-6 && control_status.position_active && !control_status.ready,
+                "first position frame did not hold actual XY / immediately restore target Z with pure position mask");
+        time(102.04);odom->pose.pose.position.x=4.1;odom->pose.pose.position.z=-.03;pose();node->on_timer();
+        require(last_output.position.x==4 && last_output.position.z==.05,"handover anchor followed drift or captured dropped height");
+        // Simulate elapsed local hold time without sleeps or live hardware.
+        node->drone_.position_started_-=1;
+        time(102.06);pose();node->on_timer();
+        require(control_status.ready && last_output.position.x==5 && last_output.position.z==.05,
+                "position interface did not release the fixed-XY handover");
+        auto old=*command;old.control_mode=acfly_interfaces::msg::ExplorationCommand::VELOCITY;
+        old.header.frame_id="base_link";old.header.stamp=node->now();old.velocity.linear.x=1;
+        node->receive_exploration_control(old);node->drone_.set_velocity_body(1,1,1);
+        require(node->drone_.external_position_active() &&
+                node->exploration_control_.control_mode==acfly_interfaces::msg::ExplorationCommand::POSITION,
+                "late velocity command stole position control");
+        time(102.7);pose();node->on_timer();
+        require(last_output.type_mask==position_mask && last_output.position.x==4.1 &&
+                last_output.position.z==.05 && !control_status.ready,"expired position chased far target or dropped height");
+        time(102.72);odom->pose.pose.position.x=4.2;pose();node->on_timer();
+        require(last_output.position.x==4.1 && last_output.position.z==.05,"watchdog hold anchor followed drift");
+        time(102.74);pose();command->header.stamp=node->now();receive();node->on_timer();
+        time(102.76);pose();node->on_timer();
+        require(!control_status.ready && last_output.position.x==4.1,"resume skipped position handover hold");
+        time(103.2);node->on_timer();
+        require(last_output.type_mask==position_mask && last_output.position.x==4.1 && last_output.position.z==.05,
+                "pose loss switched back to velocity or latched wrong height");
+        time(103.22);pose();node->drone_.land(true);node->drone_.tick();
+        require(last_output.type_mask==position_mask,"H-to-land handover returned to custom velocity PD");
+        node->drone_.stop();node->drone_.enter_exploration();node->drone_.set_velocity_body(.1,0,0);node->drone_.tick();
+        require((last_output.type_mask&Target::IGNORE_PX)!=0,"new mission could not restore exploration velocity mode");
+        std::cout<<"Position handover: pure MAVROS mask, immediate height target, fixed anchor, ACK timing, expiry, pose loss, late commands and reset passed\n";
         std::cout<<"Main handoff: context, real timer order, cached/source expiry, recovery, no expired release, serial failure, climb XY and legacy exclusion passed\n";
     } catch(const std::exception& e) {std::cerr<<e.what()<<'\n';exit_code=1;}
     rclcpp::shutdown();return exit_code;

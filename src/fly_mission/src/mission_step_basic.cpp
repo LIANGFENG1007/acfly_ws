@@ -211,7 +211,7 @@ void FlyMissionNode::step_wait_after_takeoff()
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  探索：首次进入锁高 + 发红点/入口/H；全程转发机体系速度
+//  探索：先转发机体系速度；终点降高/转正后，原子交接真实位置接口执行通道
 //  gx,gy = 探索终点 (SLAM 系，原点=起飞点)
 // ════════════════════════════════════════════════════════════════════════════
 void FlyMissionNode::exploration(double gx, double gy)
@@ -268,8 +268,6 @@ void FlyMissionNode::exploration(double gx, double gy)
                (!unified_control_ || (exploration_steady_seconds() - control_received_ <= params::EXPLORE_CMD_TIMEOUT_S &&
                  valid_exploration_control(exploration_control_, exploration_goal_header_, now().seconds(),
                      params::EXPLORE_CMD_TIMEOUT_S, params::MAX_SPEED_Z)))) {
-        if (unified_control_) drone_.set_exploration_altitude(exploration_control_.altitude,
-                                                            exploration_control_.vertical_speed_limit);
         // The controller publishes before this dispatcher on the next tick.
         // Pass the remaining source/receipt lifetime so its cache cannot send
         // one more old descent command before we get a chance to expire it.
@@ -277,8 +275,15 @@ void FlyMissionNode::exploration(double gx, double gy)
         if (unified_control_) command_age = std::max({command_age,
             now().seconds() - message_seconds(exploration_control_.header.stamp),
             exploration_steady_seconds() - control_received_});
-        drone_.set_velocity_body(ext_v_fwd_, ext_v_lat_, ext_yaw_rate_,
-            std::max(0.0, params::EXPLORE_CMD_TIMEOUT_S - command_age));
+        const double remaining=std::max(0.0,params::EXPLORE_CMD_TIMEOUT_S-command_age);
+        if (unified_control_ && exploration_control_.control_mode==acfly_interfaces::msg::ExplorationCommand::POSITION) {
+            const auto& p=exploration_control_.position;
+            drone_.set_external_position(p.x,p.y,p.z,exploration_control_.yaw,remaining);
+        } else {
+            if (unified_control_) drone_.set_exploration_altitude(exploration_control_.altitude,
+                                                                exploration_control_.vertical_speed_limit);
+            drone_.set_velocity_body(ext_v_fwd_,ext_v_lat_,ext_yaw_rate_,remaining);
+        }
         exploration_drop_tick();
     } else {
         // Freshness belongs to the source stamp, not just the receipt time.
@@ -297,7 +302,7 @@ void FlyMissionNode::exploration(double gx, double gy)
 void FlyMissionNode::receive_exploration_control(const acfly_interfaces::msg::ExplorationCommand& msg)
 {
     if (!explore_entered_ || explore_done_ || state_ != MissionState::EXPLORATION ||
-        msg.mission != exploration_goal_header_ || msg.header.frame_id != "base_link") return;
+        msg.mission != exploration_goal_header_) return;
     if (!valid_exploration_control(msg, exploration_goal_header_, now().seconds(),
         params::EXPLORE_CMD_TIMEOUT_S, params::MAX_SPEED_Z, unified_control_ ? &exploration_control_ : nullptr)) return;
     exploration_control_ = msg;

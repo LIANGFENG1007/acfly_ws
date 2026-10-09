@@ -246,6 +246,7 @@ inline constexpr double AVOID_ARRIVE_SLACK_M  = 0.4;   // ★航点被杆占时�
 //   取值：算法 50Hz 发(20ms 一条)，0.5s 容得下 25 帧抖动，又能较快发现真停了。
 // ---------------------------------------------------------------------------
 inline constexpr double EXPLORE_CMD_TIMEOUT_S = 0.5;
+inline constexpr double CORRIDOR_POSITION_HANDOVER_S = 0.40; // 首帧真实位置指令发出后，固定交接XY保持时长(s)；Z立即使用通道目标高度
 inline constexpr double EXPLORE_LAND_HEADING_HANDOVER_SEC = 0.30; // H点降落前保位/保持当前yaw再交接AUTO.LAND
 
 // 探索红点与后续通道任务，坐标均为 camera_init / SLAM 系 (m)。

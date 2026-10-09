@@ -33,6 +33,7 @@ enum class ActionMode {
     TURN_YAW,    // 转头到目标 yaw
     CIRCLE,      // 绕前方圆心做圆周运动（机头始终朝圆心）
     EXTERNAL_VEL,// 外部算法直接给机体系速度（探索）
+    EXTERNAL_POS,// 通道：直接给飞控XYZ/yaw位置指令，不运行本机PD
     LAND         // 请求 AUTO.LAND等触底
 };
 
@@ -89,6 +90,10 @@ public:
     void expire_external_velocity();
     // Forwarders pass the remaining upstream lifetime; caching cannot renew it.
     void set_velocity_body(double v_fwd, double v_lat, double yaw_rate, double valid_for_seconds = .3);
+    bool set_external_position(double x, double y, double z, double yaw, double valid_for_seconds);
+    bool external_position_active() const { return action_mode_ == ActionMode::EXTERNAL_POS; }
+    bool external_position_ready() const { return external_position_active() && position_ready_; }
+    geometry_msgs::msg::Point external_position_anchor() const;
     // ====================================================================
     //   状态查询
     // ====================================================================
@@ -236,6 +241,7 @@ private:
     // ---- land 请求一次性标记 ----
     bool land_requested_ = false;
     bool land_hold_heading_ = false;
+    bool land_position_mode_ = false;
     std::chrono::steady_clock::time_point land_handover_start_;
 
     // ---- ★起飞段位置环★(params::TAKEOFF_POSITION_MODE) ----
@@ -246,14 +252,17 @@ private:
     //   可能还有残余爬升速度，PD 接管会抽一下。用标志则由状态机决定何时切，切换点在悬停稳定后。
     bool takeoff_pos_mode_ = false;
 
-    // ---- 外部速度（EXTERNAL_VEL：探索算法直接给机体系速度）----
+    // ---- 外部控制：探索速度/通道位置共用时间戳与看门狗 ----
     double       ext_v_fwd_    = 0.0;   // 机体前进 (m/s)
     double       ext_v_lat_    = 0.0;   // 机体横向纠偏 (m/s)
     double       ext_yaw_rate_ = 0.0;   // (rad/s)
     std::chrono::steady_clock::time_point ext_received_{};
-    rclcpp::Time ext_cmd_time_;         // 最近一次收到速度的时间（看门狗用）
+    rclcpp::Time ext_cmd_time_;         // 最近一次更新外部命令缓存的时间（看门狗用）
     double ext_cmd_timeout_ = .3;
-    bool         ext_valid_    = false; // 是否已收到过速度命令
+    bool         ext_valid_    = false; // 是否有有效的外部命令
+    bool position_latched_ = false, position_holding_ = true, position_ready_ = false;
+    double position_hold_x_ = 0, position_hold_y_ = 0;
+    double position_started_ = -1; // 本机steady秒：从首次实际发布位置帧计时
     double explore_z_speed_ = .10;
     bool ext_watchdog_holding_ = false;
     double ext_hold_x_ = 0, ext_hold_y_ = 0;

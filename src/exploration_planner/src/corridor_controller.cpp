@@ -27,7 +27,7 @@ CorridorController::CorridorController(const CorridorConfig& config)
                    cfg_.position_kp, cfg_.velocity_kd, cfg_.velocity_filter_tau, cfg_.arrival_hysteresis,
                    cfg_.heading_tolerance, cfg_.heading_stop, cfg_.point_tolerance,
                    cfg_.stop_speed, cfg_.lookahead, cfg_.approach_distance, cfg_.exit_distance,
-                   cfg_.moving_lookahead, cfg_.center_prediction_time,
+                   cfg_.moving_lookahead, cfg_.center_prediction_time, cfg_.position_lead, cfg_.position_acceleration,
                    cfg_.center_tolerance, cfg_.gate_association, cfg_.cloud_timeout,
                    cfg_.pose_timeout, p.corridor_width, p.robot_width, p.cell_size, p.lookahead,
                    p.wall_min_span, p.max_wall_gap, p.gate_min_span, p.gate_cluster_depth,
@@ -72,6 +72,10 @@ void CorridorController::start(const Vec2& red, double now)
     rotation_done_ = false;
     heading_selected_ = false;
     target_yaw_ = 0.0;
+    position_active_=position_ready_=position_waiting_=position_gate_aligned_=false;
+    position_gate_approach_=false;
+    position_reference_=red;
+    position_reference_velocity_={};
     previous_yaw_rate_ = 0.0;
     settled_since_ = -1.0;
     last_update_ = now;
@@ -139,6 +143,14 @@ bool CorridorController::stable(bool condition, double now)
 
 CorridorCommand CorridorController::hold(const Vec2& position, const std::string& reason)
 {
+    if (position_active_) {
+        if (!position_waiting_ && finite(position)) position_reference_=position;
+        position_waiting_=true;
+        position_reference_velocity_={}; // 定位/交接/高度异常时立即保持，不继续执行旧曲线
+        CorridorCommand cmd;cmd.position_control=true;cmd.target=position_reference_;
+        cmd.path={position,position_reference_};cmd.status=reason;
+        return cmd;
+    }
     previous_velocity_ = {};
     previous_yaw_rate_ = 0.0;
     rotation_hold_.stop();
@@ -193,6 +205,7 @@ CorridorCommand CorridorController::translate(const Vec2& position, double yaw,
                                              double vf, double vl, double dt,
                                              double longitudinal_limit, double min_forward)
 {
+    if (position_active_) return positionCommand(position,target,speed,dt);
     const double error = angle(target_yaw_ - yaw);
     const bool forward_phase = phase_ == CorridorPhase::Search ||
         phase_ == CorridorPhase::Approach || phase_ == CorridorPhase::Cross;
@@ -316,8 +329,9 @@ CorridorCommand CorridorController::translate(const Vec2& position, double yaw,
 }
 
 // 隧道里往前走：纵向恒定 cruise_speed(不低于 min_forward_speed)，只在快到 H 时减速停到 H；
-// 横向目标：平时是原行进线(t=0)，锁定门后离门前沿 approach_distance 内对门中心，保持到门后沿 exit_distance。
-// 看不清(门没确认/墙没看全/点云没更新/认不出的点)一律不停，门的确认/锁定/通过计数照常做。
+// 旧速度横向目标：平时是原行进线(t=0)，门前 approach_distance 内对中；位置接口可提前斜向对中。
+// 旧速度接口保持连续前进；位置接口还要求新鲜点云/扫掠路径可通行，并在门前先对中。
+// 门的确认/锁定/通过计数两种接口共用。
 CorridorCommand CorridorController::forwardCorridor(const Vec2& position, double yaw, double vf, double vl, double dt)
 {
     const double s = perception_.longitudinal(position);
@@ -334,6 +348,8 @@ CorridorCommand CorridorController::forwardCorridor(const Vec2& position, double
             last_gate_back_ = back;
             passed_s_ = back + resolution;
             gate_locked_ = false;
+            position_gate_aligned_=false;
+            position_gate_approach_=false;
             ++gates_passed_;
             // 下一扇门在锁定当前门期间一直在确认，保留它的确认次数；没有候选才重新看一眼
             if (!(candidate_.gate_passable && candidate_.gate_s > passed_s_)) {
@@ -353,6 +369,8 @@ CorridorCommand CorridorController::forwardCorridor(const Vec2& position, double
         candidate_.gate_passable && candidate_.gate_s > passed_s_) {
         locked_gate_ = candidate_;
         gate_locked_ = true;
+        position_gate_aligned_=false;
+        position_gate_approach_=false;
     }
     // 3. 横向目标：平时原行进线(t=0)；锁定门后离门前沿 approach_distance 内对门中心
     double t_ref = 0.0;
@@ -372,12 +390,115 @@ CorridorCommand CorridorController::forwardCorridor(const Vec2& position, double
     phase_ = phase;   // 只用于显示/日志，不重置计时和机头状态
     // 4. 纵向目标总在前方；快到 H 且前面没有要对准的门时指向 H，让它减速停到 H
     Vec2 target = perception_.toWorld(s + cfg_.moving_lookahead, t_ref);
+    if (position_active_ && gate_locked_) {
+        const double front=locked_gate_.gate_s-locked_gate_.gate_depth*.5;
+        const double back=locked_gate_.gate_s+locked_gate_.gate_depth*.5;
+        const double center=.5*(locked_gate_.gap_left+locked_gate_.gap_right);
+        const double before=front-radius-cfg_.continuous_center_reserve;
+        const double staging=std::max({s,perception_.longitudinal(position_reference_),before});
+        const Vec2 staging_point=perception_.toWorld(staging,center);
+        const bool in_alignment_zone=s>=front-cfg_.approach_distance-.05;
+        // 门一经确认且整条斜线可容纳机身，就直接朝门前中心推进。
+        // 不能等到固定距离才横移，也不能在斜向接近后反复切回通道中线。
+        if(!position_gate_approach_ &&
+            CorridorPerception::pathClear(points_,position,staging_point,radius) &&
+            CorridorPerception::pathClear(points_,position_reference_,staging_point,radius))
+            position_gate_approach_=true;
+        if (position_gate_approach_ || in_alignment_zone) {
+            position_gate_approach_=true;
+            const double tolerance=std::min(cfg_.center_tolerance,
+                std::max(.01,(locked_gate_.gap_width-cfg_.perception.robot_width)*.5-.02));
+            const Vec2 axis{(h_.x-entry_.x)/perception_.length(),(h_.y-entry_.y)/perception_.length()};
+            const double cross_speed=-axis.y*filtered_velocity_.x+axis.x*filtered_velocity_.y;
+            const double t=perception_.lateral(position);
+            if (in_alignment_zone && std::abs(t-center)<=tolerance &&
+                std::abs(t+cfg_.center_prediction_time*cross_speed-center)<=tolerance)
+                position_gate_aligned_=true;
+            // 位置接口先对中再贯穿，参考点不能在尚未对中时自行跑到门后。
+            // 参考已领先实机，转入对中时不能再追其后方的旧暂驻点。
+            // 保留已推进的纵向位置，让旧切向逐渐减为零并横向对中；扫掠/刹停检查仍生效。
+            target=perception_.toWorld(position_gate_aligned_
+                ? std::max(back+cfg_.exit_distance,s+cfg_.moving_lookahead) : staging,center);
+            status=position_gate_aligned_ ? "Position: crossing door" :
+                (in_alignment_zone ? "Position: aligning before door" : "Position: diagonally approaching door");
+        }
+    }
     if (near_h && !gate_locked_) {
         target = h_;
         status = "Final approach to H";
     }
     auto cmd = translate(position, yaw, target, cfg_.cruise_speed, vf, vl, dt, -1.0, cfg_.min_forward_speed);
     if (cmd.status.empty()) cmd.status = status;
+    return cmd;
+}
+
+void CorridorController::positionFeedback(bool ready, const Vec2& anchor)
+{
+    if (!position_active_) return;
+    if (!ready && finite(anchor)) {
+        position_reference_=anchor;position_waiting_=true;position_reference_velocity_={};
+    }
+    position_ready_=ready;
+}
+
+void CorridorController::positionFeedbackTimeout(const Vec2& position)
+{
+    if(position_active_ && position_ready_ && finite(position)) {
+        position_reference_=position;position_waiting_=true;position_reference_velocity_={};
+    }
+    position_ready_=false;
+}
+
+CorridorCommand CorridorController::positionCommand(const Vec2& position,const Vec2& target,double speed,double dt)
+{
+    // 仅平滑位置参考的切向速度。主控仍只发XYZ/yaw，实际飞机的速度与纠偏由飞控控制。
+    // 沿用上一拍切向，在对中/穿门/下一段切换时限制速度向量的变化，不能直接折向新目标。
+    const double dx=target.x-position_reference_.x,dy=target.y-position_reference_.y;
+    const double d=std::hypot(dx,dy),acceleration=cfg_.position_acceleration;
+    // 提前收敛到静止目标，防止带着旧切向冲过入口/对中点再反向拉回。
+    const double approach_time=std::max(.5,speed/acceleration);
+    const double previous_speed=std::hypot(position_reference_velocity_.x,position_reference_velocity_.y);
+    const double remaining_lead=std::max(0.0,cfg_.position_lead-distance(position_reference_,position));
+    // 连同本拍位移预留刹停距离，连续收紧推进速度，避免40cm边缘反复硬冻结。
+    const double lead_speed=std::max(0.0,std::sqrt(std::max(0.0,
+        acceleration*acceleration*dt*dt-acceleration*dt*previous_speed+2*acceleration*remaining_lead))
+        -acceleration*dt);
+    const double scale=d>1e-9 ? std::min({speed/d,lead_speed/d,1.0/approach_time}) : 0.0;
+    const Vec2 desired{dx*scale,dy*scale};
+    const auto slew=[&](const Vec2& requested) {
+        const double x=requested.x-position_reference_velocity_.x;
+        const double y=requested.y-position_reference_velocity_.y;
+        const double change=std::hypot(x,y);
+        const double fraction=change>1e-12 ? std::min(1.0,acceleration*dt/change) : 1.0;
+        return Vec2{position_reference_velocity_.x+x*fraction,position_reference_velocity_.y+y*fraction};
+    };
+    const auto integrate=[&](const Vec2& velocity) {
+        return Vec2{position_reference_.x+.5*(position_reference_velocity_.x+velocity.x)*dt,
+                    position_reference_.y+.5*(position_reference_velocity_.y+velocity.y)*dt};
+    };
+    const double radius=cfg_.perception.robot_width*.5;
+    const auto safe=[&](const Vec2& next,const Vec2& velocity) {
+        const double v=std::hypot(velocity.x,velocity.y);
+        // 额外半拍覆盖离散积分最后一拍的停止距离，防止低速时在领先边界触发硬保持。
+        const double stop_time=v/(2*acceleration)+.5*dt;
+        const Vec2 stop{next.x+velocity.x*stop_time,next.y+velocity.y*stop_time};
+        // 检查下一点及沿该切向减速到零所需的整段；不能只看下一小步可走就切入门框。
+        return distance(next,position)<=cfg_.position_lead+1e-9 &&
+            distance(stop,position)<=cfg_.position_lead+1e-9 &&
+            CorridorPerception::pathClear(points_,position,next,radius) &&
+            CorridorPerception::pathClear(points_,position_reference_,next,radius) &&
+            CorridorPerception::pathClear(points_,next,stop,radius);
+    };
+    Vec2 velocity=slew(desired),next=integrate(velocity);
+    bool braking=false;
+    if(!safe(next,velocity)) {
+        // 先沿当前切向平滑刹住；跟不上或靠近墙时，目标不能每拍走一下又突然停一下。
+        velocity=slew({});next=integrate(velocity);braking=true;
+        if(!safe(next,velocity)) return hold(position,"Position: measured path blocked, holding XY");
+    }
+    position_reference_=next;position_reference_velocity_=velocity;position_waiting_=false;
+    CorridorCommand cmd;cmd.position_control=true;cmd.target=next;cmd.path={position,next};
+    if(braking) cmd.status="Position: smoothly slowing reference for clearance / lead";
     return cmd;
 }
 
@@ -416,7 +537,7 @@ CorridorCommand CorridorController::update(const Vec2& position, double yaw, dou
     // With fresh measurements, waiting for wall/door evidence still holds the
     // first waiting position. It must not silently hand XY to the flight controller.
     // Missing pose/cloud data and actual occupied corrections remain stop cases.
-    const bool can_hold = pose_fresh && finite(position) && std::isfinite(yaw) &&
+    const bool can_hold = !position_active_ && pose_fresh && finite(position) && std::isfinite(yaw) &&
         std::isfinite(vf) && std::isfinite(vl) && std::isfinite(now) &&
         now >= evidence_time_ && now - evidence_time_ <= evidence_timeout && !points_.empty() &&
         phase_ != CorridorPhase::Idle && phase_ != CorridorPhase::WaitRoute &&
@@ -452,10 +573,13 @@ CorridorCommand CorridorController::updateMotion(const Vec2& position, double ya
     if (phase_ == CorridorPhase::Idle) return hold(position, "Exploration");
     if (phase_ == CorridorPhase::WaitRoute) return hold(position, "Waiting for entry / H coordinates");
     if (phase_ == CorridorPhase::Done) {
-        auto cmd = hold(h_, "H reached");
+        auto cmd = position_active_ ? positionCommand(position,h_,cfg_.align_speed,dt) : hold(h_, "H reached");
+        cmd.status="H reached";
         cmd.finished = true;
         return cmd;
     }
+    if(position_active_ && (!position_ready_ || (cfg_.descend_before_entry && !altitude_ready_)))
+        return hold(position,!position_ready_ ? "Position: waiting for main handover" : "Position: restoring corridor height");
     if (!heading_selected_) {
         // 仅在本次通道开始后的首个有效位姿上选一次；转向/降高/横移中的漂移不能重选。
         // 用世界系正方向，与通道前进轴分开。相同转角(±45/±135度)按远离0度取整确定方向。
@@ -485,6 +609,12 @@ CorridorCommand CorridorController::updateMotion(const Vec2& position, double ya
             if (!cfg_.descend_before_entry || altitude_ready_) {
                 transition(CorridorPhase::Entry);
                 cmd.status = "Heading aligned: entering corridor";
+                if(cfg_.position_control) {
+                    position_active_=true;position_waiting_=true;position_ready_=false;position_reference_=position;
+                    position_reference_velocity_={};
+                    cmd={};cmd.position_control=true;cmd.target=position;cmd.path={position,position};
+                    cmd.status="Position: requesting handover after height and heading alignment";
+                }
             } else {
                 cmd.status = "Heading aligned: descending to corridor height with XY hold";
             }
@@ -495,7 +625,7 @@ CorridorCommand CorridorController::updateMotion(const Vec2& position, double ya
         ? std::min(cfg_.cloud_window, cfg_.cloud_timeout) : cfg_.cloud_timeout;
     const bool forward_phase = phase_ == CorridorPhase::Search ||
         phase_ == CorridorPhase::Approach || phase_ == CorridorPhase::Cross;
-    if (!forward_phase && (now - evidence_time_ > evidence_timeout || now < evidence_time_ || points_.empty())) {
+    if ((!forward_phase || position_active_) && (now - evidence_time_ > evidence_timeout || now < evidence_time_ || points_.empty())) {
         confirmations_ = 0;
         settled_since_ = -1.0;
         return hold(position, "Waiting for fresh corridor cloud");

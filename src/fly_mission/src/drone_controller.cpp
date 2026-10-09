@@ -303,12 +303,16 @@ void DroneController::tick()
     // AUTO.LAND 接管后不再发送 OFFBOARD 目标，降落仍由飞控负责。
     if (action_mode_ == ActionMode::LAND) {
         if (land_hold_heading_ && is_offboard()) {
-            eff_gx_ = target_x_;
-            eff_gy_ = target_y_;
-            double vx, vy, vz, yr;
-            compute_velocity_command(vx, vy, vz, yr);
-            publish_setpoint(vx, vy, clamp_abs(vz, params::MAX_SPEED_Z_LEVEL),
-                             0.0, target_yaw_);
+            if (land_position_mode_) {
+                publish_position_setpoint(target_x_, target_y_, target_z_, target_yaw_);
+            } else {
+                eff_gx_ = target_x_;
+                eff_gy_ = target_y_;
+                double vx, vy, vz, yr;
+                compute_velocity_command(vx, vy, vz, yr);
+                publish_setpoint(vx, vy, clamp_abs(vz, params::MAX_SPEED_Z_LEVEL),
+                                 0.0, target_yaw_);
+            }
             const double elapsed = std::chrono::duration<double>(
                 std::chrono::steady_clock::now() - land_handover_start_).count();
             if (elapsed < params::EXPLORE_LAND_HEADING_HANDOVER_SEC) {
@@ -324,6 +328,28 @@ void DroneController::tick()
             RCLCPP_INFO(node_->get_logger(), "[降落] 已请求 AUTO.LAND");
         }
         log_progress();
+        return;
+    }
+
+    // 真实位置接口：任何保持/超时路径都只发位置，不调用本机XY/Z/yaw PD。
+    if (action_mode_ == ActionMode::EXTERNAL_POS) {
+        const double local_now = std::chrono::duration<double>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+        const double age = ext_valid_ ? (node_->now()-ext_cmd_time_).seconds() : 1e9;
+        const double local_age = std::chrono::duration<double>(std::chrono::steady_clock::now()-ext_received_).count();
+        const bool stale = !has_fresh_pose() || age<0 || age>ext_cmd_timeout_ ||
+                           local_age<0 || local_age>ext_cmd_timeout_;
+        if (stale) {
+            if (!position_holding_) { position_hold_x_=current_x(); position_hold_y_=current_y(); }
+            position_holding_=true; position_ready_=false; position_started_=-1;
+        } else {
+            if (position_started_<0) position_started_=local_now;
+            position_ready_=local_now-position_started_>=params::CORRIDOR_POSITION_HANDOVER_S;
+            if (position_ready_) position_holding_=false;
+        }
+        // 超时只冻结XY；不能把掉高后的实际Z重新锁为目标，也不能继续远处的旧位置目标。
+        publish_position_setpoint(position_holding_ ? position_hold_x_ : target_x_,
+                                  position_holding_ ? position_hold_y_ : target_y_, target_z_, target_yaw_);
         return;
     }
 
@@ -409,6 +435,7 @@ void DroneController::log_progress()
         case ActionMode::TURN_YAW: tag = "[转向]"; break;
         case ActionMode::CIRCLE:   tag = "[环绕]"; break;
         case ActionMode::EXTERNAL_VEL: tag = "[探索]"; break;
+        case ActionMode::EXTERNAL_POS: tag = "[通道位置]"; break;
         case ActionMode::HOLD:     tag = "[悬停]"; break;
         case ActionMode::LAND:     tag = "[降落]"; break;
         case ActionMode::IDLE:     return;
@@ -575,7 +602,7 @@ void DroneController::publish_setpoint(double vx, double vy, double vz, double y
 }
 
 // ============================================================================
-//   ★位置 setpoint 出口★(起飞段 "打点上去" 用)
+//   ★位置 setpoint 出口★(起飞打点，以及终点降高转正后的通道位置接口)
 //   直接发目标位置 + 目标 yaw，屏蔽速度/加速度/yaw_rate(与速度环出口正好互补)，
 //   由飞控内部位置环飞过去。本程序在这一段不算速度、不做 PD 矫正。
 //   前提：飞控 local 位置估计与 SLAM/camera_init 同源(见 params 的开关注释)。
@@ -696,6 +723,7 @@ bool DroneController::is_reached_tol(double tol_xy) const
     }
 
     case ActionMode::EXTERNAL_VEL:
+    case ActionMode::EXTERNAL_POS:
         // 探索是否结束由算法的 /exploration/finished 决定，drone_ 自身不判定
         return false;
 
@@ -778,6 +806,11 @@ std::string DroneController::progress_string() const
         break;
     }
 
+    case ActionMode::EXTERNAL_POS: {
+        std::snprintf(buf,sizeof(buf),"位置目标(%.3f,%.3f,%.3f) yaw %.1f° %s",target_x_,target_y_,target_z_,
+            target_yaw_*180/M_PI,position_ready_?"运行":"交接/保持");
+        break;
+    }
     case ActionMode::EXTERNAL_VEL: {
         const double rel_h = cz - home_z_;
         std::snprintf(buf, sizeof(buf),
@@ -849,6 +882,7 @@ void DroneController::stop()
     settle_valid_ = false;
     circle_active_ = false;
     takeoff_pos_mode_ = false;   // 起飞途中中止：退出位置环(IDLE 分支自己会按开关发占位)
+    position_latched_=false; position_ready_=false; position_holding_=true; position_started_=-1;
     // ★落平台下降模式也必须复位★：它把 MOVE_POSE 的垂直限速从平飞档 0.1m/s 放开到
     //   PLAT_DESCEND_SPD(0.2)。若在 TRACK_LAND 期间失锁/中止，状态机跳走了但这个标志
     //   还留着 true → 之后所有 MOVE_POSE(追踪小车、视觉锁定)都用大限速，
@@ -1044,6 +1078,7 @@ void DroneController::exit_takeoff_position_mode()
 void DroneController::land(bool preserve_heading)
 {
     if (action_mode_ != ActionMode::LAND) {
+        land_position_mode_ = action_mode_ == ActionMode::EXTERNAL_POS;
         land_hold_heading_ = preserve_heading && has_pose_.load();
         if (land_hold_heading_) {
             target_x_ = current_pose_.pose.position.x;
@@ -1310,6 +1345,7 @@ void DroneController::wait_time(double seconds)
 // ============================================================================
 void DroneController::enter_exploration()
 {
+    position_latched_=false; position_ready_=false; position_holding_=true; position_started_=-1;
     // 锁定当前高度为探索期间的保持高度
     explore_z_ = current_pose_.pose.position.z;
     ext_v_fwd_ = ext_v_lat_ = ext_yaw_rate_ = 0.0;
@@ -1346,6 +1382,7 @@ void DroneController::expire_external_velocity()
 
 void DroneController::set_velocity_body(double v_fwd, double v_lat, double yaw_rate, double valid_for_seconds)
 {
+    if (position_latched_) return; // 迟到的旧速度不能夺回本次通道控制权；仅新任务/stop清除
     if (!std::isfinite(v_fwd) || !std::isfinite(v_lat) || !std::isfinite(yaw_rate) ||
         !std::isfinite(valid_for_seconds) || valid_for_seconds < 0) return;
     if (action_mode_ != ActionMode::EXTERNAL_VEL) {
@@ -1360,6 +1397,35 @@ void DroneController::set_velocity_body(double v_fwd, double v_lat, double yaw_r
     ext_received_ = std::chrono::steady_clock::now();
     ext_cmd_timeout_ = std::min(.3, valid_for_seconds);
     ext_valid_    = true;
+}
+
+bool DroneController::set_external_position(double x, double y, double z, double yaw, double valid_for_seconds)
+{
+    if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z) || !std::isfinite(yaw) ||
+        !std::isfinite(valid_for_seconds) || valid_for_seconds<=0 || !has_fresh_pose() ||
+        !is_armed_offboard()) return false;
+    if (!position_latched_) {
+        if (action_mode_!=ActionMode::EXTERNAL_VEL) return false;
+        position_latched_=true; position_holding_=true; position_ready_=false; position_started_=-1;
+        position_hold_x_=current_x(); position_hold_y_=current_y();
+        ext_v_fwd_=ext_v_lat_=ext_yaw_rate_=0;
+        reset_for_new_action(settle_valid_,wait_active_);
+        RCLCPP_INFO(node_->get_logger(),"[通道位置交接] 首帧保持XY(%.3f,%.3f)，Z立即恢复到%.3f，yaw=%.1f°；使用飞控位置接口",
+            position_hold_x_,position_hold_y_,z,yaw*180/M_PI);
+    }
+    if (action_mode_!=ActionMode::EXTERNAL_VEL && action_mode_!=ActionMode::EXTERNAL_POS) return false;
+    action_mode_=ActionMode::EXTERNAL_POS;
+    target_x_=x;target_y_=y;target_z_=z;target_yaw_=wrap_pi(yaw);
+    ext_cmd_time_=node_->now();ext_received_=std::chrono::steady_clock::now();
+    ext_cmd_timeout_=std::min(.3,valid_for_seconds);ext_valid_=true;
+    return true;
+}
+
+geometry_msgs::msg::Point DroneController::external_position_anchor() const
+{
+    geometry_msgs::msg::Point point;
+    point.x=position_hold_x_;point.y=position_hold_y_;point.z=target_z_;
+    return point;
 }
 
 // ============================================================================

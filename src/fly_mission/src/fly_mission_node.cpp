@@ -58,6 +58,7 @@ FlyMissionNode::FlyMissionNode()
     const auto latched = rclcpp::QoS(1).transient_local();
     exploration_context_pub_ = create_publisher<acfly_interfaces::msg::ExplorationContext>("/exploration/context", latched);
     drop_status_pub_ = create_publisher<acfly_interfaces::msg::DropStatus>("/exploration/drop_status", latched);
+    control_status_pub_ = create_publisher<acfly_interfaces::msg::ExplorationControlStatus>("/exploration/control_status",rclcpp::QoS(1));
     exploration_control_sub_ = create_subscription<acfly_interfaces::msg::ExplorationCommand>(
         "/exploration/control", rclcpp::QoS(1),
         [this](const acfly_interfaces::msg::ExplorationCommand::SharedPtr msg) { receive_exploration_control(*msg); });
@@ -221,6 +222,13 @@ FlyMissionNode::FlyMissionNode()
 void FlyMissionNode::on_timer()
 {
     drone_.tick();
+    if (explore_entered_ && state_==MissionState::EXPLORATION) {
+        acfly_interfaces::msg::ExplorationControlStatus status;
+        status.header.stamp=now();status.header.frame_id="camera_init";status.mission=exploration_goal_header_;
+        status.position_active=drone_.external_position_active();status.ready=drone_.external_position_ready();
+        status.hold_position=drone_.external_position_anchor();
+        control_status_pub_->publish(status); // tick之后发布：ready不早于首个位置帧及固定XY交接期
+    }
 
     // ★Arduino 非阻塞发送泵★：把 arduino_send_async() 排队的字节往串口写一点。
     //   非阻塞(O_NONBLOCK + 不 tcdrain/不 usleep)，没东西发时直接返回，零开销。

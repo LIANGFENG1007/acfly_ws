@@ -106,8 +106,11 @@ inline constexpr double VISION_TARGET_STOP_SPEED_MPS = 0.05; // 兼容旧配置�
 
 // 探索终点后的走廊任务。入口/H 坐标由 fly_mission 的参数区发送，均为 camera_init 系。
 // true: 到探索终点等待路线，然后转向、进入、穿门、到 H 才 finished。
-// false: 保留到探索终点即完成的流程。过门始终使用速度接口，以执行 0.3m/s 限速。
+// false: 保留到探索终点即完成的流程。通道控制接口由 CORRIDOR_POSITION_CONTROL 选择。
 inline constexpr bool CORRIDOR_ENABLED = true;
+inline constexpr bool CORRIDOR_POSITION_CONTROL = true; // 降高和转正完成后改发真实位置接口；探索/终点转向仍用速度
+inline constexpr double CORRIDOR_POSITION_LEAD_M = 0.40; // 位置参考最多领先实际XY距离(m)，限制目标跑远；不是速度PD
+inline constexpr double CORRIDOR_POSITION_ACCEL_MPS2 = 0.30; // 位置参考加速度上限(m/s²)：入口/对门/出门时连续改变推进方向；实际纠偏由飞控负责
 inline constexpr bool CORRIDOR_NEAREST_CARDINAL_YAW = true; // true: 到终点后转到最近的0/±90/180度，选一次并保持到H；false: 使用下面固定角度
 inline constexpr double CORRIDOR_INITIAL_YAW_DEG = -90.0; // 仅关闭最近转正时使用的固定航向(度)
 inline constexpr double CORRIDOR_WIDTH = 1.5; // 两侧墙搜索范围(m)，不把道路中线当成门中心
@@ -115,8 +118,10 @@ inline constexpr double CORRIDOR_ROBOT_WIDTH = 0.64; // x500仿真含桨完整�
 // 实机 Point-LIO 默认输出；仿真 launch 在启动稠密转换节点后单独覆盖此参数。
 inline constexpr const char* CORRIDOR_CLOUD_TOPIC = "/cloud_registered";
 inline constexpr double CORRIDOR_MIN_GAP_EXTRA = 0.0; // 机宽以外额外要求(m)，默认不额外膨胀
+// 位置接口下这是位置参考的推进速度(m/s)，实际速度与加减速由飞控位置环控制。
 inline constexpr double CORRIDOR_ENTRY_SPEED = 0.30;
 inline constexpr double CORRIDOR_CRUISE_SPEED = 0.30;
+// 下列速度下限/横向速度及加速度只用于旧速度接口；位置接口不在本机计算纠偏速度。
 inline constexpr double CORRIDOR_MIN_FORWARD_SPEED = 0.30; // ★隧道里前进速度下限(m/s)★ 2026-09-26 用户定(0.2→0.3)：整个隧道都不低于它(涡流里太慢推不动)；只在快到 H、门还没确认时减速
 inline constexpr double CORRIDOR_LATERAL_SPEED = 0.45;     // ★隧道里横向纠偏速度上限(m/s)★ 和前进分开算；门前 0.6 m 内要横移到门中心，门偏得多要调大
 inline constexpr double CORRIDOR_LATERAL_ACCEL = 0.60;     // 隧道里横向指令斜坡(m/s²)
@@ -127,8 +132,8 @@ inline constexpr double CORRIDOR_YAW_KP = 1.60;
 inline constexpr double CORRIDOR_MAX_YAW_RATE = 0.60;
 inline constexpr double CORRIDOR_YAW_ACCEL = 1.20;
 inline constexpr double CORRIDOR_ACCEL = 0.30;
-inline constexpr double CORRIDOR_POSITION_KP = 0.80; // 位置误差到平移速度(1/s)，接近入口/门/H提前减速
-inline constexpr double CORRIDOR_VELOCITY_KD = 0.35; // 实测速度阻尼，减少到点冲过后反向修正
+inline constexpr double CORRIDOR_POSITION_KP = 0.80; // 本机XY保持/旧速度接口增益(1/s)；切入真实位置接口后不使用
+inline constexpr double CORRIDOR_VELOCITY_KD = 0.35; // 本机XY保持/旧速度接口阻尼；切入真实位置接口后不使用
 inline constexpr double CORRIDOR_VELOCITY_FILTER_S = 0.15; // 平移速度估计滤波(s)，用于阻尼和停稳判定
 inline constexpr double CORRIDOR_ARRIVAL_HYSTERESIS = 1.50; // 到点后偏离超过此倍容差才重新对位
 inline constexpr double CORRIDOR_YAW_TOL_DEG = 5.0;
@@ -137,7 +142,7 @@ inline constexpr double CORRIDOR_POINT_TOL = 0.25;
 inline constexpr double CORRIDOR_STOP_SPEED = 0.04; // 兼容旧配置保留，转向和H点交接不再等待此速度
 inline constexpr double CORRIDOR_SETTLE_S = 0.25;
 inline constexpr double CORRIDOR_LOOKAHEAD = 0.25;
-inline constexpr double CORRIDOR_APPROACH_M = 0.80; // 提前在门前此距离附近完成对中(m)，中间点不要求停稳
+inline constexpr double CORRIDOR_APPROACH_M = 0.80; // 旧速度接口开始对中/位置接口进入穿门判定区(m)；位置接口确认安全斜线后提前对中
 inline constexpr bool CORRIDOR_CONTINUOUS_APPROACH = true; // 持续前进并对门中心，原启动命令直接生效
 inline constexpr double CORRIDOR_CONTINUOUS_CENTER_RESERVE = 0.15; // 机体前缘之外的门前对中预留(m)
 inline constexpr double CORRIDOR_CONTINUOUS_TIME_MARGIN = 0.50; // 横向对中时间估计的附加余量(s)

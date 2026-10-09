@@ -25,6 +25,7 @@
 // ============================================================================
 
 #include "fly_mission/drone_controller.hpp"
+#include <acfly_interfaces/msg/exploration_control_status.hpp>
 #include "fly_mission/params.hpp"
 #include "fly_mission/mission_state.hpp"
 #include "fly_mission/find_figure.hpp"
@@ -284,6 +285,7 @@ private:
     }
     rclcpp::Publisher<acfly_interfaces::msg::ExplorationContext>::SharedPtr exploration_context_pub_;
     rclcpp::Publisher<acfly_interfaces::msg::DropStatus>::SharedPtr drop_status_pub_;
+    rclcpp::Publisher<acfly_interfaces::msg::ExplorationControlStatus>::SharedPtr control_status_pub_;
     rclcpp::Subscription<acfly_interfaces::msg::ExplorationCommand>::SharedPtr exploration_control_sub_;
     acfly_interfaces::msg::ExplorationCommand exploration_control_;
     bool unified_control_ = false;
