@@ -51,7 +51,7 @@ void flight(){CorridorConfig cfg;cfg.position_control=true;cfg.wall_entry=true;c
  require(done && c.gatesPassed()==2,"wall entry/two doors stalled");require(clearance>.32,"wall entry hit wall");
 }
 void confirmation(){
- CorridorConfig cfg;cfg.wall_entry=true;cfg.position_control=true;cfg.settle_time=0;cfg.perception.robot_width=.64;cfg.perception.corridor_width=1.5;
+ CorridorConfig cfg;cfg.wall_entry=true;cfg.position_control=true;cfg.settle_time=0;cfg.cloud_window=0;cfg.perception.robot_width=.64;cfg.perception.corridor_width=1.5;
  CorridorController c(cfg);c.configure({100,100},{5,.9});Vec2 red{-.3,-1};c.start(red,0);
  auto cloud=scene();
  for(int i=0;i<2;++i){double t=.02+i*.10;c.observe(cloud,t,red);c.update(red,0,0,0,t,true);}
@@ -63,7 +63,40 @@ void confirmation(){
  require(dist(c.entry(),{-.6,.75})<.04 && dist(c.axis(),{1,0})<.01,"off-center H tilted wall-based centerline");
  auto locked=c.entry();for(auto& p:cloud)p.x+=.2;c.observe(cloud,1,red);c.update(red,0,0,0,1,true);
  require(dist(c.entry(),locked)<1e-12,"new raw endpoint moved locked entrance");
- std::cout<<"independent entrance confirmation, timeout, ignored legacy entry and locked wall centerline passed\n";
+ // A small matching correction uses the same 80/20 weight after confirmation.
+ auto nearby=scene();for(auto& p:nearby)p.x+=.04;
+ c.observe(nearby,1.1,red);c.update(red,0,0,0,1.1,true);
+ require(std::abs(c.entry().x-(locked.x+.008))<.002,"confirmed entrance was not updated by weighted mean");
+ const auto filtered=c.entry();
+ c.observe({},2,red);c.update(red,0,0,0,2,true);
+ require(c.entranceReady() && dist(c.entry(),filtered)<1e-12 && c.entrancePlan().valid,
+     "missing wall scan removed entrance or changed coordinates");
+ c.observe(nearby,3,red);c.update(red,0,0,0,3,true);
+ require(std::abs(c.entry().x-(filtered.x*.8+(locked.x+.04)*.2))<.002,
+     "reacquired entrance did not retain old weighted estimate");
+ c.start(red,3.1);require(!c.entranceReady() && !c.entrancePlan().valid,"new mission retained previous entrance");
+ std::cout<<"independent confirmation, timeout, ignored legacy entry, weighted entrance and persistent memory passed\n";
 }
+void entranceUpdateKeepsGate() {
+ CorridorConfig cfg;cfg.wall_entry=true;cfg.position_control=true;cfg.settle_time=0;cfg.cloud_window=0;
+ cfg.perception.robot_width=.64;cfg.perception.corridor_width=1.5;
+ CorridorController c(cfg);c.configure({100,100},{5,.75});Vec2 red{-.3,-1};c.start(red,0);
+ auto cloud=scene(false,true);
+ for(int i=0;i<5;++i){double t=.02+i*.10;c.observe(cloud,t,red);c.update(red,0,0,0,t,true);}
+ require(c.entranceReady() && c.displayGate().gate_passable && c.gateConfirmations()==3,
+     "fixture did not preconfirm door while holding before entry");
+ const auto before=c.displayGate().gate_center;const auto entry=c.entry();
+ // Shorten the measured near wall by 4 cm; the doorway itself stays in world coordinates.
+ Path2 changed;for(auto p:cloud)if(!(p.x<.04 && std::abs(p.y)<1e-8))changed.push_back(p);
+ c.observe(changed,.62,red);c.update(red,0,0,0,.62,true);
+ require(c.entry().x>entry.x && c.entry().x<entry.x+.04,"entrance was not refined");
+ require(c.displayGate().gate_passable && c.gateConfirmations()==3,"entrance update erased confirmed door");
+ const auto raw=c.observation().gate_center;
+ const Vec2 expected{before.x*.8+raw.x*.2,before.y*.8+raw.y*.2};
+ require(dist(c.displayGate().gate_center,expected)<1e-9,
+     "moving corridor origin corrupted weighted door world coordinates");
+ std::cout<<"entrance refinement preserves remembered door world coordinates and confirmation\n";
 }
-int main(){try{geometry();confirmation();flight();}catch(const std::exception& e){std::cerr<<"FAIL "<<e.what()<<'\n';return 1;}}
+
+}
+int main(){try{geometry();confirmation();entranceUpdateKeepsGate();flight();}catch(const std::exception& e){std::cerr<<"FAIL "<<e.what()<<'\n';return 1;}}

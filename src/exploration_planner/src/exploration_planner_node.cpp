@@ -221,7 +221,7 @@ public:
         ccfg_.gate_association = dd("corridor_gate_assoc_m", params::CORRIDOR_GATE_ASSOC_M);
         ccfg_.confirm_frames = declare_parameter<int>("corridor_confirm_frames", params::CORRIDOR_CONFIRM_FRAMES);
         ccfg_.gate_track_timeout=dd("corridor_gate_track_timeout_s",params::CORRIDOR_GATE_TRACK_TIMEOUT_S);
-        ccfg_.gate_filter_time=dd("corridor_gate_filter_s",params::CORRIDOR_GATE_FILTER_S);
+        ccfg_.detection_new_weight=dd("corridor_detection_new_weight",params::CORRIDOR_DETECTION_NEW_WEIGHT);
         ccfg_.cloud_timeout = dd("corridor_cloud_timeout_s", params::CORRIDOR_CLOUD_TIMEOUT_S);
         ccfg_.cloud_window = dd("corridor_cloud_window_s", params::CORRIDOR_CLOUD_WINDOW_S);
         ccfg_.pose_timeout = dd("corridor_pose_timeout_s", params::CORRIDOR_POSE_TIMEOUT_S);
@@ -4878,6 +4878,8 @@ private:
                 number("corridor_position_active",corridor_->positionActive());
                 number("corridor_position_gate_aligned",corridor_->positionGateAligned());
                 number("corridor_position_recovering",corridor_->positionRecovering());
+                number("corridor_gate_measurement_blocked",corridor_->gateBlocked());
+                number("corridor_detection_new_weight",ccfg_.detection_new_weight);
                 number("corridor_entrance_ready",corridor_->entranceReady());
                 value("corridor_entrance_reason",corridor_->entrancePlan().reason);
                 number("corridor_wall_end_x",corridor_->entrancePlan().wall_end.x);

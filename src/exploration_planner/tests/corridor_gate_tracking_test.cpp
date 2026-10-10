@@ -30,11 +30,11 @@ void intermittentAndWarmup() {
     require(c.gateLocked(),"entry restarted door confirmation after warmup");
     const auto center=c.gate().gate_center;
     observe(c,scene(true,false,.025),.30,0);
-    require(std::hypot(c.displayGate().gate_center.x-center.x,c.displayGate().gate_center.y-center.y)<1e-12,
-        "locked marker followed one noisy raw scan");
+    require(std::abs(c.displayGate().gate_center.x-(center.x*.8+c.observation().gate_center.x*.2))<1e-9,
+        "locked door did not use weighted measurement");
     c.update({0,-3.3},0,0,0,.32,true);
     require(c.gatesPassed()==1 && !c.displayGate().gate_passable,"passed doorway reappeared as an old candidate marker");
-    std::cout<<"3 matching frames across missed rays confirmed during rotation; locked marker stable\n";
+    std::cout<<"3 matching frames across missed rays confirmed during rotation; locked marker uses weighted updates\n";
 }
 void staleAndContradiction() {
     for(bool closed:{false,true}) {
@@ -42,13 +42,14 @@ void staleAndContradiction() {
         observe(c,scene(),.02);observe(c,scene(),.12);
         if(closed)observe(c,scene(true,true),.17);
         else c.update({0,0},.7,0,0,.50,true);
-        require(!c.displayGate().gate_passable && c.gateConfirmations()==0,"stale/closed door retained passable candidate");
+        require(c.displayGate().gate_passable && c.gateConfirmations()==0,"stale/closed scan erased remembered coordinates");
+        if(closed)require(c.gateBlocked(),"closed scan failed to block motion independently of marker");
         observe(c,scene(),.52);
         require(c.gateConfirmations()==1,"stale evidence counted toward new confirmation");
         c.update({0,0},.7,0,0,.53,true);
         require(c.gateConfirmations()==1,"same scan counted twice");
     }
-    std::cout<<"candidate timeout, closed-door contradiction, independent scan counting passed\n";
+    std::cout<<"remembered marker survives timeout/closed scan; confirmation and motion remain independent\n";
 }
 void filteredGeometry() {
     CorridorController c(config());c.configure({0,0},{0,-6});c.start({0,0},0);
@@ -73,6 +74,39 @@ void unrelatedOutlier() {
     observe(c,other,.50);require(std::abs(c.displayGate().gate_s-2.5)<.01 && c.gateConfirmations()==1,"expired candidate prevented reacquisition");
     std::cout<<"unrelated single-frame candidate cannot replace tracked marker\n";
 }
+void confirmedMemoryAndRecovery() {
+    CorridorController c(config());c.configure({0,0},{0,-6});c.start({0,0},0);
+    observe(c,scene(),.02);observe(c,scene(),.12);observe(c,scene(),.22);
+    const auto center=c.displayGate().gate_center;
+    c.update({0,0},.7,0,0,5,true);
+    require(c.displayGate().gate_passable && c.gateConfirmations()==3,"confirmed door expired during long missed scan");
+    observe(c,scene(true,false,.025),5.1);
+    require(std::abs(c.displayGate().gate_center.x-(center.x*.8+c.observation().gate_center.x*.2))<1e-9,
+        "recovery after long gap overweighted first fresh observation");
+    c.update({0,0},0,0,0,5.12,true);c.positionFeedback(true,{0,0});c.update({0,0},0,0,0,5.14,true);
+    require(c.gateLocked(),"retained confirmed door did not activate");
+    const auto locked=c.gate().gate_center;
+    observe(c,scene(true,true),5.2,0);
+    require(c.displayGate().gate_passable && c.gateBlocked(),"closed current door disappeared or remained navigable");
+    const auto stop=c.update({0,0},0,0,0,5.22,true);
+    require(stop.status.find("blocked")!=std::string::npos,"closed door motion was not held");
+    require(c.displayGate().gate_center.x==locked.x,"invalid scan changed tracked center");
+    observe(c,scene(),5.3,0);require(!c.gateBlocked(),"valid opening did not recover from blocked scan");
+    c.update({0,0},0,0,0,8,true);
+    require(c.displayGate().gate_passable,"locked marker erased during cloud dropout");
+    c.start({0,0},8.1);require(!c.displayGate().gate_passable,"new mission inherited old door");
+    std::cout<<"confirmed/locked memory persists, bounded reacquisition weight, blocked motion, mission reset passed\n";
 }
-int main(){try{intermittentAndWarmup();staleAndContradiction();filteredGeometry();unrelatedOutlier();}
+void confirmedIdentity() {
+    CorridorController c(config());c.configure({0,0},{0,-6});c.start({0,0},0);
+    observe(c,scene(),.02);observe(c,scene(),.12);observe(c,scene(),.22);
+    auto other=scene();for(auto& p:other)if(p.y==-2 && std::abs(p.x)<.74)p.y=-2.5;
+    observe(c,other,5.0);
+    require(c.gateConfirmations()==3 && std::abs(c.displayGate().gate_s-2)<.01,
+        "another door replaced confirmed identity after long gap");
+    std::cout<<"confirmed identity cannot be stolen by another door after dropout\n";
+}
+
+}
+int main(){try{intermittentAndWarmup();staleAndContradiction();filteredGeometry();unrelatedOutlier();confirmedMemoryAndRecovery();confirmedIdentity();}
 catch(const std::exception& e){std::cerr<<"FAIL: "<<e.what()<<'\n';return 1;}}

@@ -55,8 +55,8 @@ struct CorridorConfig {
     double center_tolerance = 0.04;
     double gate_association = 0.15;
     int confirm_frames = 3;
-    double gate_track_timeout = .35; // 候选门允许的短暂漏检间隔，不能跨长期断流确认
-    double gate_filter_time = .15; // 候选门中心滤波时间(s)，锁定后不跟单帧抖动走
+    double gate_track_timeout = .35; // 首次确认允许的观测间隔；超时重计未完成的确认，不删除已记住的坐标
+    double detection_new_weight = .20; // 同一门/入口墙端的新观测权重，旧值占1-weight；断流不增大权重
     double cloud_timeout = 0.50;
     double cloud_window = 0.30;
     double pose_timeout = 0.30;
@@ -112,6 +112,7 @@ public:
     bool positionGateAligned() const { return position_gate_aligned_; }
     bool positionRecovering() const { return position_recovering_; }
     int gatesPassed() const { return gates_passed_; }
+    bool gateBlocked() const { return gate_locked_ ? gate_blocked_ : candidate_blocked_; }
 
 private:
     CorridorConfig cfg_;
@@ -157,7 +158,9 @@ private:
     double passed_s_ = -1e9;
     double last_gate_back_ = -1e9;
     bool gate_locked_ = false;
+    bool gate_blocked_ = false, candidate_blocked_ = false;
     bool stable(bool condition, double now);
+    CorridorObservation averageGate(const CorridorObservation& previous, const CorridorObservation& observed) const;
     void confirmGate(const CorridorObservation& observed, double now);
     void trackGate(const Vec2& position, double now);
     void trackEntrance(const Vec2& position, double now);
