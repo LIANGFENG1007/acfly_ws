@@ -2395,8 +2395,15 @@ void home_straight_descent_regression()
     feedback->mission=node.goal_header_;feedback->header.stamp=node.now()-rclcpp::Duration::from_seconds(1);deliver();
     require(!node.control_status_->ready,"stale feedback released the position handover");
     feedback->header.stamp=node.now();deliver();node.on_timer();
-    require(node.corridor_command_.status=="Position: restoring corridor height" && last_control.position.z==.05,
-            "height loss failed to hold XY with unchanged target Z after main readiness");
+    require(node.corridor_command_.status=="Position: restoring initial corridor height" && last_control.position.z==.05,
+            "initial height loss failed to hold XY with unchanged target Z after main readiness");
+    node.pz_=.05;node.on_timer();
+    require(node.corridor_->positionHeightAdmitted(),"initial recovered height did not latch corridor admission");
+    node.pz_=.20;node.on_timer();
+    require(node.corridor_->positionHeightAdmitted() && last_control.position.z==.05 &&
+            last_control.altitude==.05 && last_control.control_mode==acfly_interfaces::msg::ExplorationCommand::POSITION &&
+            node.corridor_command_.status!="Position: restoring initial corridor height",
+            "in-flight Z excursion revoked XY admission or changed target height/interface");
     ++message->header.stamp.sec;node.on_goal(message);
     require(!node.corridor_->headingSelected(),"new mission retained the previous corridor heading");
     require(!node.control_status_ && !node.corridor_->positionActive(),"new mission retained old interface feedback");

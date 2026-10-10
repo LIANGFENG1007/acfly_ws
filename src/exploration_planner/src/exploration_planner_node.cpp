@@ -183,6 +183,7 @@ public:
         ccfg_.position_lateral_max=dd("corridor_position_lateral_max_m",params::CORRIDOR_POSITION_LATERAL_MAX_M);
         ccfg_.position_lateral_brake=dd("corridor_position_lateral_brake_s",params::CORRIDOR_POSITION_LATERAL_BRAKE_S);
         ccfg_.position_lateral_response=dd("corridor_position_lateral_response_s",params::CORRIDOR_POSITION_LATERAL_RESPONSE_S);
+        ccfg_.position_brake_time=dd("corridor_position_brake_s",params::CORRIDOR_POSITION_BRAKE_S);
         ccfg_.wall_entry=declare_parameter<bool>("corridor_wall_entry",params::CORRIDOR_WALL_ENTRY);
         ccfg_.wall_entry_offset=dd("corridor_wall_entry_offset_m",params::CORRIDOR_WALL_ENTRY_OFFSET_M);
         corridor_cloud_topic_ = declare_parameter<std::string>("corridor_cloud_topic", params::CORRIDOR_CLOUD_TOPIC);
@@ -4878,6 +4879,11 @@ private:
                 number("corridor_position_active",corridor_->positionActive());
                 number("corridor_position_gate_aligned",corridor_->positionGateAligned());
                 number("corridor_position_recovering",corridor_->positionRecovering());
+                number("corridor_position_height_admitted",corridor_->positionHeightAdmitted());
+                number("corridor_position_measured_braking",corridor_->positionMeasuredBraking());
+                const auto measured_v=corridor_->measuredVelocity(),reference_v=corridor_->referenceVelocity();
+                number("corridor_measured_vx",measured_v.x);number("corridor_measured_vy",measured_v.y);
+                number("corridor_reference_vx",reference_v.x);number("corridor_reference_vy",reference_v.y);
                 number("corridor_gate_measurement_blocked",corridor_->gateBlocked());
                 number("corridor_detection_new_weight",ccfg_.detection_new_weight);
                 number("corridor_entrance_ready",corridor_->entranceReady());

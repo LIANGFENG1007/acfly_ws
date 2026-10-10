@@ -219,6 +219,10 @@ if(BUILD_TESTING)
     src/corridor_controller.cpp src/corridor_perception.cpp)
   target_compile_features(corridor_position_target_test PRIVATE cxx_std_17)
   add_test(NAME corridor_position_target_test COMMAND corridor_position_target_test)
+  add_executable(corridor_real_flight_test tests/corridor_real_flight_test.cpp
+    src/corridor_controller.cpp src/corridor_perception.cpp)
+  target_compile_features(corridor_real_flight_test PRIVATE cxx_std_17)
+  add_test(NAME corridor_real_flight_test COMMAND corridor_real_flight_test)
   add_executable(corridor_gate_tracking_test tests/corridor_gate_tracking_test.cpp
     src/corridor_controller.cpp src/corridor_perception.cpp)
   target_compile_features(corridor_gate_tracking_test PRIVATE cxx_std_17)

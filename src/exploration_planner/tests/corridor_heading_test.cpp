@@ -171,14 +171,18 @@ Path2 fly(double yaw, double corridor_angle, bool position_mode=false) {
                 const double acceleration=std::hypot(reference_velocity.x-last_reference_velocity.x,
                                                       reference_velocity.y-last_reference_velocity.y)/dt;
                 peak_reference_acceleration=std::max(peak_reference_acceleration,acceleration);
-                require(acceleration<=cfg.position_acceleration+1e-6,
+                const double side_accel=std::max(cfg.position_acceleration,
+                    std::max(cfg.cruise_speed,2*cfg.position_lateral_max/cfg.position_lateral_response)/cfg.position_lateral_response);
+                require(acceleration<=std::hypot(cfg.position_acceleration,side_accel)+1e-6,
                         "position reference made an abrupt turn/stop across entry or door phases: "+std::to_string(acceleration));
                 last_reference_velocity=reference_velocity;
                 require(CorridorPerception::pathClear(cloud,last_reference,cmd.target,cfg.perception.robot_width*.5),
                         "smoothed reference cut through a door frame");
                 if(cmd.status=="Position: aligning before door")
-                    require(frame.longitudinal(cmd.target)>=frame.longitudinal(last_reference)-1e-9,
-                            "door alignment pulled the smooth reference back to an old staging point");
+                    // 实测动量制动可以平滑收回参考；旧的“绝不后退”要求会禁止
+                    // 必要制动。仍禁止从门后瞬跳回暂驻点，并检查上面的加速度约束。
+                    require(frame.longitudinal(last_reference)-frame.longitudinal(cmd.target)<=cfg.cruise_speed*dt+1e-9,
+                            "door alignment jumped back to an old staging point");
             }
             last_reference=cmd.target;have_reference=true;
             // Independent toy FCU response. Production corridor emits only the position, never this velocity.

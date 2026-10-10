@@ -20,6 +20,11 @@ void geometry(){CorridorPerceptionConfig cfg;cfg.corridor_width=1.5;cfg.robot_wi
   require(dist(e.wall_end,rotate({0,0},angle))<.04,"used field wall instead of horizontal wall end");
   require(dist(e.center,rotate({-.6,.75},angle))<.06,"centerline entrance not 60cm outside wall end");
   require(dist(e.staging,rotate({-.6,-1},angle))<.06,"incorrect outside alignment position");
+  auto refined=perception.entrance(cloud,cloud,red,red,h,.6,&e);
+  require(refined.valid && dist(refined.center,e.center)<1e-9,"confirmed wall refinement changed geometry");
+  auto long_cfg=cfg;long_cfg.wall_min_span=1.5;CorridorPerception long_wall(long_cfg);
+  require(long_wall.entrance(cloud,cloud,red,red,h,.6,&e).valid,"confirmed seed shorter than configured wall span");
+  require(!perception.entrance(cloud,{},red,red,h,.6,&e).valid,"confirmed wall bypassed fresh rays");
  }
  const auto p=scene();auto no_rays=perception.entrance(p,{}, {-.3,-1},{-.3,-1},{5,.75},.6);
  require(!no_rays.valid,"unseen aperture accepted as free space");

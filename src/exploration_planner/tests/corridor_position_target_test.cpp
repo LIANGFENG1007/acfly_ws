@@ -57,8 +57,12 @@ void amplifiedTarget() {
             cmd=c.forwardCorridor(p,0,0,0,dt);
             require(cmd.position_control && cmd.forward==0 && cmd.lateral==0,"not pure position interface");
             Vec2 v{(cmd.target.x-last.x)/dt,(cmd.target.y-last.y)/dt};
-            require(norm({v.x-last_v.x,v.y-last_v.y})/dt<=config().position_acceleration+1e-6,"reference jumped during correction");
-            if(gate)require(std::abs(cmd.target.x)<=.053,"target placed in opposite door frame");
+            const double lateral_accel=2*config().position_lateral_max/
+                (config().position_lateral_response*config().position_lateral_response);
+            require(norm({v.x-last_v.x,v.y-last_v.y})/dt<=std::hypot(config().position_acceleration,lateral_accel)+1e-6,
+                "reference jumped during correction");
+            if(gate)require(CorridorPerception::pathClear(c.points_,p,cmd.target,.32),
+                "diagonal reference entered wall/door body envelope");
             last=cmd.target;last_v=v;
         }
         require(side*cmd.target.x<-.025,"position target failed to extend across centerline");

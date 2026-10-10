@@ -327,7 +327,8 @@ CorridorObservation CorridorPerception::analyze(
 }
 
 CorridorEntrance CorridorPerception::entrance(const Path2& points, const Path2& rays,
-    const Vec2& sensor, const Vec2& red, const Vec2& goal, double offset) const {
+    const Vec2& sensor, const Vec2& red, const Vec2& goal, double offset,
+    const CorridorEntrance* confirmed) const {
     CorridorEntrance result;
     const double radius=config_.robot_width*.5, width=config_.corridor_width;
     if(!finite(red)||!finite(goal)||!finite(sensor)||!std::isfinite(offset)||offset<=radius) {
@@ -340,8 +341,17 @@ CorridorEntrance CorridorPerception::entrance(const Path2& points, const Path2& 
     for(auto p:points)if(finite(p))cloud.push_back(p);
     if(cloud.size()<6)return result;
     // 有上限的确定性线假设；仅新点云调用。局部密集点不会使候选数量平方增长。
-    Path2 seeds;const size_t count=std::min<size_t>(64,cloud.size());
-    for(size_t i=0;i<count;++i)seeds.push_back(cloud[i*(cloud.size()-1)/(count-1)]);
+    Path2 seeds;
+    if(confirmed && confirmed->valid) {
+        // 已确认墙的身份不再改变：只在同一墙模型周围用当前实测点重新拟合。
+        // 不在每个20Hz点云帧里重试上千组线假设、长时间占用控制/定位共用锁。
+        const double span=std::max(1.0,config_.wall_min_span+.01);
+        seeds={confirmed->wall_end,{confirmed->wall_end.x+span*confirmed->axis.x,
+                                   confirmed->wall_end.y+span*confirmed->axis.y}};
+    } else {
+        const size_t count=std::min<size_t>(64,cloud.size());
+        for(size_t i=0;i<count;++i)seeds.push_back(cloud[i*(cloud.size()-1)/(count-1)]);
+    }
     const Vec2 to_goal=sub(goal,red);const double goal_distance=std::hypot(to_goal.x,to_goal.y);
     const double band=std::max(.025,config_.cell_size),min_span=std::max(.8,config_.wall_min_span);
     double best=std::numeric_limits<double>::infinity(),best_span=0;

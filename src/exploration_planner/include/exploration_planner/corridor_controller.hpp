@@ -1,6 +1,7 @@
 #pragma once
 
 #include <deque>
+#include <map>
 #include <string>
 
 #include "exploration_planner/corridor_perception.hpp"
@@ -20,6 +21,7 @@ struct CorridorConfig {
     double position_lateral_max = .18; // 额外横向位置补偿上限，另受门洞机体余量限制
     double position_lateral_brake = .90; // 根据已有横向速度提前收回位置补偿(s)，与增强后的侧向补偿配套
     double position_lateral_response = .30; // 横向位置参考单独收敛时间(s)，不再共用前進减速时间
+    double position_brake_time = 1.20; // 实测平移速度的制动前瞻(s)，仅调整位置目标，不启用速度接口
     double initial_yaw = -1.5707963267948966;
     // 转向期间可同时降高；航向和外部高度反馈(set_altitude_ready)都到位才横移进入口。false=只等待航向
     bool descend_before_entry = false;
@@ -111,6 +113,10 @@ public:
     int gateConfirmations() const { return confirmations_; }
     bool positionGateAligned() const { return position_gate_aligned_; }
     bool positionRecovering() const { return position_recovering_; }
+    bool positionHeightAdmitted() const { return position_height_admitted_; }
+    bool positionMeasuredBraking() const { return position_measured_braking_; }
+    Vec2 measuredVelocity() const { return filtered_velocity_; }
+    Vec2 referenceVelocity() const { return position_reference_velocity_; }
     int gatesPassed() const { return gates_passed_; }
     bool gateBlocked() const { return gate_locked_ ? gate_blocked_ : candidate_blocked_; }
 
@@ -133,12 +139,14 @@ private:
     bool heading_selected_ = false;
     double target_yaw_ = 0.0;
     bool position_active_ = false, position_ready_ = false, position_waiting_ = false;
+    bool position_height_admitted_ = false; // 初次交接确认高度后锁存；中途Z纠偏不撤销XY运动
     bool position_gate_aligned_ = false, position_gate_approach_ = false;
     bool position_recovering_ = false;
+    bool position_measured_braking_ = false;
     Vec2 position_reference_;
     Vec2 position_reference_velocity_; // 仅用于生成连续切向的位置点，不作为速度指令发送
-    struct Cloud { double stamp; Path2 points; };
-    std::deque<Cloud> clouds_;
+    struct TimedPoint { double stamp; Vec2 point; };
+    std::map<std::pair<long long,long long>,TimedPoint> cloud_voxels_;
     Path2 points_;
     Path2 visibility_points_;
     Vec2 sensor_origin_;
