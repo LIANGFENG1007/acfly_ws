@@ -32,10 +32,15 @@ struct CorridorVisualState {
     bool configured = false;
     bool active = false;
     Vec2 entry, h;
+    bool entry_valid = true;
+    bool wall_entry_valid = false;
+    Vec2 wall_end, wall_axis, entrance_staging;
     double width = 2.0;
     std::string phase;
     std::vector<Vec2> points;
     Path2 route;
+    bool position_target_valid = false;
+    Vec2 position_target; // 本拍实际交给主控的XY位置点，已包含前进、纠偏和平滑限幅
     bool gate_valid = false;
     Vec2 gate_left, gate_right, gate_center;
     int gates_passed = 0;

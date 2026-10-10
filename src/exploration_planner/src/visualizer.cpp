@@ -258,9 +258,21 @@ cv::Mat Visualizer::render(const GridSnapshot& grid,
         }
         const cv::Point entry = to_px(corridor.entry.x, corridor.entry.y);
         const cv::Point h = to_px(corridor.h.x, corridor.h.y);
+        if(corridor.wall_entry_valid) {
+            const auto p=corridor.wall_end,a=corridor.wall_axis;
+            const cv::Scalar wall_color(235,210,90);
+            cv::line(img,to_px(p.x,p.y),to_px(p.x+a.x,p.y+a.y),wall_color,3,cv::LINE_AA);
+            cv::drawMarker(img,to_px(p.x,p.y),wall_color,cv::MARKER_TILTED_CROSS,12,2,cv::LINE_AA);
+            dashed_line(img,to_px(corridor.entrance_staging.x,corridor.entrance_staging.y),entry,wall_color);
+            cv::putText(img,"WALL END",to_px(p.x,p.y)+cv::Point(7,14),cv::FONT_HERSHEY_SIMPLEX,.40,wall_color,1,cv::LINE_AA);
+        }
+        if(corridor.entry_valid && corridor.wall_entry_valid) {
+            cv::drawMarker(img,entry,cv::Scalar(235,210,90),cv::MARKER_CROSS,12,2,cv::LINE_AA);
+        } else if(corridor.entry_valid) {
         cv::circle(img, entry, 9, cv::Scalar(0, 210, 140), cv::FILLED, cv::LINE_AA);
         cv::putText(img, "E", entry + cv::Point(-5, 5), cv::FONT_HERSHEY_SIMPLEX,
                     0.45, cv::Scalar(20, 35, 25), 1, cv::LINE_AA);
+        }
         cv::circle(img, h, 12, cv::Scalar(245, 245, 245), 2, cv::LINE_AA);
         cv::putText(img, "H", h + cv::Point(-6, 6), cv::FONT_HERSHEY_SIMPLEX,
                     0.55, cv::Scalar(245, 245, 245), 2, cv::LINE_AA);
@@ -293,6 +305,16 @@ cv::Mat Visualizer::render(const GridSnapshot& grid,
     }
 
     // ---- 5) 前瞻点 ----
+    if (corridor.active && corridor.position_target_valid && finite_point(corridor.position_target)) {
+        const cv::Point target = to_px(corridor.position_target.x, corridor.position_target.y);
+        const cv::Scalar target_color(0, 165, 255);
+        if (pose_valid) dashed_line(img, to_px(px, py), target, target_color);
+        cv::drawMarker(img, target, target_color, cv::MARKER_DIAMOND, 13, 2, cv::LINE_AA);
+        cv::circle(img, target, 2, target_color, cv::FILLED, cv::LINE_AA);
+        const int label_x=target.x+65<img.cols ? target.x+9 : std::max(0,target.x-60);
+        cv::putText(img, "CMD XY", cv::Point(label_x,target.y-7), cv::FONT_HERSHEY_SIMPLEX,
+                    0.40, target_color, 1, cv::LINE_AA);
+    }
     if (look_valid && !corridor.active) {
         cv::circle(img, to_px(lookahead.x, lookahead.y), 3, cv::Scalar(255, 0, 255), cv::FILLED);
     }

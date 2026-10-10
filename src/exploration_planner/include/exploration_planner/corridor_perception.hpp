@@ -49,6 +49,13 @@ struct CorridorObservation {
     std::string reason;
 };
 
+struct CorridorEntrance {
+    bool valid = false;
+    Vec2 wall_end, axis, inward, staging, center, line_goal; // staging为横墙外侧的对准位置，随后沿inward直进center
+    double wall_span = 0.0;
+    std::string reason = "entrance_wall_unconfirmed";
+};
+
 // Input points are height-filtered, uninflated obstacle returns in world XY.
 class CorridorPerception {
 public:
@@ -62,6 +69,9 @@ public:
     double longitudinal(const Vec2& point) const;
     double lateral(const Vec2& point) const;
     double length() const { return length_; }
+    // 从隔开终点与 H 的长墙识别侧入口。场地外围墙不提供入口位置。
+    CorridorEntrance entrance(const Path2& points, const Path2& rays,
+        const Vec2& sensor, const Vec2& red, const Vec2& goal, double offset) const;
 
     // This is a swept-body collision test, not a free-space visibility test.
     // Callers must also require current observation and measured wall support.

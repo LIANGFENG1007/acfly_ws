@@ -12,6 +12,8 @@ struct CorridorConfig {
     CorridorPerceptionConfig perception;
     bool nearest_cardinal_yaw = true; // 到终点后选最近的 0/±90/180 度，并锁定到本次通道任务结束
     bool position_control = false; // 主节点参数默认开启；独立旧速度控制用例可关闭
+    bool wall_entry = false; // 主节点默认开启；入口由横墙墙端生成，旧入口坐标只兼容历史模式
+    double wall_entry_offset = .60; // 雷达中心从横墙入口端向外留出的距离(m)
     double position_lead = 1.00;
     double position_acceleration = .60; // 位置参考的加速度上限；不用于飞控速度/PID接口
     double position_lateral_gain = 1.5; // 中线另一侧的额外位置补偿/当前横向误差
@@ -97,6 +99,10 @@ public:
     CorridorPhase phase() const { return phase_; }
     Vec2 entry() const { return entry_; }
     Vec2 goal() const { return h_; }
+    Vec2 axis() const { const auto p=perception_.toWorld(1,0);return {p.x-entry_.x,p.y-entry_.y}; }
+    const CorridorEntrance& entrancePlan() const { return entrance_plan_; }
+    bool entranceReady() const { return !cfg_.wall_entry || entrance_locked_; }
+    const Path2& plannedPath() const { return planned_path_; }
     const Path2& points() const { return points_; }
     const CorridorObservation& observation() const { return observation_; }
     const CorridorObservation& gate() const { return locked_gate_; }
@@ -113,6 +119,12 @@ private:
     CorridorPhase phase_ = CorridorPhase::Idle;
     bool configured_ = false;
     Vec2 entry_, h_, red_;
+    CorridorEntrance entrance_plan_, entrance_candidate_;
+    bool entrance_locked_=false, entrance_staged_=false;
+    int entrance_confirmations_=0;
+    unsigned long entrance_sequence_=0;
+    double entrance_time_=-1e9;
+    Path2 planned_path_;
     PositionHold rotation_hold_, heading_hold_, waiting_hold_;
     bool waiting_for_evidence_ = false;
     bool heading_recovery_ = false;
@@ -148,6 +160,7 @@ private:
     bool stable(bool condition, double now);
     void confirmGate(const CorridorObservation& observed, double now);
     void trackGate(const Vec2& position, double now);
+    void trackEntrance(const Vec2& position, double now);
     CorridorCommand updateMotion(const Vec2& position, double yaw, double vf, double vl,
                                  double now, bool pose_fresh);
     void transition(CorridorPhase phase);

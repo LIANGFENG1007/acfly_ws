@@ -353,13 +353,15 @@ void FlyMissionNode::publish_exploration_corridor_route(bool force)
     corridor_h_y_ = h_y;
     nav_msgs::msg::Path route;
     route.header = exploration_goal_header_; // 与本次 goal 配对，防止使用上一任务的通道。
-    const bool route_valid = std::isfinite(entry_x) && std::isfinite(entry_y) &&
-        std::isfinite(h_x) && std::isfinite(h_y);
+    const bool route_valid = std::isfinite(h_x) && std::isfinite(h_y);
     if (enabled && route_valid) {
         geometry_msgs::msg::PoseStamped entry;
         entry.header = route.header;
-        entry.pose.position.x = entry_x;
-        entry.pose.position.y = entry_y;
+        // 自动横墙入口只需要 H；保留两点消息格式兼容已有主控/探索接口。
+        // 旧手工入口模式会拒绝与 H 重合的占位点，而非悄悄生成错误路线。
+        const bool legacy_entry_valid = std::isfinite(entry_x) && std::isfinite(entry_y);
+        entry.pose.position.x = legacy_entry_valid ? entry_x : h_x;
+        entry.pose.position.y = legacy_entry_valid ? entry_y : h_y;
         entry.pose.position.z = exploration_route_z_;
         entry.pose.orientation.w = 1.0;
         auto finish = entry;
@@ -367,14 +369,14 @@ void FlyMissionNode::publish_exploration_corridor_route(bool force)
         finish.pose.position.y = h_y;
         route.poses = {entry, finish};
         corridor_route_pub_->publish(route);
-        RCLCPP_INFO(get_logger(), "[过门] 发布入口 (%.2f, %.2f)，H 点 (%.2f, %.2f)",
+        RCLCPP_INFO(get_logger(), "[过门] 发布兼容入口参考 (%.2f, %.2f)，H 点 (%.2f, %.2f)；自动横墙入口模式忽略入口参考",
             entry_x, entry_y, h_x, h_y);
     } else if (!enabled) {
         corridor_route_pub_->publish(route); // 空路径显式关闭尚未开始的后续过门。
     } else {
         RCLCPP_WARN(get_logger(),
-            "[过门] 入口/H 坐标未配置：探索可继续，到红点后保高等待；"
-            "请填写 params.hpp 的 CORRIDOR_ENTRY_X/Y、CORRIDOR_H_X/Y 或对应 ROS 参数");
+            "[过门] H 坐标未配置：探索可继续，到红点后保高等待；"
+            "请填写 params.hpp 的 CORRIDOR_H_X/Y 或对应 ROS 参数");
     }
 }
 

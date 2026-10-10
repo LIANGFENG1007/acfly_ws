@@ -109,6 +109,8 @@ inline constexpr double VISION_TARGET_STOP_SPEED_MPS = 0.05; // 兼容旧配置�
 // false: 保留到探索终点即完成的流程。通道控制接口由 CORRIDOR_POSITION_CONTROL 选择。
 inline constexpr bool CORRIDOR_ENABLED = true;
 inline constexpr bool CORRIDOR_POSITION_CONTROL = true; // 降高和转正完成后改发真实位置接口；探索/终点转向仍用速度
+inline constexpr bool CORRIDOR_WALL_ENTRY = true; // 由入口横墙墙端定位入口，不依赖场地左墙或预设第一个进入点
+inline constexpr double CORRIDOR_WALL_ENTRY_OFFSET_M = 0.60; // 雷达中心在横墙入口端外侧的距离(m)；进入后到墙向内半个通道宽度的中线
 inline constexpr double CORRIDOR_POSITION_LEAD_M = 1.00; // 动态位置目标最大XY领先距离(m)，为低响应飞控保留前进拉力；墙/门会进一步限制
 inline constexpr double CORRIDOR_POSITION_ACCEL_MPS2 = 0.60; // 位置参考加速度上限(m/s²)：更快建立前进/纠偏目标，仍连续变向；不是飞控PID
 inline constexpr double CORRIDOR_POSITION_LATERAL_GAIN = 1.50; // 额外侧向补偿比例；右偏4cm且横向静止时请求向中线左侧延伸6cm，另受门宽限制
@@ -117,7 +119,7 @@ inline constexpr double CORRIDOR_POSITION_LATERAL_BRAKE_S = 0.90; // 按已有�
 inline constexpr double CORRIDOR_POSITION_LATERAL_RESPONSE_S = 0.30; // 横向位置目标独立收敛时间(s)，越小越快拉出纠偏目标，仍受上述加速度/间距限制
 inline constexpr bool CORRIDOR_NEAREST_CARDINAL_YAW = true; // true: 到终点后转到最近的0/±90/180度，选一次并保持到H；false: 使用下面固定角度
 inline constexpr double CORRIDOR_INITIAL_YAW_DEG = -90.0; // 仅关闭最近转正时使用的固定航向(度)
-inline constexpr double CORRIDOR_WIDTH = 1.5; // 两侧墙搜索范围(m)，不把道路中线当成门中心
+inline constexpr double CORRIDOR_WIDTH = 1.5; // 通道墙间距(m)：入口横墙向内偏移此值一半就是行进中线；门中心另行识别
 inline constexpr double CORRIDOR_ROBOT_WIDTH = 0.64; // x500仿真含桨完整外廓(m)，实机按测量值调整
 // 实机 Point-LIO 默认输出；仿真 launch 在启动稠密转换节点后单独覆盖此参数。
 inline constexpr const char* CORRIDOR_CLOUD_TOPIC = "/cloud_registered";

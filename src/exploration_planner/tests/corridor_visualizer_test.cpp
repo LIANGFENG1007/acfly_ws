@@ -212,6 +212,13 @@ int main(int argc, char** argv)
               "Unconfigured mission stages change canvas dimensions");
     }
     const std::string output = argc > 1 ? argv[1] : "/tmp/acfly-corridor-preview.png";
+    CorridorVisualState commanded=corridor;
+    commanded.position_target_valid=true;commanded.position_target={8.48,1.4};
+    commanded.wall_entry_valid=true;commanded.wall_end={7.5,3.9};
+    commanded.wall_axis={0,-1};commanded.entrance_staging={7,4.5};
+    const auto command_image=draw(visualizer,grid,commanded);
+    check(contains_color(command_image,cv::Scalar(0,165,255)),"Actual position target marker absent");
+    check(cv::imwrite("/tmp/acfly-corridor-command-preview.png",command_image),"Could not save command target preview");
     check(cv::imwrite(output, image), "Could not write corridor preview");
     check(cv::imwrite("/tmp/acfly-unified-exploration.png", exploring),
           "Could not write unified exploration preview");

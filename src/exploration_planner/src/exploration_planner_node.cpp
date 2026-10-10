@@ -183,6 +183,8 @@ public:
         ccfg_.position_lateral_max=dd("corridor_position_lateral_max_m",params::CORRIDOR_POSITION_LATERAL_MAX_M);
         ccfg_.position_lateral_brake=dd("corridor_position_lateral_brake_s",params::CORRIDOR_POSITION_LATERAL_BRAKE_S);
         ccfg_.position_lateral_response=dd("corridor_position_lateral_response_s",params::CORRIDOR_POSITION_LATERAL_RESPONSE_S);
+        ccfg_.wall_entry=declare_parameter<bool>("corridor_wall_entry",params::CORRIDOR_WALL_ENTRY);
+        ccfg_.wall_entry_offset=dd("corridor_wall_entry_offset_m",params::CORRIDOR_WALL_ENTRY_OFFSET_M);
         corridor_cloud_topic_ = declare_parameter<std::string>("corridor_cloud_topic", params::CORRIDOR_CLOUD_TOPIC);
         ccfg_.nearest_cardinal_yaw = declare_parameter<bool>("corridor_nearest_cardinal_yaw", params::CORRIDOR_NEAREST_CARDINAL_YAW);
         ccfg_.initial_yaw = dd("corridor_initial_yaw_deg", params::CORRIDOR_INITIAL_YAW_DEG) * M_PI / 180.0;
@@ -683,6 +685,11 @@ public:
             corridor_visual.active = corridor_->active();
             corridor_visual.entry = corridor_->entry();
             corridor_visual.h = corridor_->goal();
+            corridor_visual.entry_valid=corridor_->entranceReady();
+            const auto& entrance=corridor_->entrancePlan();
+            corridor_visual.wall_entry_valid=ccfg_.wall_entry && corridor_->entranceReady();
+            corridor_visual.wall_end=entrance.wall_end;corridor_visual.wall_axis=entrance.axis;
+            corridor_visual.entrance_staging=entrance.staging;
             // A startup route is a display preview only. Execution still requires
             // the current goal's matching timestamp in apply_corridor_route().
             if (!corridor_visual.configured && corridor_route_received_ &&
@@ -703,13 +710,21 @@ public:
             if (!corridor_visual.active)
                 corridor_visual.phase = has_goal_ ? "EXPLORATION" : "WAITING";
             corridor_visual.points = corridor_->points();
-            corridor_visual.route = corridor_command_.path;
+            corridor_visual.route = corridor_->plannedPath();
+            corridor_visual.position_target_valid = corridor_visual.active && corridor_command_.position_control;
+            corridor_visual.position_target = corridor_command_.target;
+            // 主控交接期仍发锚点；窗口也显示锚点，而不是提前画尚未放行的推进点。
+            if(corridor_visual.position_target_valid && control_status_ && control_status_->mission==goal_header_ &&
+               control_status_->position_active && !control_status_->ready &&
+               steady_seconds()>=control_status_received_ && steady_seconds()-control_status_received_<=.3)
+                corridor_visual.position_target={control_status_->hold_position.x,control_status_->hold_position.y};
             corridor_visual.gates_passed = corridor_->gatesPassed();
             const auto& door = corridor_->displayGate();
             corridor_visual.gate_valid = door.gate_passable;
             corridor_visual.gate_center = door.gate_center;
-            const double dx = corridor_visual.h.x - corridor_visual.entry.x;
-            const double dy = corridor_visual.h.y - corridor_visual.entry.y;
+            const auto axis=corridor_->axis();
+            const double dx = axis.x;
+            const double dy = axis.y;
             const double length = std::hypot(dx, dy);
             if (length > 1e-6) {
                 const double half_gap = door.gap_width * 0.5;
@@ -829,7 +844,8 @@ private:
         const auto& b = route.poses[1].pose.position;
         if (corridor_->configure({a.x, a.y}, {b.x, b.y})) {
             corridor_disabled_for_goal_ = false;
-            RCLCPP_INFO(get_logger(), "走廊路线: 入口(%.2f,%.2f), H(%.2f,%.2f)", a.x, a.y, b.x, b.y);
+            if(ccfg_.wall_entry)RCLCPP_INFO(get_logger(),"走廊横墙入口: H(%.2f,%.2f)，入口由实测墙端外侧 %.2fm 和墙内半宽生成；旧入口XY不参与",b.x,b.y,ccfg_.wall_entry_offset);
+            else RCLCPP_INFO(get_logger(), "走廊路线: 入口(%.2f,%.2f), H(%.2f,%.2f)", a.x, a.y, b.x, b.y);
         } else RCLCPP_WARN(get_logger(), "走廊坐标无效，到探索终点后悬停等待有效路线");
     }
 
@@ -4253,7 +4269,7 @@ private:
                 last_look_ = corridor_command_.target;
                 look_valid_ = true;
                 traj_.clear();
-                for (const auto& p : corridor_command_.path) {
+                for (const auto& p : corridor_->plannedPath()) {
                     TrajPoint tp{};
                     tp.p = p;
                     traj_.push_back(tp);
@@ -4862,11 +4878,17 @@ private:
                 number("corridor_position_active",corridor_->positionActive());
                 number("corridor_position_gate_aligned",corridor_->positionGateAligned());
                 number("corridor_position_recovering",corridor_->positionRecovering());
+                number("corridor_entrance_ready",corridor_->entranceReady());
+                value("corridor_entrance_reason",corridor_->entrancePlan().reason);
+                number("corridor_wall_end_x",corridor_->entrancePlan().wall_end.x);
+                number("corridor_wall_end_y",corridor_->entrancePlan().wall_end.y);
+                number("corridor_entry_x",corridor_->entry().x);number("corridor_entry_y",corridor_->entry().y);
+                number("corridor_position_target_x",corridor_command_.target.x);
+                number("corridor_position_target_y",corridor_command_.target.y);
                 if(corridor_active && corridor_command_.position_control) {
-                    const auto entry=corridor_->entry(),end=corridor_->goal();
-                    const double length=std::hypot(end.x-entry.x,end.y-entry.y);
-                    if(length>1e-6) {
-                        const double ax=(end.x-entry.x)/length,ay=(end.y-entry.y)/length;
+                    const auto axis=corridor_->axis();
+                    if(std::hypot(axis.x,axis.y)>1e-6) {
+                        const double ax=axis.x,ay=axis.y;
                         const double dx=corridor_command_.target.x-px_,dy=corridor_command_.target.y-py_;
                         number("corridor_position_forward_lead_m",dx*ax+dy*ay);
                         number("corridor_position_lateral_pull_m",-dx*ay+dy*ax);

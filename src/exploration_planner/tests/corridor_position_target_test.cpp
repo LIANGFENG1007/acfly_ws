@@ -49,15 +49,16 @@ void geometricRecovery() {
     std::cout<<"monotonic escape and opposite-wall veto passed\n";
 }
 void amplifiedTarget() {
+    for(bool gate:{false,true})
     for(double side:{-1.,1.}) {
-        CorridorController c(config());const Vec2 p{side*.04,-1.3};seed(c,p,true);
+        CorridorController c(config());const Vec2 p{side*.04,-1.3};seed(c,p,gate);
         Vec2 last=p,last_v{};CorridorCommand cmd;
         for(int i=0;i<400;++i) {
             cmd=c.forwardCorridor(p,0,0,0,dt);
             require(cmd.position_control && cmd.forward==0 && cmd.lateral==0,"not pure position interface");
             Vec2 v{(cmd.target.x-last.x)/dt,(cmd.target.y-last.y)/dt};
             require(norm({v.x-last_v.x,v.y-last_v.y})/dt<=config().position_acceleration+1e-6,"reference jumped during correction");
-            require(std::abs(cmd.target.x)<=.053,"target placed in opposite door frame");
+            if(gate)require(std::abs(cmd.target.x)<=.053,"target placed in opposite door frame");
             last=cmd.target;last_v=v;
         }
         require(side*cmd.target.x<-.025,"position target failed to extend across centerline");
@@ -66,7 +67,7 @@ void amplifiedTarget() {
         for(int i=0;i<300;++i)cmd=c.forwardCorridor(p,0,0,0,dt);
         require(side*cmd.target.x>0,"returning lateral speed did not retract side extension");
     }
-    std::cout<<"left/right diagonal position extension, retraction and smoothness passed\n";
+    std::cout<<"travel line AND gate: left/right diagonal position extension, retraction and smoothness passed\n";
 }
 void revokeCrossing() {
     CorridorController c(config());seed(c,{0,-1.3},true);

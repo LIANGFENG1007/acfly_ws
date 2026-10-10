@@ -326,6 +326,97 @@ CorridorObservation CorridorPerception::analyze(
     return result;
 }
 
+CorridorEntrance CorridorPerception::entrance(const Path2& points, const Path2& rays,
+    const Vec2& sensor, const Vec2& red, const Vec2& goal, double offset) const {
+    CorridorEntrance result;
+    const double radius=config_.robot_width*.5, width=config_.corridor_width;
+    if(!finite(red)||!finite(goal)||!finite(sensor)||!std::isfinite(offset)||offset<=radius) {
+        result.reason="invalid_entrance_geometry";return result;
+    }
+    const auto dot=[](Vec2 a,Vec2 b){return a.x*b.x+a.y*b.y;};
+    const auto sub=[](Vec2 a,Vec2 b){return Vec2{a.x-b.x,a.y-b.y};};
+    const auto at=[](Vec2 p,Vec2 a,double s,Vec2 n,double t){return Vec2{p.x+a.x*s+n.x*t,p.y+a.y*s+n.y*t};};
+    Path2 cloud;
+    for(auto p:points)if(finite(p))cloud.push_back(p);
+    if(cloud.size()<6)return result;
+    // 有上限的确定性线假设；仅新点云调用。局部密集点不会使候选数量平方增长。
+    Path2 seeds;const size_t count=std::min<size_t>(64,cloud.size());
+    for(size_t i=0;i<count;++i)seeds.push_back(cloud[i*(cloud.size()-1)/(count-1)]);
+    const Vec2 to_goal=sub(goal,red);const double goal_distance=std::hypot(to_goal.x,to_goal.y);
+    const double band=std::max(.025,config_.cell_size),min_span=std::max(.8,config_.wall_min_span);
+    double best=std::numeric_limits<double>::infinity(),best_span=0;
+    std::set<std::pair<int,int>> tried;
+    for(size_t i=0;i<seeds.size();++i)for(size_t j=i+1;j<seeds.size();++j) {
+        Vec2 a=sub(seeds[j],seeds[i]);double length=std::hypot(a.x,a.y);
+        if(length<min_span)continue;
+        a={a.x/length,a.y/length};if(dot(a,to_goal)<0)a={-a.x,-a.y};
+        if(dot(a,to_goal)<.35*goal_distance)continue;
+        Vec2 n{-a.y,a.x};Vec2 origin=seeds[i];
+        const double red_t=dot(sub(red,origin),n),goal_t=dot(sub(goal,origin),n);
+        // 选隔开当前终点和通道 H 的近侧长墙；外围左墙/远侧墙两点同侧，不能充当入口墙。
+        if(red_t*goal_t>=0 || std::abs(red_t)<.12 || std::abs(goal_t)<radius || std::abs(goal_t)>width-radius+.15)continue;
+        if(goal_t<0)n={-n.x,-n.y};
+        const auto key=std::make_pair(static_cast<int>(std::lround(std::atan2(a.y,a.x)/.04)),
+            static_cast<int>(std::lround(dot(origin,n)/(.08))));
+        if(!tried.insert(key).second)continue;
+        Path2 inliers;
+        for(auto p:cloud)if(std::abs(dot(sub(p,origin),n))<=band)inliers.push_back(p);
+        if(inliers.size()<6)continue;
+        // 全体支持点最小二乘修正墙角度，避免把某两个噪声点连线当墙。
+        Vec2 mean{};for(auto p:inliers){mean.x+=p.x;mean.y+=p.y;}mean.x/=inliers.size();mean.y/=inliers.size();
+        double xx=0,xy=0,yy=0;for(auto p:inliers){auto q=sub(p,mean);xx+=q.x*q.x;xy+=q.x*q.y;yy+=q.y*q.y;}
+        const double theta=.5*std::atan2(2*xy,xx-yy);a={std::cos(theta),std::sin(theta)};
+        if(dot(a,to_goal)<0)a={-a.x,-a.y};
+        n={-a.y,a.x};
+        if(dot(sub(goal,mean),n)<0)n={-n.x,-n.y};
+        origin=mean;
+        const double outside=dot(sub(red,origin),n),inside=dot(sub(goal,origin),n);
+        if(outside>=-.12 || inside<radius || inside>width-radius+.15)continue;
+        std::vector<double> samples;
+        for(auto p:cloud)if(std::abs(dot(sub(p,origin),n))<=band)samples.push_back(dot(sub(p,origin),a));
+        std::sort(samples.begin(),samples.end());
+        // 每一段真实连续墙分别检验；不把几米外的无关点拼成墙端。
+        for(size_t first=0;first<samples.size();) {
+            size_t end=first+1;while(end<samples.size() && samples[end]-samples[end-1]<=config_.max_wall_gap)++end;
+            const double begin_s=samples[first],span=samples[end-1]-begin_s;const size_t support=end-first;first=end;
+            if(span<min_span || support<6)continue;
+            const Vec2 tip=at(origin,a,begin_s,n,0);
+            if(dot(sub(goal,tip),a)<min_span*.5)continue;
+            // 先在墙外保持原来的法向距离，平移对准墙端外60cm的进入线；
+            // 对准后沿墙法向直进半宽中线，不能从终点斜着切过墙端。
+            const Vec2 staging=at(tip,a,-offset,n,outside);
+            const Vec2 center=at(tip,a,-offset,n,width*.5);
+            const double goal_s=dot(sub(goal,center),a);
+            if(goal_s<.5)continue;
+            if(!pathClear(cloud,red,staging,radius+.02) ||
+               !pathClear(cloud,staging,center,radius+.02)) {
+                result.reason="entrance_body_path_blocked";continue;
+            }
+            // 需要本帧从外面穿过开口并打到墙后方的射线，避免把少扫到一段墙误认为墙端。
+            int clear=0;const double sensor_t=dot(sub(sensor,tip),n);
+            for(auto hit:rays) {
+                if(!finite(hit))continue;
+                const double hit_t=dot(sub(hit,tip),n);
+                if(sensor_t>=-.05 || hit_t<width*.5 || hit_t<=sensor_t)continue;
+                const double u=-sensor_t/(hit_t-sensor_t);
+                const Vec2 crossing{sensor.x+u*(hit.x-sensor.x),sensor.y+u*(hit.y-sensor.y)};
+                if(std::abs(dot(sub(crossing,tip),a)+offset)<=radius)++clear;
+            }
+            if(clear<config_.gate_min_clear_rays){result.reason="entrance_free_rays_unconfirmed";continue;}
+            const double cost=std::hypot(staging.x-red.x,staging.y-red.y)+
+                std::hypot(center.x-staging.x,center.y-staging.y);
+            // 优先连续长墙证据，不能因为两面相交墙凑出的短斜线略近就选它。
+            if(span<best_span-.10 || (span<=best_span+.10 && cost>=best))continue;
+            best=cost;best_span=span;
+            result.valid=true;result.wall_end=tip;result.axis=a;result.inward=n;
+            result.staging=staging;result.center=center;result.line_goal=at(center,a,goal_s,n,0);
+            result.wall_span=span;result.reason="entrance_wall_measured";
+        }
+    }
+    if(result.valid)result.reason="entrance_wall_measured";
+    return result;
+}
+
 bool CorridorPerception::pathRecovering(const Path2& points, const Vec2& start,
                                        const Vec2& end, double body_radius) {
     if (!finite(start) || !finite(end) || !std::isfinite(body_radius) || body_radius <= 0.0) return false;
