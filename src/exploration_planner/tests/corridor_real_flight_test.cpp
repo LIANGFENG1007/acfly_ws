@@ -101,7 +101,10 @@ void delayedActualFlight(double mirror,double delay,double tau,double gain,doubl
             <<c.filtered_velocity_.x<<','<<c.filtered_velocity_.y<<','<<cmd.status<<'\n';
         require(cmd.position_control,"position scenario changed control interface");
         require(std::isfinite(cmd.target.x)&&std::isfinite(cmd.target.y),"nonfinite target");
-        if(distance(cmd.target,prior)>.10)++resets;prior=cmd.target;
+        if(distance(cmd.target,prior)>.10) {
+            ++resets;
+        }
+        prior=cmd.target;
         queue.push_back(cmd.target);auto reference=queue.front();queue.pop_front();
         Vec2 desired{gain*(reference.x-p.x),gain*(reference.y-p.y)};
         if(std::abs(desired.x)<.025)desired.x=0;
