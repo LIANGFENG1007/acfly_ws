@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <map>
 #include <stdexcept>
 
@@ -80,13 +81,15 @@ void CorridorController::start(const Vec2& red, double now)
     position_measured_braking_=false;
     position_gate_admission_=1.0;position_gate_limit_s_=0.0;position_reference_stop_time_=0.0;
     position_intent_=red;
+    position_brake_input_=position_brake_target_=red;position_wall_normal_limited_=false;
+    position_limit_reason_.clear();
     position_gate_approach_=false;
     position_recovering_=false;
     position_reference_=red;
     position_reference_velocity_={};
     previous_yaw_rate_ = 0.0;
     settled_since_ = -1.0;
-    candidate_={};confirmations_=0;candidate_time_=-1e9;candidate_sequence_=0;
+    observation_={};candidate_={};confirmations_=0;candidate_time_=-1e9;candidate_sequence_=0;
     gate_locked_=gate_blocked_=candidate_blocked_=false;locked_gate_={};
     passed_s_=last_gate_back_=-1e9;gates_passed_=0;
     entrance_plan_={};entrance_candidate_={};entrance_locked_=entrance_staged_=false;
@@ -249,9 +252,12 @@ void CorridorController::trackEntrance(const Vec2& position,double now)
         const auto right=old_frame.toWorld(gate.gate_s,gate.gap_right);
         const auto front=old_frame.toWorld(gate.gate_s-gate.gate_depth*.5,0);
         const auto back=old_frame.toWorld(gate.gate_s+gate.gate_depth*.5,0);
+        const auto wall_left=old_frame.toWorld(gate.gate_s,gate.left_wall);
+        const auto wall_right=old_frame.toWorld(gate.gate_s,gate.right_wall);
         gate.gate_s=perception_.longitudinal(gate.gate_center);
         gate.gap_left=perception_.lateral(left);gate.gap_right=perception_.lateral(right);
         gate.gap_width=gate.gap_left-gate.gap_right;
+        gate.left_wall=perception_.lateral(wall_left);gate.right_wall=perception_.lateral(wall_right);
         gate.gate_depth=std::abs(perception_.longitudinal(back)-perception_.longitudinal(front))+
             std::abs(perception_.longitudinal(left)-perception_.longitudinal(right));
     };
@@ -299,6 +305,8 @@ CorridorCommand CorridorController::hold(const Vec2& position, const std::string
         position_waiting_=true;
         position_reference_velocity_={}; // 定位/交接/高度异常时立即保持，不继续执行旧曲线
         position_intent_=position_reference_;
+        position_brake_input_=position_brake_target_=position_reference_;position_wall_normal_limited_=false;
+        position_limit_reason_.clear();
         position_gate_admission_=0.0;position_reference_stop_time_=0.0;position_measured_braking_=false;
         CorridorCommand cmd;cmd.position_control=true;cmd.target=position_reference_;
         cmd.path={position,position_reference_};cmd.status=reason;
@@ -691,10 +699,84 @@ double CorridorController::referenceStopTime(const Vec2& velocity,bool corridor_
     return std::max(std::abs(along)/cfg_.position_acceleration,std::abs(cross)/lateral_acceleration);
 }
 
+Vec2 CorridorController::measuredBrakeTarget(const Vec2& position,const Vec2& target,
+                                             bool corridor_forward,double lateral_acceleration)
+{
+    Vec2 destination=target;
+    const double radius=cfg_.perception.robot_width*.5+.02;
+    const Vec2 direction=axis(),normal{-direction.y,direction.x};
+    const double s=perception_.longitudinal(position),t=perception_.lateral(position);
+    const double measured_speed=std::hypot(filtered_velocity_.x,filtered_velocity_.y);
+    const double response_time=cfg_.position_brake_time+position_reference_stop_time_;
+    const double horizon=response_time+measured_speed/(2*cfg_.position_acceleration);
+    const Vec2 travel{filtered_velocity_.x*horizon,filtered_velocity_.y*horizon};
+    const double travel2=travel.x*travel.x+travel.y*travel.y;
+    const double end_s=s+travel.x*direction.x+travel.y*direction.y;
+    // 已确认门保留的墙坐标仅用于给当前真实点分类；不能凭记忆造出不存在的墙。
+    // 漏检一帧不应让同一面墙突然从平面制动退回散点斜向制动。
+    const auto& walls=observation_.walls_observed ? observation_ :
+        (locked_gate_.walls_observed ? locked_gate_ : candidate_);
+    double lower=-std::numeric_limits<double>::infinity(),upper=std::numeric_limits<double>::infinity();
+    double geometric_lower=lower,geometric_upper=upper;
+    for(const auto& p:points_) {
+        const double ps=perception_.longitudinal(p),pt=perception_.lateral(p);
+        const int side=corridor_forward && walls.walls_observed
+            ? (std::abs(pt-walls.right_wall)<=cfg_.perception.wall_exclusion_band ? 1 :
+               (std::abs(pt-walls.left_wall)<=cfg_.perception.wall_exclusion_band ? -1 : 0)) : 0;
+        if(side && side*(t-pt)>0) {
+            // 只采用实机预测扫掠范围旁边确有点云支撑的侧墙，不把远处墙端延长成假墙。
+            if(ps<std::min(s,end_s)-radius || ps>std::max(s,end_s)+radius)continue;
+            const double clearance=side*(t-pt)-radius;
+            const double closing=std::max(0.0,-side*(filtered_velocity_.x*normal.x+filtered_velocity_.y*normal.y));
+            const double reference_closing=std::max(0.0,-side*(position_reference_velocity_.x*normal.x+
+                                                                    position_reference_velocity_.y*normal.y));
+            // 侧墙只看朝墙的侧向参考速度。沿墙前进或正在离墙的参考都不增加侧向反应时间。
+            const double response=cfg_.position_brake_time+reference_closing/lateral_acceleration;
+            const double stop=closing*response+closing*closing/(2*cfg_.position_acceleration);
+            const double bound=std::min(cfg_.position_lead*.5,stop-clearance);
+            // bound 可以为负：尚有余量时连续收紧朝墙的位置差，不能等预测碰撞后突然甩到身后。
+            if(side>0) {lower=std::max(lower,t+bound);geometric_lower=std::max(geometric_lower,pt+radius);}
+            else {upper=std::min(upper,t-bound);geometric_upper=std::min(geometric_upper,pt-radius);}
+            continue;
+        }
+        // 门框/未确认形状仍按真实散点检查动量，保留原有的紧急制动。
+        if(travel2<=1e-8)continue;
+        const double dx=position.x-p.x,dy=position.y-p.y,d=std::hypot(dx,dy);
+        if(d<1e-6)continue;
+        const double u=std::clamp(-(dx*travel.x+dy*travel.y)/travel2,0.0,1.0);
+        if(std::hypot(dx+u*travel.x,dy+u*travel.y)>radius)continue;
+        const Vec2 outward{dx/d,dy/d};
+        const double closing=-(filtered_velocity_.x*outward.x+filtered_velocity_.y*outward.y);
+        if(closing<=0)continue;
+        const double stop=closing*response_time+closing*closing/(2*cfg_.position_acceleration);
+        const double away=std::clamp(stop-std::max(0.0,d-radius),0.0,cfg_.position_lead*.5);
+        const double requested=(destination.x-position.x)*outward.x+(destination.y-position.y)*outward.y;
+        if(away>0 && requested<away) {
+            position_measured_braking_=true;
+            destination.x+=outward.x*(away-requested);destination.y+=outward.y*(away-requested);
+        }
+    }
+    // 同一面墙的点合并为一个法向约束，保留切向前进分量，不逐点叠加斜向投影。
+    // 制动也不能把参考推入对侧的已测墙；最终整段机体净空检查仍在 positionCommand 中执行。
+    if(geometric_lower<=geometric_upper) {
+        lower=std::clamp(lower,geometric_lower,geometric_upper);
+        upper=std::clamp(upper,geometric_lower,geometric_upper);
+        if(lower<=upper) {
+            const double old_t=perception_.lateral(destination),new_t=std::clamp(old_t,lower,upper);
+            if(std::abs(new_t-old_t)>1e-9) {
+                destination.x+=normal.x*(new_t-old_t);destination.y+=normal.y*(new_t-old_t);
+                position_measured_braking_=true;position_wall_normal_limited_=true;
+            }
+        }
+    }
+    return destination;
+}
+
 CorridorCommand CorridorController::positionCommand(const Vec2& position,const Vec2& target,double speed,double dt)
 {
     position_intent_=target;
-    position_measured_braking_=false;
+    position_measured_braking_=false;position_wall_normal_limited_=false;
+    position_limit_reason_.clear();
     const double radius=cfg_.perception.robot_width*.5;
     const bool corridor_forward=phase_==CorridorPhase::Search || phase_==CorridorPhase::Approach || phase_==CorridorPhase::Cross;
     const Vec2 direction=this->axis(),normal{-direction.y,direction.x};
@@ -707,6 +789,14 @@ CorridorCommand CorridorController::positionCommand(const Vec2& position,const V
     position_reference_stop_time_=referenceStopTime(position_reference_velocity_,corridor_forward,lateral_reference_accel);
     const bool overlapping=!CorridorPerception::pathClear(points_,position,position,radius);
     Vec2 destination=target;
+    if(corridor_forward && gate_locked_ && position_gate_approach_) {
+        // 门前推进范围必须先作用于几何目标，再进入动量制动。否则明明尚未
+        // 放行，保护器却拿门后1米多的远端目标做斜向投影，凭空放大横向反拉。
+        // 已有安全参考是下限，仍不因失准把参考搬回门前。
+        const double allowed=std::max(position_gate_limit_s_,perception_.longitudinal(position_reference_));
+        const double excess=std::max(0.0,perception_.longitudinal(destination)-allowed);
+        destination.x-=direction.x*excess;destination.y-=direction.y*excess;
+    }
     const auto reachable=[&](const Vec2& p) {
         return CorridorPerception::pathClear(points_,position,p,radius) ||
             CorridorPerception::pathRecovering(points_,position,p,radius);
@@ -728,34 +818,9 @@ CorridorCommand CorridorController::positionCommand(const Vec2& position,const V
         destination.x-=cfg_.position_brake_time*filtered_velocity_.x;
         destination.y-=cfg_.position_brake_time*filtered_velocity_.y;
     }
-    if(!position_recovering_) {
-        // 预测实际机体的前进包络。只对该包络真正会碰到的点施加向外制动，
-        // 不把两边门框的正常近距离当成必须停车的理由。
-        const double measured_speed=std::hypot(filtered_velocity_.x,filtered_velocity_.y);
-        // 参考本身还在运动时，先把它刹住也要时间；这段延迟必须算进实机
-        // 包络，不能等实际机体距墙只剩最后几厘米才开始反转虚拟参考。
-        const double response_time=cfg_.position_brake_time+position_reference_stop_time_;
-        const double horizon=response_time+measured_speed/(2*cfg_.position_acceleration);
-        const Vec2 travel{filtered_velocity_.x*horizon,filtered_velocity_.y*horizon};
-        const double travel2=travel.x*travel.x+travel.y*travel.y;
-        if(travel2>1e-8)for(const auto& p:points_) {
-            const double dx=position.x-p.x,dy=position.y-p.y,d=std::hypot(dx,dy);
-            if(d<1e-6)continue;
-            const double u=std::clamp(-(dx*travel.x+dy*travel.y)/travel2,0.0,1.0);
-            if(std::hypot(dx+u*travel.x,dy+u*travel.y)>radius+.02)continue;
-            const Vec2 outward{dx/d,dy/d};
-            const double closing=-(filtered_velocity_.x*outward.x+filtered_velocity_.y*outward.y);
-            if(closing<=0)continue;
-            const double stop=closing*response_time+closing*closing/(2*cfg_.position_acceleration);
-            const double away=std::clamp(stop-std::max(0.0,d-radius-.02),0.0,cfg_.position_lead*.5);
-            const double requested=(destination.x-position.x)*outward.x+(destination.y-position.y)*outward.y;
-            if(away>0 && requested<away) {
-                position_measured_braking_=true;
-                destination.x+=outward.x*(away-requested);
-                destination.y+=outward.y*(away-requested);
-            }
-        }
-    }
+    position_brake_input_=destination;
+    if(!position_recovering_)destination=measuredBrakeTarget(position,destination,corridor_forward,lateral_reference_accel);
+    position_brake_target_=destination;
     // 当前参考已因实测墙面变化而不再安全时，仅把它收至最近的可用位置。
     // 恢复起步若参考在飞机脚下，则直接建立经单调远离检查的安全侧位置差。
     // 二者均保留真正安全的既有参考，不靠反复hold(当前位置)重启斜坡。
@@ -907,9 +972,11 @@ CorridorCommand CorridorController::positionCommand(const Vec2& position,const V
     Vec2 velocity=slew(desired),next=integrate(velocity);
     bool braking=false;
     if(!safe(next,velocity)) {
+        position_limit_reason_=blocked_reason;
         // 先沿当前切向平滑刹住；跟不上或靠近墙时，目标不能每拍走一下又突然停一下。
         velocity=slew({});next=integrate(velocity);braking=true;
         if(!safe(next,velocity,true)) {
+            position_limit_reason_=blocked_reason;
             // 新曲线/其停止段受阻不等于现有目标失效。保留可达参考，再逐拍
             // 朝可达的目标修正；仅在参考自身失效时投影，避免几十厘米回跳。
             const Vec2 retained=project(position_reference_);
@@ -926,6 +993,7 @@ CorridorCommand CorridorController::positionCommand(const Vec2& position,const V
                 cmd.status="Position: recovering along verified escape";return cmd;
             }
             auto cmd=hold(position,"Position: no measured safe escape");
+            position_limit_reason_=blocked_reason;
             position_recovering_=overlapping;return cmd;
         }
     }
@@ -933,6 +1001,7 @@ CorridorCommand CorridorController::positionCommand(const Vec2& position,const V
     CorridorCommand cmd;cmd.position_control=true;cmd.target=next;cmd.path={position,next};
     if(position_recovering_) cmd.status="Position: recovering toward travel line";
     else if(braking) cmd.status="Position: smoothly slowing reference for clearance / lead";
+    else if(position_wall_normal_limited_) cmd.status="Position: limiting wall-normal lead for measured clearance";
     else if(position_measured_braking_) cmd.status="Position: braking measured aircraft motion near wall";
     return cmd;
 }

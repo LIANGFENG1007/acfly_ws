@@ -31,7 +31,7 @@ void seed(CorridorController& c,Vec2 position,bool gate) {
     c.position_reference_=position;c.phase_=CorridorPhase::Search;
     c.gate_locked_=gate;c.position_gate_approach_=gate;
     c.locked_gate_.gate_s=2;c.locked_gate_.gate_depth=.04;
-    c.locked_gate_.gap_left=-.392767;c.locked_gate_.gap_right=.392767;
+    c.locked_gate_.gap_left=.392767;c.locked_gate_.gap_right=-.392767;
     c.locked_gate_.gap_width=.785534;
     for(int i=-20;i<=260;++i) {
         c.points_.push_back({-.75,-i*.025});c.points_.push_back({.75,-i*.025});
@@ -96,7 +96,7 @@ void noPrematureSideReversal() {
 void consistentReferenceStopping() {
     for(double yaw:{0.,.7,1.5707963267948966,3.141592653589793}) {
         CorridorController c(config());Vec2 a{std::cos(yaw),std::sin(yaw)},n{-a.y,a.x};
-        c.configure({0,0},{6*a.x,6*a.y});
+        c.configure({3.1,-2.7},{3.1+6*a.x,-2.7+6*a.y});
         for(double along:{-.4,0.,.4})for(double cross:{-1.03,0.,1.03}) {
             Vec2 v{a.x*along+n.x*cross,a.y*along+n.y*cross};
             const double expected=std::max(std::abs(along)/.6,std::abs(cross)/4.);
@@ -126,6 +126,90 @@ void noGateTargetWithdrawal() {
         }
     }
     std::cout<<"gate admission pauses advancement without withdrawing safe reference\n";
+}
+void wallNormalBraking() {
+    // A wall must not turn a long tangential goal into a large sideways reversal.
+    for(double yaw:{0.,.7,1.5707963267948966,3.141592653589793})for(double mirror:{-1.,1.}) {
+        CorridorController c(config());const Vec2 a{std::cos(yaw),std::sin(yaw)},n{-a.y,a.x};
+        c.configure({3.1,-2.7},{3.1+6*a.x,-2.7+6*a.y});
+        const auto world=[&](double s,double t){return c.perception_.toWorld(s,mirror*t);};
+        c.phase_=CorridorPhase::Approach;c.position_active_=true;
+        c.observation_.walls_observed=true;c.observation_.right_wall=-.75;c.observation_.left_wall=.75;
+        for(int i=-100;i<=300;++i)for(double side:{-.75,.75})c.points_.push_back(world(i*.02,side));
+        const Vec2 p=world(0,.30);
+        c.filtered_velocity_={a.x*.35+n.x*mirror*.20,a.y*.35+n.y*mirror*.20};
+        c.position_reference_velocity_={a.x*.45-n.x*mirror*.8,a.y*.45-n.y*mirror*.8};
+        c.position_reference_stop_time_=c.referenceStopTime(c.position_reference_velocity_,true,4.);
+        const auto short_goal=c.measuredBrakeTarget(p,world(.6,.40),true,4.);
+        const auto far_goal=c.measuredBrakeTarget(p,world(2.,.40),true,4.);
+        require(std::abs(c.perception_.longitudinal(short_goal)-.6)<1e-9 &&
+                std::abs(c.perception_.longitudinal(far_goal)-2.)<1e-9,"side-wall brake changed tangential progress");
+        require(std::abs(c.perception_.lateral(short_goal)-c.perception_.lateral(far_goal))<1e-9,
+                "long goal amplified side-wall braking");
+        // stop=.2*1.2+.2^2/(2*.6), free side room=.75-.30-.34;
+        const double expected=.30-(.2*1.2+.2*.2/1.2-(.75-.30-.34));
+        require(std::abs(mirror*c.perception_.lateral(short_goal)-expected)<1e-9,"wrong wall-normal stopping clearance");
+        c.position_reference_velocity_={};c.position_reference_stop_time_=0;
+        const auto no_reference_motion=c.measuredBrakeTarget(p,world(.6,.40),true,4.);
+        require(norm({no_reference_motion.x-short_goal.x,no_reference_motion.y-short_goal.y})<1e-9,
+                "forward or outward reference inflated wall-normal brake time");
+        std::reverse(c.points_.begin(),c.points_.end());
+        const auto reversed=c.measuredBrakeTarget(p,world(.6,.40),true,4.);
+        require(norm({reversed.x-short_goal.x,reversed.y-short_goal.y})<1e-9,"wall point order changed output");
+        // A missing recognition frame retains identity, but still requires real wall samples.
+        c.locked_gate_=c.observation_;c.observation_={};
+        const auto remembered=c.measuredBrakeTarget(p,world(.6,.40),true,4.);
+        require(norm({remembered.x-short_goal.x,remembered.y-short_goal.y})<1e-9,"wall recognition dropout changed braking model");
+        c.points_.clear();const auto no_points=c.measuredBrakeTarget(p,world(.6,.40),true,4.);
+        require(norm({no_points.x-world(.6,.40).x,no_points.y-world(.6,.40).y})<1e-9,"remembered wall fabricated geometry without points");
+    }
+    std::cout<<"wall-normal braking invariant to along-wall goal, reference, orientation, mirror and point order\n";
+}
+void wallBrakeContinuityAndClearance() {
+    CorridorController c(config());c.configure({0,0},{6,0});
+    c.observation_.walls_observed=true;c.observation_.right_wall=-.75;c.observation_.left_wall=.75;
+    for(int i=-50;i<=200;++i)for(double t:{-.75,.75})c.points_.push_back({i*.04,t});
+    const Vec2 p{0,.30},goal{1.2,.35};double previous=goal.y;
+    for(int i=0;i<=1000;++i) {
+        c.filtered_velocity_={.3,i*.001};
+        const auto result=c.measuredBrakeTarget(p,goal,true,4.);
+        require(std::abs(result.x-goal.x)<1e-9,"side brake changed along-wall destination");
+        require(result.y<=previous+1e-9 && previous-result.y<.003,
+                "smoothly increasing wall approach triggered a discontinuous side reversal");
+        require(result.y>=-.41-1e-9 && result.y<=.41+1e-9,"side braking entered opposite wall margin");
+        previous=result.y;
+    }
+    // Braking a virtual reference toward the wall needs extra time; moving away does not.
+    c.filtered_velocity_={.3,.2};c.position_reference_velocity_={0,0};
+    const auto stationary=c.measuredBrakeTarget(p,goal,true,4.);
+    c.position_reference_velocity_={.8,.8};
+    const auto closing=c.measuredBrakeTarget(p,goal,true,4.);
+    require(std::abs((stationary.y-closing.y)-.04)<1e-9,"toward-wall reference stopping omitted");
+    // Far-away wall samples cannot be extended into a plane alongside the aircraft.
+    c.points_={{20,.75},{20,-.75}};c.position_reference_velocity_={};
+    const auto unsupported=c.measuredBrakeTarget(p,goal,true,4.);
+    require(norm({unsupported.x-goal.x,unsupported.y-goal.y})<1e-9,"distant wall invented local restriction");
+    c.observation_.right_wall=-.4;c.observation_.left_wall=.4;
+    c.points_={{0,-.4},{0,.4}};c.filtered_velocity_={0,1.};
+    const auto narrow=c.measuredBrakeTarget({0,0},{1.2,0},true,4.);
+    require(std::abs(narrow.y+.06)<1e-9,"strong brake pushed goal beyond opposite measured wall");
+    std::cout<<"wall brake continuity, opposite-wall bound, toward-wall reference and local support passed\n";
+}
+void gateLimitBeforeBraking() {
+    CorridorController c(config());seed(c,{0,-1.3},true);
+    c.position_gate_limit_s_=1.6;c.filtered_velocity_={.2,0};
+    for(double reference_s:{1.45,1.75}) {
+        c.position_reference_={0,-reference_s};c.position_reference_velocity_={};
+        c.positionCommand({0,-1.3},{.05,-4.},.4,dt);
+        require(std::abs(c.perception_.longitudinal(c.positionBrakeInput())-std::max(1.6,reference_s))<1e-9,
+                "unadmitted far goal reached measured braking or existing safe goal was withdrawn");
+    }
+    // Unclassified obstacles and entry braking keep the measured swept-body fallback.
+    c.gate_locked_=false;c.position_gate_approach_=false;c.observation_={};c.candidate_={};c.locked_gate_={};
+    c.points_={{.5,0}};c.filtered_velocity_={.3,0};c.position_reference_velocity_={};c.position_reference_stop_time_=0;
+    const auto stopped=c.measuredBrakeTarget({0,0},{.3,0},true,4.);
+    require(stopped.x<0 && c.positionMeasuredBraking(),"unknown obstacle lost actual-motion braking");
+    std::cout<<"gate range applied before braking; unclassified actual obstacles still brake\n";
 }
 void revokeCrossing() {
     CorridorController c(config());seed(c,{0,-1.3},true);
@@ -229,7 +313,8 @@ void delayedWind(double side,double gain) {
 }
 int main(){try{
     geometricRecovery();noPrematureSideReversal();consistentReferenceStopping();
-    amplifiedTarget();noGateTargetWithdrawal();revokeCrossing();
+    amplifiedTarget();noGateTargetWithdrawal();wallNormalBraking();wallBrakeContinuityAndClearance();
+    gateLimitBeforeBraking();revokeCrossing();
     for(bool door:{false,true})for(double side:{-1.,1.})recoverDynamics(door,side);
     weakResponseProgress();
     noisyLeadLimit();

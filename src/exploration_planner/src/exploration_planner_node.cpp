@@ -4885,6 +4885,16 @@ private:
                 number("corridor_reference_stop_time_s",corridor_->positionReferenceStopTime());
                 const auto intent=corridor_->positionIntent();
                 number("corridor_position_intent_x",intent.x);number("corridor_position_intent_y",intent.y);
+                const auto brake_input=corridor_->positionBrakeInput(),brake_target=corridor_->positionBrakeTarget();
+                number("corridor_brake_input_x",brake_input.x);number("corridor_brake_input_y",brake_input.y);
+                number("corridor_brake_target_x",brake_target.x);number("corridor_brake_target_y",brake_target.y);
+                number("corridor_wall_normal_limited",corridor_->positionWallNormalLimited());
+                value("corridor_reference_limit_reason",corridor_->positionLimitReason());
+                number("gate_depth",gate.gate_depth);
+                number("corridor_axis_x",corridor_->axis().x);number("corridor_axis_y",corridor_->axis().y);
+                number("corridor_observed_wall_right",corridor_->observation().right_wall);
+                number("corridor_observed_wall_left",corridor_->observation().left_wall);
+                number("corridor_walls_observed",corridor_->observation().walls_observed);
                 const auto measured_v=corridor_->measuredVelocity(),reference_v=corridor_->referenceVelocity();
                 number("corridor_measured_vx",measured_v.x);number("corridor_measured_vy",measured_v.y);
                 number("corridor_reference_vx",reference_v.x);number("corridor_reference_vy",reference_v.y);

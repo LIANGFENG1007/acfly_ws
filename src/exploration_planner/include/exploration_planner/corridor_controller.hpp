@@ -118,6 +118,10 @@ public:
     double positionGateAdmission() const { return position_gate_admission_; }
     double positionReferenceStopTime() const { return position_reference_stop_time_; }
     Vec2 positionIntent() const { return position_intent_; }
+    Vec2 positionBrakeInput() const { return position_brake_input_; }
+    Vec2 positionBrakeTarget() const { return position_brake_target_; }
+    bool positionWallNormalLimited() const { return position_wall_normal_limited_; }
+    const std::string& positionLimitReason() const { return position_limit_reason_; }
     Vec2 measuredVelocity() const { return filtered_velocity_; }
     Vec2 referenceVelocity() const { return position_reference_velocity_; }
     int gatesPassed() const { return gates_passed_; }
@@ -149,6 +153,9 @@ private:
     double position_gate_admission_ = 1.0, position_gate_limit_s_ = 0.0;
     double position_reference_stop_time_ = 0.0;
     Vec2 position_intent_; // 拉伸后的几何目标，尚未经过实测动量/机体净空守卫
+    Vec2 position_brake_input_, position_brake_target_; // 门前范围约束后/动量制动后，便于区分引导与保护
+    bool position_wall_normal_limited_ = false;
+    std::string position_limit_reason_;
     Vec2 position_reference_;
     Vec2 position_reference_velocity_; // 仅用于生成连续切向的位置点，不作为速度指令发送
     struct TimedPoint { double stamp; Vec2 point; };
@@ -192,6 +199,8 @@ private:
     CorridorCommand positionCommand(const Vec2& position, const Vec2& target, double speed, double dt);
     double lateralPositionExtra(double error, double cross_speed, double room) const;
     double referenceStopTime(const Vec2& velocity, bool corridor_forward, double lateral_acceleration) const;
+    Vec2 measuredBrakeTarget(const Vec2& position, const Vec2& target,
+                            bool corridor_forward, double lateral_acceleration);
     double approachForwardLimit(double lateral_error, double lateral_speed,
                                 double remaining_distance) const;
 };
