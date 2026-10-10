@@ -69,9 +69,63 @@ void amplifiedTarget() {
         // Returning velocity must retract the request before the vehicle crosses the centerline.
         c.filtered_velocity_={-side*.15,0};
         for(int i=0;i<300;++i)cmd=c.forwardCorridor(p,0,0,0,dt);
-        require(side*cmd.target.x>0,"returning lateral speed did not retract side extension");
+        require(std::abs(cmd.target.x)<.005,"returning lateral speed did not retract extension to center");
     }
     std::cout<<"travel line AND gate: left/right diagonal position extension, retraction and smoothness passed\n";
+}
+void noPrematureSideReversal() {
+    CorridorController c(config());
+    for(double side:{-1.,1.})for(double error:{.001,.04,.12,.30}) {
+        const double stationary=c.lateralPositionExtra(side*error,0,.18);
+        require(side*stationary>0,"stationary offset lost cross-center pull");
+        double previous=std::abs(stationary);
+        for(int i=0;i<=50;++i) {
+            const double extra=c.lateralPositionExtra(side*error,-side*i*.01,.18);
+            require(side*extra>=0,"inward velocity flipped lateral intent before crossing center");
+            require(std::abs(extra)<=previous+1e-12,"returning faster increased extension");
+            require(std::abs(extra)<=.18+1e-12,"extension exceeded limit");
+            previous=std::abs(extra);
+        }
+        require(previous<1e-12,"sufficient inward motion did not retract extension");
+        require(std::abs(c.lateralPositionExtra(side*error,side*.2,.025))<=.025,
+                "door room was ignored");
+    }
+    require(c.lateralPositionExtra(0,.3,.18)==0,"centered aircraft requested a side reversal");
+    std::cout<<"both sides: inward speed retracts pull, never reverses it before crossing\n";
+}
+void consistentReferenceStopping() {
+    for(double yaw:{0.,.7,1.5707963267948966,3.141592653589793}) {
+        CorridorController c(config());Vec2 a{std::cos(yaw),std::sin(yaw)},n{-a.y,a.x};
+        c.configure({0,0},{6*a.x,6*a.y});
+        for(double along:{-.4,0.,.4})for(double cross:{-1.03,0.,1.03}) {
+            Vec2 v{a.x*along+n.x*cross,a.y*along+n.y*cross};
+            const double expected=std::max(std::abs(along)/.6,std::abs(cross)/4.);
+            require(std::abs(c.referenceStopTime(v,true,4.)-expected)<1e-9,
+                    "reference stopping time disagrees with independent-axis stopping curve");
+            require(std::abs(c.referenceStopTime(v,false,4.)-norm(v)/.6)<1e-9,
+                    "entry stopping changed to corridor-only model");
+        }
+    }
+    std::cout<<"reference stopping consistent for both axes and rotated corridors\n";
+}
+void noGateTargetWithdrawal() {
+    for(double side:{-1.,1.}) {
+        CorridorController c(config());const Vec2 p{side*.07,-1.4};seed(c,p,true);
+        // The existing reference is safe through the opening. Small side error exceeds
+        // the admission threshold; it must stop advancing, not retreat behind the door.
+        c.position_reference_={0,-2.05};
+        require(CorridorPerception::pathClear(c.points_,p,c.position_reference_,.32),"invalid test geometry");
+        double prior_s=2.05;
+        for(int i=0;i<150;++i) {
+            const auto cmd=c.forwardCorridor(p,0,0,0,dt);
+            const double s=-cmd.target.y;
+            require(s>=prior_s-1e-9,"centering gate withdrew existing safe forward reference");
+            require(s<=2.05+1e-8,"unadmitted gate reference kept advancing");
+            require(CorridorPerception::pathClear(c.points_,p,cmd.target,.32),"retained target crossed door frame");
+            prior_s=s;
+        }
+    }
+    std::cout<<"gate admission pauses advancement without withdrawing safe reference\n";
 }
 void revokeCrossing() {
     CorridorController c(config());seed(c,{0,-1.3},true);
@@ -174,7 +228,8 @@ void delayedWind(double side,double gain) {
 }
 }
 int main(){try{
-    geometricRecovery();amplifiedTarget();revokeCrossing();
+    geometricRecovery();noPrematureSideReversal();consistentReferenceStopping();
+    amplifiedTarget();noGateTargetWithdrawal();revokeCrossing();
     for(bool door:{false,true})for(double side:{-1.,1.})recoverDynamics(door,side);
     weakResponseProgress();
     noisyLeadLimit();

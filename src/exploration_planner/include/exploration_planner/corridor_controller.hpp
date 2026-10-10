@@ -19,7 +19,7 @@ struct CorridorConfig {
     double position_acceleration = .60; // 位置参考的加速度上限；不用于飞控速度/PID接口
     double position_lateral_gain = 1.5; // 中线另一侧的额外位置补偿/当前横向误差
     double position_lateral_max = .18; // 额外横向位置补偿上限，另受门洞机体余量限制
-    double position_lateral_brake = .90; // 根据已有横向速度提前收回位置补偿(s)，与增强后的侧向补偿配套
+    double position_lateral_brake = .90; // 回中速度的预测时间(s)：只把额外拉伸收回中线，不反向甩到来向一侧
     double position_lateral_response = .30; // 横向位置参考单独收敛时间(s)，不再共用前進减速时间
     double position_brake_time = 1.20; // 实测平移速度的制动前瞻(s)，仅调整位置目标，不启用速度接口
     double initial_yaw = -1.5707963267948966;
@@ -115,6 +115,9 @@ public:
     bool positionRecovering() const { return position_recovering_; }
     bool positionHeightAdmitted() const { return position_height_admitted_; }
     bool positionMeasuredBraking() const { return position_measured_braking_; }
+    double positionGateAdmission() const { return position_gate_admission_; }
+    double positionReferenceStopTime() const { return position_reference_stop_time_; }
+    Vec2 positionIntent() const { return position_intent_; }
     Vec2 measuredVelocity() const { return filtered_velocity_; }
     Vec2 referenceVelocity() const { return position_reference_velocity_; }
     int gatesPassed() const { return gates_passed_; }
@@ -143,6 +146,9 @@ private:
     bool position_gate_aligned_ = false, position_gate_approach_ = false;
     bool position_recovering_ = false;
     bool position_measured_braking_ = false;
+    double position_gate_admission_ = 1.0, position_gate_limit_s_ = 0.0;
+    double position_reference_stop_time_ = 0.0;
+    Vec2 position_intent_; // 拉伸后的几何目标，尚未经过实测动量/机体净空守卫
     Vec2 position_reference_;
     Vec2 position_reference_velocity_; // 仅用于生成连续切向的位置点，不作为速度指令发送
     struct TimedPoint { double stamp; Vec2 point; };
@@ -184,6 +190,8 @@ private:
                               double longitudinal_limit = -1.0, double min_forward = 0.0);
     CorridorCommand forwardCorridor(const Vec2& position, double yaw, double vf, double vl, double dt);
     CorridorCommand positionCommand(const Vec2& position, const Vec2& target, double speed, double dt);
+    double lateralPositionExtra(double error, double cross_speed, double room) const;
+    double referenceStopTime(const Vec2& velocity, bool corridor_forward, double lateral_acceleration) const;
     double approachForwardLimit(double lateral_error, double lateral_speed,
                                 double remaining_distance) const;
 };

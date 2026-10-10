@@ -78,6 +78,8 @@ void CorridorController::start(const Vec2& red, double now)
     position_active_=position_ready_=position_waiting_=position_gate_aligned_=false;
     position_height_admitted_=false;
     position_measured_braking_=false;
+    position_gate_admission_=1.0;position_gate_limit_s_=0.0;position_reference_stop_time_=0.0;
+    position_intent_=red;
     position_gate_approach_=false;
     position_recovering_=false;
     position_reference_=red;
@@ -296,6 +298,8 @@ CorridorCommand CorridorController::hold(const Vec2& position, const std::string
         if (!position_waiting_ && finite(position)) position_reference_=position;
         position_waiting_=true;
         position_reference_velocity_={}; // 定位/交接/高度异常时立即保持，不继续执行旧曲线
+        position_intent_=position_reference_;
+        position_gate_admission_=0.0;position_reference_stop_time_=0.0;position_measured_braking_=false;
         CorridorCommand cmd;cmd.position_control=true;cmd.target=position_reference_;
         cmd.path={position,position_reference_};cmd.status=reason;
         return cmd;
@@ -499,6 +503,7 @@ CorridorCommand CorridorController::translate(const Vec2& position, double yaw,
 // 门的确认/锁定/通过计数两种接口共用。
 CorridorCommand CorridorController::forwardCorridor(const Vec2& position, double yaw, double vf, double vl, double dt)
 {
+    position_gate_admission_=1.0;
     const double s = perception_.longitudinal(position);
     const double radius = cfg_.perception.robot_width * 0.5;
     const double resolution = cfg_.perception.cell_size;
@@ -605,18 +610,16 @@ CorridorCommand CorridorController::forwardCorridor(const Vec2& position, double
             // 横向目标实时越过中线适当延伸；机身接近中线/已有回正速度时自动收回。
             // 不能把“加大纠偏”变成把位置目标放进另一侧门框。
             const double door_room=std::max(0.0,(locked_gate_.gap_width-cfg_.perception.robot_width)*.5-.02);
-            // 门前仍在宽通道中时，制动点可以留在来向一侧，不能提前被窄门
-            // 的几厘米余量夹住。进入机身穿门区以后才按真实门宽收紧。
+            // 门前可用通道内的纠偏余量；进入机身穿门区后按门框余量收紧。
             const double room=s<before ? std::max(door_room,cfg_.position_lateral_max) : door_room;
-            const double extra=std::clamp(cfg_.position_lateral_gain*(t-center)+
-                (cfg_.position_lateral_brake+cfg_.position_lateral_gain*cfg_.position_brake_time)*cross_speed,
-                -std::min(cfg_.position_lateral_max,room),std::min(cfg_.position_lateral_max,room));
-            // 放行标志保留诊断用途；前进目标按当前/预测误差连续收放，避免
-            // 几毫米跨阈值就在门前点、门后点之间往返切换。
-            const double admission=std::clamp((tolerance-risk)/std::max(.005,tolerance*.65),0.0,1.0);
+            const double extra=lateralPositionExtra(t-center,cross_speed,room);
+            // 对中误差限制参考继续向前推进，不再把目标在门前/门后之间来回搬。
+            // 已发出的安全参考保持纠偏拉力；真正撞墙风险仍由实测动量/机体检查处理。
+            position_gate_admission_=std::clamp((tolerance-risk)/std::max(.005,tolerance*.65),0.0,1.0);
             const double through=std::max(back+cfg_.exit_distance,s+moving_ahead);
-            target=perception_.toWorld(staging+admission*(through-staging),center-extra);
-            route_target=perception_.toWorld(perception_.longitudinal(target),center);
+            position_gate_limit_s_=staging+position_gate_admission_*(through-staging);
+            target=perception_.toWorld(through,center-extra);
+            route_target=perception_.toWorld(position_gate_limit_s_,center);
             status=position_gate_aligned_ ? "Position: crossing door" :
                 (in_alignment_zone ? "Position: aligning before door" : "Position: diagonally approaching door");
         }
@@ -628,9 +631,8 @@ CorridorCommand CorridorController::forwardCorridor(const Vec2& position, double
     } else if(position_active_ && !position_gate_approach_) {
         const double cross_speed=(perception_.lateral({position.x+filtered_velocity_.x,
             position.y+filtered_velocity_.y})-perception_.lateral(position));
-        const double extra=std::clamp(cfg_.position_lateral_gain*(perception_.lateral(position)-t_ref)+
-            (cfg_.position_lateral_brake+cfg_.position_lateral_gain*cfg_.position_brake_time)*cross_speed,
-            -cfg_.position_lateral_max,cfg_.position_lateral_max);
+        const double extra=lateralPositionExtra(perception_.lateral(position)-t_ref,cross_speed,
+                                               cfg_.position_lateral_max);
         target=perception_.toWorld(perception_.longitudinal(target),t_ref-extra);
     }
     const double speed=position_active_ && phase==CorridorPhase::Cross ? cfg_.gate_speed : cfg_.cruise_speed;
@@ -666,9 +668,43 @@ void CorridorController::positionFeedbackTimeout(const Vec2& position)
     position_ready_=false;
 }
 
+double CorridorController::lateralPositionExtra(double error,double cross_speed,double room) const
+{
+    // 静止偏离时仍向中线另一侧拉伸。已经向中线移动时，只按剩余误差
+    // 收回拉伸，不能把速度项叠加成相反符号、提前把目标甩回飞机来向。
+    // 真正过中线后 error 才换号；贴墙的紧急动量制动在 positionCommand 单独处理。
+    if(std::abs(error)<1e-9)return 0.0;
+    const double inward=std::max(0.0,-std::copysign(1.0,error)*cross_speed);
+    const double remaining=std::max(0.0,std::abs(error)-cfg_.position_lateral_brake*inward);
+    const double extra=std::min(cfg_.position_lateral_gain*remaining,
+                                std::max(0.0,std::min(cfg_.position_lateral_max,room)));
+    return std::copysign(extra,error);
+}
+
+double CorridorController::referenceStopTime(const Vec2& velocity,bool corridor_forward,
+                                             double lateral_acceleration) const
+{
+    if(!corridor_forward)return std::hypot(velocity.x,velocity.y)/cfg_.position_acceleration;
+    const Vec2 direction=axis();
+    const double along=velocity.x*direction.x+velocity.y*direction.y;
+    const double cross=-velocity.x*direction.y+velocity.y*direction.x;
+    return std::max(std::abs(along)/cfg_.position_acceleration,std::abs(cross)/lateral_acceleration);
+}
+
 CorridorCommand CorridorController::positionCommand(const Vec2& position,const Vec2& target,double speed,double dt)
 {
+    position_intent_=target;
+    position_measured_braking_=false;
     const double radius=cfg_.perception.robot_width*.5;
+    const bool corridor_forward=phase_==CorridorPhase::Search || phase_==CorridorPhase::Approach || phase_==CorridorPhase::Cross;
+    const Vec2 direction=this->axis(),normal{-direction.y,direction.x};
+    const double acceleration=cfg_.position_acceleration;
+    const double lateral_reference_speed=std::max(speed,2*cfg_.position_lateral_max/cfg_.position_lateral_response);
+    const double lateral_reference_accel=corridor_forward
+        ? std::max(acceleration,lateral_reference_speed/cfg_.position_lateral_response) : acceleration;
+    // 与下面的参考斜坡和停止曲线共用两个轴的加速度，避免把快速侧向
+    // 参考错误地按纵向慢加速度计算，虚增出一秒多的实机制动前瞻。
+    position_reference_stop_time_=referenceStopTime(position_reference_velocity_,corridor_forward,lateral_reference_accel);
     const bool overlapping=!CorridorPerception::pathClear(points_,position,position,radius);
     Vec2 destination=target;
     const auto reachable=[&](const Vec2& p) {
@@ -686,7 +722,6 @@ CorridorCommand CorridorController::positionCommand(const Vec2& position,const V
         const double side_error=std::abs(perception_.lateral(position)-perception_.lateral(target));
         if(!overlapping && (!forward || side_error<.02)) position_recovering_=false;
     }
-    const bool corridor_forward=phase_==CorridorPhase::Search || phase_==CorridorPhase::Approach || phase_==CorridorPhase::Cross;
     if(!corridor_forward && !position_recovering_) {
         // 入口/最终定点必须按实机动量提前制动，不能只让虚拟参考点减速。
         // 仍是位置接口：提前把目标收向来向，飞控位置PID执行制动。
@@ -699,8 +734,7 @@ CorridorCommand CorridorController::positionCommand(const Vec2& position,const V
         const double measured_speed=std::hypot(filtered_velocity_.x,filtered_velocity_.y);
         // 参考本身还在运动时，先把它刹住也要时间；这段延迟必须算进实机
         // 包络，不能等实际机体距墙只剩最后几厘米才开始反转虚拟参考。
-        const double reference_stop=std::hypot(position_reference_velocity_.x,position_reference_velocity_.y)/cfg_.position_acceleration;
-        const double response_time=cfg_.position_brake_time+reference_stop;
+        const double response_time=cfg_.position_brake_time+position_reference_stop_time_;
         const double horizon=response_time+measured_speed/(2*cfg_.position_acceleration);
         const Vec2 travel{filtered_velocity_.x*horizon,filtered_velocity_.y*horizon};
         const double travel2=travel.x*travel.x+travel.y*travel.y;
@@ -742,7 +776,6 @@ CorridorCommand CorridorController::positionCommand(const Vec2& position,const V
         const Vec2 repaired=position_recovering_ ? project(destination) : project(position_reference_);
         if(reachable(repaired)) {position_reference_=repaired;position_reference_velocity_={};}
     }
-    const Vec2 direction=this->axis(),normal{-direction.y,direction.x};
     const double reference_cross=(destination.x-position_reference_.x)*normal.x+(destination.y-position_reference_.y)*normal.y;
     // 达到领先上限后仍须能换侧纠偏。先把参考的纵向位置轻收进圆内，再沿圆内弦线平滑换侧，
     // 不把“前进余量为零”误当成“所有方向都不能调整”。最终 next/stop 仍经同一严格检查。
@@ -759,13 +792,10 @@ CorridorCommand CorridorController::positionCommand(const Vec2& position,const V
     // 仅平滑位置参考的切向速度。主控仍只发XYZ/yaw，实际飞机的速度与纠偏由飞控控制。
     // 沿用上一拍切向，在对中/穿门/下一段切换时限制速度向量的变化，不能直接折向新目标。
     const double dx=destination.x-position_reference_.x,dy=destination.y-position_reference_.y;
-    const double d=std::hypot(dx,dy),acceleration=cfg_.position_acceleration;
+    const double d=std::hypot(dx,dy);
     // 动态纠偏点必须能在配置的响应时间内收回；不能让虚拟点和飞机都经历
     // 一遍同样慢的侧向加减速，形成两层迟滞。这里只提高参考点侧向响应，
     // 真实飞控的速度/加速度接口仍关闭，纵向参考仍用原推进速度。
-    const double lateral_reference_speed=std::max(speed,2*cfg_.position_lateral_max/cfg_.position_lateral_response);
-    const double lateral_reference_accel=corridor_forward
-        ? std::max(acceleration,lateral_reference_speed/cfg_.position_lateral_response) : acceleration;
     // 提前收敛到静止目标，防止带着旧切向冲过入口/对中点再反向拉回。
     const double approach_time=std::max(.5,speed/acceleration);
     const double previous_speed=std::hypot(position_reference_velocity_.x,position_reference_velocity_.y);
@@ -779,7 +809,14 @@ CorridorCommand CorridorController::positionCommand(const Vec2& position,const V
     if(corridor_forward) {
         const Vec2 axis=this->axis(),normal{-axis.y,axis.x};
         // 侧向拉回不必等待纵向目标的慢收敛，但输出仍是连续XYZ位置点。
-        const double along=std::clamp((dx*axis.x+dy*axis.y)/approach_time,-speed,speed);
+        double along=std::clamp((dx*axis.x+dy*axis.y)/approach_time,-speed,speed);
+        if(gate_locked_ && position_gate_approach_ && !position_recovering_) {
+            const double advance=std::max(0.0,position_gate_limit_s_-perception_.longitudinal(position_reference_));
+            along=std::min(along,advance/approach_time);
+            // 门前几厘米摆动只让虚拟参考减速/暂停，不倒退重拉。领先圆边界
+            // 换侧需要小幅收纵向距离时仍允许；动量制动/碰撞恢复也不受此限制。
+            if(!reposition && !position_measured_braking_)along=std::max(0.0,along);
+        }
         const double lateral_limit=reposition ? lateral_reference_speed : std::min(lateral_reference_speed,lead_speed);
         const double cross=std::clamp((dx*normal.x+dy*normal.y)/cfg_.position_lateral_response,-lateral_limit,lateral_limit);
         const double forward=std::clamp(along,-std::min(speed,lead_speed),std::min(speed,lead_speed));
@@ -839,7 +876,7 @@ CorridorCommand CorridorController::positionCommand(const Vec2& position,const V
             // 逐段检查完整刹停曲线，按加速度上界补偿弦线和曲线之间的偏差。
             const double along=velocity.x*direction.x+velocity.y*direction.y;
             const double cross=velocity.x*normal.x+velocity.y*normal.y;
-            const double duration=std::max(std::abs(along)/acceleration,std::abs(cross)/lateral_reference_accel);
+            const double duration=referenceStopTime(velocity,true,lateral_reference_accel);
             const int steps=std::max(1,static_cast<int>(std::ceil(duration/.05)));
             const double h=duration/steps;
             const double envelope=.125*h*h*std::hypot(acceleration,lateral_reference_accel);

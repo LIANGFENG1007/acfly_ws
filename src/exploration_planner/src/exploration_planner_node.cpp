@@ -4881,6 +4881,10 @@ private:
                 number("corridor_position_recovering",corridor_->positionRecovering());
                 number("corridor_position_height_admitted",corridor_->positionHeightAdmitted());
                 number("corridor_position_measured_braking",corridor_->positionMeasuredBraking());
+                number("corridor_position_gate_admission",corridor_->positionGateAdmission());
+                number("corridor_reference_stop_time_s",corridor_->positionReferenceStopTime());
+                const auto intent=corridor_->positionIntent();
+                number("corridor_position_intent_x",intent.x);number("corridor_position_intent_y",intent.y);
                 const auto measured_v=corridor_->measuredVelocity(),reference_v=corridor_->referenceVelocity();
                 number("corridor_measured_vx",measured_v.x);number("corridor_measured_vy",measured_v.y);
                 number("corridor_reference_vx",reference_v.x);number("corridor_reference_vy",reference_v.y);
