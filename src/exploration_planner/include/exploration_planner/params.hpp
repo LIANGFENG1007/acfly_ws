@@ -15,7 +15,7 @@ namespace params {
 //   true  = 先探索，覆盖率达标后去探索终点，再执行通道任务。
 //   false = 跳过探索和视觉/插点访问，起飞后直接去探索终点，再执行通道任务。
 //   直达终点仍使用原有避障与场地安全检查；场地边界请填写实际范围。
-inline constexpr bool EXPLORATION_ENABLED = true;
+inline constexpr bool EXPLORATION_ENABLED = false;
 
 // 探索终点到配置边界的最小距离(m)。0 = 终点中心可到边界，不能越界。
 // 只放宽前往探索终点的末段；普通探索/视觉目标仍使用原安全边距。

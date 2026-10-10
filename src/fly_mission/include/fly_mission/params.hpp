@@ -257,7 +257,7 @@ inline constexpr double EXPLORE_GOAL_Y = 4.0;
 inline constexpr bool   EXPLORE_CORRIDOR_ENABLED = true; // false: 红点完成后按旧流程降落
 inline constexpr double CORRIDOR_ENTRY_X = 9.47; // 仅兼容关闭 CORRIDOR_WALL_ENTRY 时的旧入口；自动入口不使用此坐标
 inline constexpr double CORRIDOR_ENTRY_Y = 4.0;  // 同上；自动入口根据横墙墙端+0.60m外侧距离+通道半宽生成
-inline constexpr double CORRIDOR_H_X = 9.67;      // 穿过全部门后的 H 点 x；实机小场地为 5.7
+inline constexpr double CORRIDOR_H_X = 9.8;      // 穿过全部门后的 H 点 x；实机小场地为 5.7
 inline constexpr double CORRIDOR_H_Y = -1.4;     // 穿过全部门后的 H 点 y；实机小场地为 -1.0
 // ---------------------------------------------------------------------------
 // ★ 小车雷达追踪（TrackCar / TRACK_CAR 状态）★  ← 追踪调参都在这一段
