@@ -108,6 +108,32 @@ void consistentReferenceStopping() {
     }
     std::cout<<"reference stopping consistent for both axes and rotated corridors\n";
 }
+void smoothLateralExtension() {
+    CorridorController c(config());
+    for(double room:{0.,.01,.04,.06,.18})for(double side:{-1.,1.}) {
+        double previous=0;
+        for(int i=0;i<=1000;++i) {
+            const double error=i*.001;
+            const double extra=side*c.lateralPositionExtra(side*error,0,room);
+            require(extra>=previous-1e-12,"smooth pull was not monotone with stationary error");
+            require(extra<=std::min(config().position_lateral_gain*error,room)+1e-12,
+                    "smooth pull exceeded old strength or door room");
+            previous=extra;
+        }
+        require(previous>=room*.99,"large offset lost original recovery pull");
+        require(c.lateralPositionExtra(side*.04,-side*.1,room)==0.,
+                "inward motion did not retract smoothly saturated pull to center");
+        if(room==0.)continue;
+        const double threshold=room/config().position_lateral_gain,h=1e-6;
+        const auto f=[&](double e){return side*c.lateralPositionExtra(side*e,0,room);};
+        const double left=(f(threshold)-f(threshold-h))/h;
+        const double right=(f(threshold+h)-f(threshold))/h;
+        require(std::abs(left-right)<.001,"old hard-saturation slope corner remains");
+        require(std::abs(f(h)/h-config().position_lateral_gain)<1e-6,
+                "zero-error proportional gain changed");
+    }
+    std::cout<<"smooth lateral extension: continuous saturation, same limits, signed pull and large-error strength\n";
+}
 void noGateTargetWithdrawal() {
     for(double side:{-1.,1.}) {
         CorridorController c(config());const Vec2 p{side*.07,-1.4};seed(c,p,true);
@@ -222,6 +248,31 @@ void revokeCrossing() {
     require(-cmd.target.y<=staging+.01,"off-center request advanced past door staging limit");
     std::cout<<"crossing permission revoked before unsafe drift continued forward\n";
 }
+void completeDoorExitWithoutOldAlignmentLimit() {
+    const auto cfg=config();
+    const double body_clear_s=2+.04*.5+cfg.perception.robot_width*.5+cfg.perception.cell_size;
+    for(double side:{-1.,1.}) {
+        CorridorController c(cfg);
+        Vec2 p{side*.12,-(body_clear_s+.01)};seed(c,p,true);
+        auto cmd=c.forwardCorridor(p,0,0,0,dt);
+        require(c.gatesPassed()==0 && c.gateLocked(),"body clearance released door before configured exit distance");
+        require(!c.positionGateAligned(),"test lost intended off-center exit condition");
+        require(c.positionGateAdmission()==1.,"door already behind full body still restricted forward travel");
+        require(cmd.target.y<p.y,"body-clear exit failed to advance reference");
+        require(CorridorPerception::pathClear(c.points_,p,cmd.target,.32),"exit reference bypassed body clearance");
+        const auto intent=c.positionIntent();
+        require(side*intent.x<=0,"exit stopped correcting toward current door center");
+        // Re-entering the slab revokes permission again; body-clear is not a permanent latch.
+        p.y=-(body_clear_s-.01);
+        c.forwardCorridor(p,0,0,0,dt);
+        require(c.positionGateAdmission()==0.,"backward drift kept body-clear permission latched");
+        // Existing normal door handoff still occurs only at the configured exit distance.
+        p.y=-(2+.04*.5+cfg.exit_distance+.01);
+        c.forwardCorridor(p,0,0,0,dt);
+        require(c.gatesPassed()==1 && !c.gateLocked(),"normal exit handoff no longer counted door");
+    }
+    std::cout<<"body-clear door exit continues, retains centerline and rechecks backward drift\n";
+}
 void recoverDynamics(bool atDoor,double side) {
     const auto cfg=config();CorridorController c(cfg);
     Vec2 p{side*(atDoor?.15:.50),atDoor?-1.86:-.6},v{};seed(c,p,atDoor);
@@ -312,9 +363,9 @@ void delayedWind(double side,double gain) {
 }
 }
 int main(){try{
-    geometricRecovery();noPrematureSideReversal();consistentReferenceStopping();
+    geometricRecovery();noPrematureSideReversal();consistentReferenceStopping();smoothLateralExtension();
     amplifiedTarget();noGateTargetWithdrawal();wallNormalBraking();wallBrakeContinuityAndClearance();
-    gateLimitBeforeBraking();revokeCrossing();
+    gateLimitBeforeBraking();revokeCrossing();completeDoorExitWithoutOldAlignmentLimit();
     for(bool door:{false,true})for(double side:{-1.,1.})recoverDynamics(door,side);
     weakResponseProgress();
     noisyLeadLimit();

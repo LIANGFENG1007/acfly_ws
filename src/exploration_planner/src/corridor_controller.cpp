@@ -623,12 +623,18 @@ CorridorCommand CorridorController::forwardCorridor(const Vec2& position, double
             const double extra=lateralPositionExtra(t-center,cross_speed,room);
             // 对中误差限制参考继续向前推进，不再把目标在门前/门后之间来回搬。
             // 已发出的安全参考保持纠偏拉力；真正撞墙风险仍由实测动量/机体检查处理。
-            position_gate_admission_=std::clamp((tolerance-risk)/std::max(.005,tolerance*.65),0.0,1.0);
+            // 整个机身已越过门后沿(另留一格余量)后，仍按原门中线完成退出段，
+            // 但不能再因身后这扇门的横向误差收紧前进许可。否则刚出门又减速。
+            // 按当前实际位置逐拍判断，不锁存；若倒漂回门洞范围，立即恢复对中约束。
+            const bool body_clear=s>=back+radius+resolution;
+            position_gate_admission_=body_clear ? 1.0 :
+                std::clamp((tolerance-risk)/std::max(.005,tolerance*.65),0.0,1.0);
             const double through=std::max(back+cfg_.exit_distance,s+moving_ahead);
             position_gate_limit_s_=staging+position_gate_admission_*(through-staging);
             target=perception_.toWorld(through,center-extra);
             route_target=perception_.toWorld(position_gate_limit_s_,center);
-            status=position_gate_aligned_ ? "Position: crossing door" :
+            status=body_clear ? "Position: clearing passed doorway" :
+                position_gate_aligned_ ? "Position: crossing door" :
                 (in_alignment_zone ? "Position: aligning before door" : "Position: diagonally approaching door");
         }
     }
@@ -684,8 +690,11 @@ double CorridorController::lateralPositionExtra(double error,double cross_speed,
     if(std::abs(error)<1e-9)return 0.0;
     const double inward=std::max(0.0,-std::copysign(1.0,error)*cross_speed);
     const double remaining=std::max(0.0,std::abs(error)-cfg_.position_lateral_brake*inward);
-    const double extra=std::min(cfg_.position_lateral_gain*remaining,
-                                std::max(0.0,std::min(cfg_.position_lateral_max,room)));
+    const double limit=std::max(0.0,std::min(cfg_.position_lateral_max,room));
+    if(limit<=0.0)return 0.0;
+    // 平滑趋近可用拉伸上限，避免门内小余量下“顶住上限→突然收回”的斜率突变。
+    // 小误差处仍保留原比例增益；大偏差趋近原上限，且始终不比原补偿更大或反号。
+    const double extra=limit*std::tanh(cfg_.position_lateral_gain*remaining/limit);
     return std::copysign(extra,error);
 }
 

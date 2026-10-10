@@ -17,7 +17,7 @@ struct CorridorConfig {
     double wall_entry_offset = .60; // 雷达中心从横墙入口端向外留出的距离(m)
     double position_lead = 1.00;
     double position_acceleration = .60; // 位置参考的加速度上限；不用于飞控速度/PID接口
-    double position_lateral_gain = 1.5; // 中线另一侧的额外位置补偿/当前横向误差
+    double position_lateral_gain = 1.5; // 额外横向补偿的零点增益；随后平滑趋近当前可用上限
     double position_lateral_max = .18; // 额外横向位置补偿上限，另受门洞机体余量限制
     double position_lateral_brake = .90; // 回中速度的预测时间(s)：只把额外拉伸收回中线，不反向甩到来向一侧
     double position_lateral_response = .30; // 横向位置参考单独收敛时间(s)，不再共用前進减速时间
