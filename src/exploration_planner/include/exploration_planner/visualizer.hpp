@@ -8,6 +8,7 @@
 //    - 规划好的贝塞尔参考轨迹（线）
 //    - 飞机位置(marker) + 朝向箭头 + FOV_DEG 扇形视野轮廓
 //    - 终点(星标)
+//    - 当前雷达 X/Y/Z 坐标（SLAM 坐标系，单位米）
 //    - 覆盖率 % 文本
 //
 //  ★线程★：render 跑在主线程，栅格却由 50Hz 主循环线程在写。所以这里吃的是
@@ -66,7 +67,7 @@ public:
     cv::Mat render(const GridSnapshot& grid,
                    const Trajectory& traj,
                    const Vec2& goal, bool goal_valid,
-                   double px, double py, double yaw, bool pose_valid,
+                   double px, double py, double pz, double yaw, bool pose_valid,
                    const Vec2& lookahead, bool look_valid,
                    const std::vector<Vec2>& pois,
                    const Obstacles& obstacles,
@@ -79,7 +80,7 @@ private:
     GridConfig cfg_;
     int canvas_px_;
     int   W_, H_;
-    static constexpr int status_height_ = 66;
+    static constexpr int status_height_ = 86;
     double offset_x_ = 0.0;
     double scale_;          // 米 → 像素
     double field_w_, field_h_;

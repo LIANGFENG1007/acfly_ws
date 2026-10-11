@@ -655,7 +655,7 @@ public:
     {
         if (!viz_ || !viz_obj_) return true;
         // 取快照（持锁尽量短）
-        double px, py, yaw; bool pose_valid;
+        double px, py, pz, yaw; bool pose_valid;
         Vec2 goal; bool goal_valid;
         Trajectory traj;
         Vec2 look; bool look_valid;
@@ -666,7 +666,7 @@ public:
         DeliveryVisualState delivery_visual;
         {
             std::lock_guard<std::mutex> lk(mtx_);
-            px = px_; py = py_; yaw = yaw_; pose_valid = has_pose_;
+            px = px_; py = py_; pz = pz_; yaw = yaw_; pose_valid = has_pose_;
             if (visual_drop_enabled_) {
                 delivery_visual.package_offset = visual_drop_.package_offset();
                 if (vision_queue_->active()) {
@@ -744,7 +744,7 @@ public:
         const GridSnapshot grid_snap = grid_->snapshot();
 
         cv::Mat img = viz_obj_->render(grid_snap, traj, goal, goal_valid,
-                                       px, py, yaw, pose_valid, look, look_valid,
+                                       px, py, pz, yaw, pose_valid, look, look_valid,
                                        pois, obstacles,
                                        turning, turn_dir, unreach_valid, unreach_pos, corridor_visual, delivery_visual);
         cv::imshow("Exploration", img);

@@ -35,7 +35,7 @@ cv::Mat draw(exploration::Visualizer& visualizer,
     const exploration::Vec2 position = corridor.active
         ? exploration::Vec2{8.6, 2.45} : exploration::Vec2{3.0, 1.0};
     return visualizer.render(grid, trajectory, {7.0, 4.25}, true,
-                             position.x, position.y, -M_PI / 2.0, pose_valid,
+                             position.x, position.y, 0.5, -M_PI / 2.0, pose_valid,
                              {8.6, 1.8}, false,
                              {}, {}, false, 1, false, {}, corridor);
 }
@@ -61,13 +61,14 @@ cv::Rect color_bounds(const cv::Mat& image, cv::Scalar color)
 
 void check_status_layout(const cv::Mat& image)
 {
-    check(image.at<cv::Vec3b>(65, 0) == cv::Vec3b(28, 28, 28),
+    check(image.at<cv::Vec3b>(85, 0) == cv::Vec3b(28, 28, 28),
           "Status panel height changed between mission stages");
-    check(image.at<cv::Vec3b>(66, 0) == cv::Vec3b(40, 40, 40),
+    check(image.at<cv::Vec3b>(86, 0) == cv::Vec3b(40, 40, 40),
           "Map margin or status panel background changed");
     for (const cv::Rect& row : {cv::Rect(8, 5, image.cols - 16, 15),
                                cv::Rect(8, 25, image.cols - 16, 15),
-                               cv::Rect(8, 45, image.cols - 16, 15)}) {
+                               cv::Rect(8, 45, image.cols - 16, 15),
+                               cv::Rect(8, 65, image.cols - 16, 15)}) {
         check(color_count(image(row), cv::Scalar(28, 28, 28)) < row.area(),
               "A mission stage is missing a status row");
     }
@@ -165,8 +166,8 @@ int main(int argc, char** argv)
         const cv::Mat stage_image = draw(visualizer, grid, stage);
         check_status_layout(stage_image);
         check(stage_image.size() == image.size(), "Corridor phase resized the map");
-        check(cv::norm(stage_image.rowRange(66, stage_image.rows),
-                       image.rowRange(66, image.rows), cv::NORM_INF) == 0,
+        check(cv::norm(stage_image.rowRange(86, stage_image.rows),
+                       image.rowRange(86, image.rows), cv::NORM_INF) == 0,
               "Corridor phase moved world coordinates on screen");
     }
 
@@ -195,12 +196,12 @@ int main(int argc, char** argv)
     check(contains_color(horizontal_image, cv::Scalar(245, 245, 245)),
           "Horizontal H marker is clipped");
 
-    const cv::Mat unconfigured = visualizer.render(grid, {}, {}, false, 0, 0, 0, false,
+    const cv::Mat unconfigured = visualizer.render(grid, {}, {}, false, 0, 0, 0, 0, false,
                                                    {}, false, {}, {}, false, 1, false, {});
     check_status_layout(unconfigured);
     check(unconfigured.cols <= 640 && unconfigured.rows == 640,
           "Unconfigured exploration canvas exceeds maximum size");
-    check(contains_color(unconfigured.rowRange(66, unconfigured.rows), cv::Scalar(60, 180, 70)),
+    check(contains_color(unconfigured.rowRange(86, unconfigured.rows), cv::Scalar(60, 180, 70)),
           "Unconfigured view lost the coverage grid below the status bar");
     for (const bool active : {false, true}) {
         CorridorVisualState no_route;

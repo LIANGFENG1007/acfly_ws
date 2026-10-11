@@ -114,7 +114,7 @@ cv::Point Visualizer::to_px(double x, double y) const
 cv::Mat Visualizer::render(const GridSnapshot& grid,
                            const Trajectory& traj,
                            const Vec2& goal, bool goal_valid,
-                           double px, double py, double yaw, bool pose_valid,
+                           double px, double py, double pz, double yaw, bool pose_valid,
                            const Vec2& lookahead, bool look_valid,
                            const std::vector<Vec2>& pois,
                            const Obstacles& obstacles,
@@ -370,17 +370,23 @@ cv::Mat Visualizer::render(const GridSnapshot& grid,
         }
     }
 
-    // ---- 6) 覆盖率文本 ----
+    // ---- 6) 顶部状态：当前雷达坐标、覆盖率和通道信息 ----
     char buf[128];
+    cv::rectangle(img, cv::Rect(0, 0, W_, status_height_), cv::Scalar(28, 28, 28), cv::FILLED);
+    if (pose_valid) {
+        std::snprintf(buf, sizeof(buf), "LiDAR (m): X=%.2f  Y=%.2f  Z=%.2f", px, py, pz);
+    } else {
+        std::snprintf(buf, sizeof(buf), "LiDAR (m): X=--  Y=--  Z=-- | WAITING");
+    }
+    status_line(img, buf, 17, cv::Scalar(240, 220, 150));
     const char* stage = corridor.active ? "CORRIDOR" : (pose_valid ? "EXPLORATION" : "WAITING");
     std::snprintf(buf, sizeof(buf), "Coverage: %.1f%% | %s", grid.coverage_ratio() * 100.0, stage);
-    cv::rectangle(img, cv::Rect(0, 0, W_, status_height_), cv::Scalar(28, 28, 28), cv::FILLED);
-    status_line(img, buf, 17, cv::Scalar(190, 220, 190));
+    status_line(img, buf, 37, cv::Scalar(190, 220, 190));
     if (corridor_configured) {
         const std::string phase = corridor.active
             ? (corridor.phase.empty() ? "ACTIVE" : corridor.phase) : "READY";
         status_line(img, "Corridor: " + phase + " | Passed: " + std::to_string(corridor.gates_passed),
-                    37, cv::Scalar(255, 220, 165));
+                    57, cv::Scalar(255, 220, 165));
         if (corridor.gate_valid && finite_point(corridor.gate_left) &&
             finite_point(corridor.gate_right)) {
             const double width = std::hypot(corridor.gate_left.x - corridor.gate_right.x,
@@ -391,10 +397,10 @@ cv::Mat Visualizer::render(const GridSnapshot& grid,
             std::snprintf(buf, sizeof(buf), "Gap: -- | Cloud: %zu | Corridor ref: %.2f m",
                           corridor.points.size(), corridor.width);
         }
-        status_line(img, buf, 57, cv::Scalar(225, 195, 230));
+        status_line(img, buf, 77, cv::Scalar(225, 195, 230));
     } else {
-        status_line(img, "Corridor: -- | Passed: --", 37, cv::Scalar(255, 220, 165));
-        status_line(img, "Gap: -- | Cloud: 0 | Corridor ref: --", 57, cv::Scalar(225, 195, 230));
+        status_line(img, "Corridor: -- | Passed: --", 57, cv::Scalar(255, 220, 165));
+        status_line(img, "Gap: -- | Cloud: 0 | Corridor ref: --", 77, cv::Scalar(225, 195, 230));
     }
 
     return img;
