@@ -2839,7 +2839,7 @@ private:
                         std::hypot(drop_leg_target_->x-drop_path_[i].x,drop_leg_target_->y-drop_path_[i].y)<1e-6;
                     const bool terminal=std::hypot(drop_path_[i].x-target.x,drop_path_[i].y-target.y)<1e-6;
                     const double heading = same_leg ? drop_leg_heading_ :
-                        (!terminal && continuing_leg ?
+                        (continuing_leg ?
                          std::atan2(drop_path_[i].y-drop_path_[1].y,drop_path_[i].x-drop_path_[1].x) :
                          terminal && std::hypot(target.x-cur.x,target.y-cur.y)<=goal_tol_ ? yaw_ :
                          std::atan2(drop_path_[i].y-cur.y,drop_path_[i].x-cur.x));

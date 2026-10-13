@@ -48,6 +48,10 @@ inline bool drop_descent_clear(Vec2 a, Vec2 b, const Obstacles& obs, const Globa
         // 入口可能有到点误差：检查入口误差圆到精确终点的整束直线。
         // 半径余量随进度线性缩小，而非给最终目标也硬加一个无法到达的余量。
         // |a+u*d-center|²-(r+allowance*(1-u))² 是二次式；最小值只在端点或凸顶点。
+        if (dx == 0.0 && dy == 0.0 && allowance == 0.0) {
+            if (std::hypot(ob.cx-a.x,ob.cy-a.y) < r-1e-9) return false;
+            continue;
+        }
         const double qa = length2-allowance*allowance;
         const double qb = 2*((a.x-ob.cx)*dx+(a.y-ob.cy)*dy+(r+allowance)*allowance);
         const double vertex = qa > 1e-12 ? std::clamp(-qb/(2*qa),0.0,1.0) : 0.0;
@@ -154,6 +158,9 @@ inline DropApproach plan_drop_approach(Vec2 start, Vec2 object, Vec2 lidar_goal,
         const Vec2 p=point(id),q=point(next);
         int previous=id;
         double cost=distance[id]+std::hypot(q.x-p.x,q.y-p.y);
+        // Ordinary-grid cost cannot change below; an already dominated edge
+        // cannot update distance/parent even when its geometry is clear.
+        if (next<n && cost>=distance[next]-1e-9) return;
         if (!drop_descent_clear(p,q,obs,transit)) return;
         if (next>=n) {
             // 终点的父节点就是核准包裹朝向所用的入场点。必须一起存入图，
