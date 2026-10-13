@@ -559,7 +559,10 @@ inline constexpr double RETREAT_TRIGGER_M  = 0.55; // 触发后退的贴障距�
 inline constexpr double RETREAT_STEP_M     = 0.50; // 每次后退目标点距离(m)：朝远离障碍方向取此远的点当 PD 目标,低速退。
 inline constexpr double RETREAT_MAX_DIST   = 1.20; // 累计后退超此距离(m)仍无解 → 放弃后退,判真被围死。防无限后退。
 // 偏入障碍执行圈时，先水平回到原安全路线。仅此恢复阶段使用，不能覆盖普通避障限速。
-inline constexpr double ROUTE_REJOIN_MIN_MPS = 0.20; // 圈内回线速度下限(m/s)，受加速斜坡和RETREAT_V_MAX限制；出圈后按惯性减速，到线5cm内结束恢复
+// ★避障回线速度★(2026-10-13 用户反馈：偏入障碍圈后横移回线太慢，实机浪费时间)。原上限借用 RETREAT_V_MAX(0.35)、下限 0.20 且不可 -p 覆盖。
+//   回线方向是远离障碍，快一点更安全；出圈后仍按距线距离与横向惯性提前减速，到线 5 cm 内结束。运行期 -p route_rejoin_v_max / route_rejoin_min_mps。
+inline constexpr double ROUTE_REJOIN_V_MAX   = 0.60; // 回线速度上限(m/s)，另受本阶段速度上限(V_MAX/V_GOAL_MAX)限制；加速斜坡 XY_BRAKE_ACCEL
+inline constexpr double ROUTE_REJOIN_MIN_MPS = 0.35; // 圈内回线速度下限(m/s)：PD 在小偏差下给的速度很小，靠它顶住实机死区；0.20→0.35(2026-10-13)
 inline constexpr double RETREAT_V_MAX      = 0.35; // 后退限速(m/s)：低速蹭出来,别猛退甩飞。
 // ★后退超时(2026-08)★ ← 修"界面冻结、终端反复刷'后退脱困(已退 0.00m)'、飞机悬在原地"
 //   两个 bug 叠加导致：

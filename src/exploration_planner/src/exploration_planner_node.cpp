@@ -441,6 +441,8 @@ public:
         retreat_step_            = dd("retreat_step",     params::RETREAT_STEP_M);
         retreat_max_dist_        = dd("retreat_max_dist", params::RETREAT_MAX_DIST);
         retreat_v_max_           = dd("retreat_v_max",    params::RETREAT_V_MAX);
+        route_rejoin_v_max_      = std::max(0.0, dd("route_rejoin_v_max",   params::ROUTE_REJOIN_V_MAX));
+        route_rejoin_min_mps_    = std::max(0.0, dd("route_rejoin_min_mps", params::ROUTE_REJOIN_MIN_MPS));
         retreat_timeout_         = dd("retreat_timeout_s", params::RETREAT_TIMEOUT_S);
         ggcfg_.min_x = gcfg_.min_x; ggcfg_.min_y = gcfg_.min_y;
         ggcfg_.max_x = gcfg_.max_x; ggcfg_.max_y = gcfg_.max_y;
@@ -2574,18 +2576,18 @@ private:
         const Vec2 direction{(target.x-cur.x)/std::max(1e-6,distance),(target.y-cur.y)/std::max(1e-6,distance)};
         const double c=std::cos(yaw_),s=std::sin(yaw_);
         const Vec2 measured{c*v_fwd_est_-s*v_lat_est_,s*v_fwd_est_+c*v_lat_est_};
-        const double cap=std::max(0.0,std::min(retreat_v_max_,owner==0 ? gains_.v_max : v_goal_max_));
+        const double cap=std::max(0.0,std::min(route_rejoin_v_max_,owner==0 ? gains_.v_max : v_goal_max_));
         const double toward=measured.x*direction.x+measured.y*direction.y;
         // A short return uses an effective translation command until arrival,
         // not an asymptotically vanishing PD velocity inside the obstacle ring.
-        const double minimum=inside ? std::clamp(params::ROUTE_REJOIN_MIN_MPS,0.0,cap) : 0.0;
+        const double minimum=inside ? std::clamp(route_rejoin_min_mps_,0.0,cap) : 0.0;
         const double predicted=std::max(0.0,distance-std::max(0.0,toward)*gains_.stop_anchor_latency);
         // Outside the ring allow braking, but do not strand a dead-zone-limited
         // aircraft just short of the line. Bounded integral compensation grows
         // only while lateral response is small; it is removed during motion and
         // reset at every new recovery, never inherited by normal flight.
         if(!inside && toward<.05)
-            route_rejoin_bias_=std::min(std::min(params::ROUTE_REJOIN_MIN_MPS,cap),
+            route_rejoin_bias_=std::min(std::min(route_rejoin_min_mps_,cap),
                 route_rejoin_bias_+.5*kp_goal_*distance*gains_.dt);
         else route_rejoin_bias_=std::max(0.0,route_rejoin_bias_-.10*gains_.dt);
         const double speed=std::clamp(kp_goal_*predicted-kd_goal_*toward+route_rejoin_bias_,minimum,cap);
@@ -2595,8 +2597,12 @@ private:
         const double horizon=std::min(.35,std::max(0.0,gains_.prediction_time))+
             magnitude/(2*std::max(.01,xy_brake_accel_));
         // Include stopping distance; a return vector must not run beyond its
-        // safe connector into another obstacle or configured wall.
-        const Vec2 projected{cur.x+velocity.x*horizon,cur.y+velocity.y*horizon};
+        // safe connector into another obstacle or configured wall. The
+        // connector itself was validated, so the projection is capped at the
+        // target: a faster return must not be abandoned just because its
+        // stopping envelope reaches past the line onto the retained route.
+        const double reach=std::min(magnitude*horizon,distance);
+        const Vec2 projected{cur.x+direction.x*reach,cur.y+direction.y*reach};
         if(!obstacle_escape_clear(cur,projected,obs,cfg) || !field_motion_clear(cur,projected,cfg)) {
             route_rejoin_target_.reset();route_rejoin_path_.clear();return false;
         }
@@ -5276,6 +5282,8 @@ private:
     double retreat_step_     = 0.50;   // 每次后退目标点距离(m)，由 RETREAT_STEP_M 覆盖
     double retreat_max_dist_ = 1.20;   // 累计后退上限(m)，由 RETREAT_MAX_DIST 覆盖
     double retreat_v_max_    = 0.35;   // 后退限速(m/s)，由 RETREAT_V_MAX 覆盖
+    double route_rejoin_v_max_   = params::ROUTE_REJOIN_V_MAX;   // 避障回线速度上限(m/s)，构造函数按参数覆盖
+    double route_rejoin_min_mps_ = params::ROUTE_REJOIN_MIN_MPS; // 圈内回线速度下限(m/s)
     rclcpp::Time retreat_start_;       // 进入后退态的时刻（超时兜底，防"退不动"无限重试）
     double retreat_timeout_  = 2.0;    // 后退超时(s)：超此仍没退够 → 判退不动，交上层跳带。由 RETREAT_TIMEOUT_S 覆盖
 
