@@ -3,6 +3,7 @@
 //
 //  订阅：
 //    /aft_mapped_to_init  (nav_msgs/Odometry, camera_init/SLAM, ~20Hz) 位姿
+//    /mavros/state       (mavros_msgs/State) 首次解锁后开始探索障碍/覆盖建图
 //    /exploration/goal    (geometry_msgs/PointStamped, latched) 探索终点(进入时一次)
 //  发布：
 //    /exploration/cmd_vel (geometry_msgs/TwistStamped) 机体系速度 50Hz
@@ -22,6 +23,7 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <nav_msgs/msg/path.hpp>
+#include <mavros_msgs/msg/state.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/float64.hpp>
 #include <diagnostic_msgs/msg/diagnostic_array.hpp>
@@ -41,6 +43,7 @@
 #include <deque>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <limits>
 #include <thread>
 #include <unordered_set>
@@ -521,6 +524,10 @@ public:
         if (viz_) viz_obj_ = std::make_unique<Visualizer>(gcfg_, 1000);  // 1000px：小格(0.05m≈5px)能看清
 
         // ---- ROS 接口 ----
+        flight_state_sub_ = create_subscription<mavros_msgs::msg::State>(
+            "/mavros/state", rclcpp::QoS(10),
+            [this](const mavros_msgs::msg::State::SharedPtr msg) { on_flight_state(*msg); });
+        RCLCPP_INFO(get_logger(), "[探索建图] 等待飞机解锁后开始累计障碍物");
         control_pub_ = create_publisher<acfly_interfaces::msg::ExplorationCommand>("/exploration/control", rclcpp::QoS(1));
         control_status_sub_=create_subscription<acfly_interfaces::msg::ExplorationControlStatus>(
             "/exploration/control_status",rclcpp::QoS(1),
@@ -1079,7 +1086,16 @@ private:
         }
     }
 
-    // Registered downsampled scans still feed the exploration obstacle map.
+    void on_flight_state(const mavros_msgs::msg::State& state)
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        if (!state.connected || !state.armed || obstacle_mapping_start_ns_) return;
+        // 单次启动：重复状态、上锁/再解锁均不清除本次进程已建立的地图。
+        obstacle_mapping_start_ns_ = now().nanoseconds();
+        RCLCPP_INFO(get_logger(), "[探索建图] 已检测到飞机解锁，开始累计解锁后的障碍点云");
+    }
+
+    // Registered downsampled scans feed the exploration map after first arming.
     void on_cloud(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
     {
         if (corridor_cloud_topic_ == "/cloud_registered") on_corridor_cloud(msg);
@@ -1095,6 +1111,10 @@ private:
         double px, py, yaw, wz; bool ok, corridor_active;
         {
             std::lock_guard<std::mutex> lk(mtx_);
+            // 不累计解锁前的障碍，也不接纳排队到解锁后才送达的旧扫描。
+            if (!obstacle_mapping_start_ns_ || msg->header.stamp.sec < 0 ||
+                msg->header.stamp.nanosec >= 1000000000u ||
+                rclcpp::Time(msg->header.stamp).nanoseconds() < *obstacle_mapping_start_ns_) return;
             px = px_; py = py_; yaw = yaw_; wz = yaw_rate_est_;
             ok = has_pose_; corridor_active = corridor_->active();
         }
@@ -4306,7 +4326,7 @@ private:
             // 取一份当前障碍圆（DWA 避障 + 视野遮挡 + 可视化共用）
             const Obstacles obstacles = obs_map_->snapshot();
 
-            if (exploration_enabled_) {
+            if (exploration_enabled_ && obstacle_mapping_start_ns_) {
                 // 把当前视野标进栅格（障碍背后被遮挡的格不标，模拟摄像头）
                 grid_->mark_scan(px_, py_, yaw_, obstacles);
                 // 障碍实体内部无需扫描，直接计为已知。
@@ -5204,6 +5224,8 @@ private:
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr    obs_cloud_pub_;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr  boundary_pub_;
     bool boundary_sent_ = false;   // 边界框只需发一次(latched)
+    rclcpp::Subscription<mavros_msgs::msg::State>::SharedPtr flight_state_sub_;
+    std::optional<int64_t> obstacle_mapping_start_ns_;  // mtx_ 保护；本进程首次检测到解锁的 ROS 时间
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr       odom_sub_;
     rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr goal_sub_;
     rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr poi_sub_;

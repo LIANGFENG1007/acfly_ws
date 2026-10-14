@@ -11,6 +11,7 @@ find_package(rclcpp REQUIRED)
 find_package(acfly_interfaces REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(mavros_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -46,6 +47,7 @@ ament_target_dependencies(exploration_planner_node
   rclcpp
   geometry_msgs
   nav_msgs
+  mavros_msgs
   std_msgs
   diagnostic_msgs
   sensor_msgs
@@ -133,7 +135,7 @@ if(BUILD_TESTING)
   target_compile_features(required_node_test PRIVATE cxx_std_17)
   ament_target_dependencies(required_node_test
     acfly_interfaces
-    rclcpp geometry_msgs nav_msgs std_msgs diagnostic_msgs sensor_msgs visualization_msgs tf2
+    rclcpp geometry_msgs nav_msgs mavros_msgs std_msgs diagnostic_msgs sensor_msgs visualization_msgs tf2
   )
   target_link_libraries(required_node_test ${OpenCV_LIBS})
   target_link_options(required_node_test PRIVATE -Wl,--wrap=rcl_publish)
@@ -145,6 +147,15 @@ if(BUILD_TESTING)
     -p fov_range:=3.0 -p v_max:=0.6)
   set_tests_properties(required_node_test PROPERTIES
     ENVIRONMENT "ROS_DOMAIN_ID=203;ROS_LOCALHOST_ONLY=1;ROS_LOG_DIR=/tmp/acfly-required-node-ctest-logs"
+    RUN_SERIAL TRUE
+    TIMEOUT 60
+  )
+  add_test(NAME armed_obstacle_mapping_test COMMAND required_node_test
+    --ros-args -p visual_drop_enabled:=false -p viz:=false -p corridor_enabled:=false -p exploration_enabled:=true
+    -p field_min_x:=0.0 -p field_min_y:=-5.0 -p field_max_x:=7.5 -p field_max_y:=5.0
+    -p fov_range:=3.0 -p v_max:=0.6)
+  set_tests_properties(armed_obstacle_mapping_test PROPERTIES
+    ENVIRONMENT "ACFLY_ARMED_MAPPING_ONLY=1;ROS_DOMAIN_ID=203;ROS_LOCALHOST_ONLY=1;ROS_LOG_DIR=/tmp/acfly-required-node-ctest-logs"
     RUN_SERIAL TRUE
     TIMEOUT 60
   )

@@ -6,6 +6,7 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <nav_msgs/msg/path.hpp>
+#include <mavros_msgs/msg/state.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/float64.hpp>
 #include <diagnostic_msgs/msg/diagnostic_array.hpp>
@@ -782,6 +783,9 @@ void exploration_switch_regression()
 {
     ExplorationNode node;
     node.vision_reader_.reset();
+    mavros_msgs::msg::State flight_state;
+    flight_state.connected = flight_state.armed = true;
+    node.on_flight_state(flight_state);
     node.exploration_enabled_ = false;
     auto goal = std::make_shared<geometry_msgs::msg::PointStamped>();
     goal->header.frame_id = "camera_init";
@@ -1308,6 +1312,70 @@ void path_failure_keeps_safe_braking()
     const Vec2 stopped = node.recovery_velocity({{2, 0, .1}}, false);
     require(stopped.x == 0 && stopped.y == 0 && node.recovery_status_ == "no_safe_recovery_velocity",
             "unavailable recovery must diagnose and reject physical overlap");
+}
+
+void obstacle_mapping_starts_on_arming()
+{
+    ExplorationNode node;
+    node.timer_->cancel(); node.vision_reader_.reset();
+    reset(node, {1, 0}); node.has_pose_ = true;
+    auto cloud = std::make_shared<sensor_msgs::msg::PointCloud2>();
+    cloud->header.frame_id = "camera_init";
+    sensor_msgs::PointCloud2Modifier modifier(*cloud);
+    modifier.setPointCloud2FieldsByString(1, "xyz"); modifier.resize(1);
+    const auto scan = [&](float x, int64_t stamp, int count = 3) {
+        cloud->header.stamp = rclcpp::Time(stamp);
+        *sensor_msgs::PointCloud2Iterator<float>(*cloud, "x") = x;
+        *sensor_msgs::PointCloud2Iterator<float>(*cloud, "y") = 0.f;
+        *sensor_msgs::PointCloud2Iterator<float>(*cloud, "z") = .8f;
+        for (int i = 0; i < count; ++i) node.on_cloud(cloud);
+    };
+    const auto sees = [&](double x) {
+        for (const auto& p : node.obs_map_->occupied_points())
+            if (std::abs(p.x - x) < node.ocfg_.cell) return true;
+        return false;
+    };
+    const int64_t before = node.now().nanoseconds();
+    scan(2.f, before);
+    mavros_msgs::msg::State state;
+    state.armed = true; state.connected = false;
+    node.on_flight_state(state); scan(2.f, before);
+    state.armed = false; state.connected = true;
+    node.on_flight_state(state); scan(2.f, before);
+    require(!node.obstacle_mapping_start_ns_ && node.obs_map_->snapshot().empty() &&
+            node.obs_map_->occupied_points().empty(), "pre-arm scans entered obstacle map");
+    for (int i = 0; i < 2 * node.gcfg_.scan_dwell_ticks + 2; ++i) node.on_timer();
+    require(node.grid_->coverage_ratio() == 0, "pre-arm empty obstacle map marked coverage as scanned");
+
+    state.armed = true; state.mode = "MANUAL";
+    node.on_flight_state(state);
+    require(node.obstacle_mapping_start_ns_.has_value(), "arming did not enable mapping outside OFFBOARD");
+    const int64_t start = *node.obstacle_mapping_start_ns_;
+    scan(2.f, start - 1);
+    require(node.obs_map_->occupied_points().empty(), "queued pre-arm scan entered map after arming");
+    scan(2.f, start, 1);
+    require(node.obs_map_->occupied_points().empty(), "pre-arm hits leaked into post-arm accumulation");
+    scan(3.f, start + 1000000);
+    require(!sees(2) && sees(3) && !node.obs_map_->snapshot().empty(),
+            "moved obstacle did not map only at its post-arm position");
+    scan(4.f, start + 2000000);
+    require(sees(3) && sees(4), "map froze instead of continuing to accumulate after arming");
+    reset(node, {1, 0});
+    for (int i = 0; i < 2 * node.gcfg_.scan_dwell_ticks + 2; ++i) node.on_timer();
+    require(node.grid_->coverage_ratio() > 0, "coverage did not start after arming");
+    node.on_flight_state(state);
+    state.armed = false; node.on_flight_state(state);
+    state.connected = false; node.on_flight_state(state);
+    state.armed = state.connected = true; node.on_flight_state(state);
+    require(*node.obstacle_mapping_start_ns_ == start && sees(3) && sees(4),
+            "repeated state/disarm/rearm cleared map or moved its start time");
+
+    ExplorationNode already_armed;
+    already_armed.timer_->cancel(); already_armed.vision_reader_.reset();
+    already_armed.on_flight_state(state);
+    require(already_armed.obstacle_mapping_start_ns_.has_value(),
+            "node started on an armed aircraft incorrectly required a disarmed transition");
+    std::cout << "armed mapping: pre-arm/moved/queued scans, continued mapping and repeated states passed\n";
 }
 
 void malformed_cloud_does_not_terminate_node()
@@ -3191,6 +3259,12 @@ int main(int argc, char** argv)
     rclcpp::init(argc, argv, options);
     int result = 0;
     try {
+        if (std::getenv("ACFLY_ARMED_MAPPING_ONLY")) {
+            obstacle_mapping_starts_on_arming();
+            corridor_registered_cloud_regression();
+            malformed_cloud_does_not_terminate_node();
+            rclcpp::shutdown(); return 0;
+        }
         if (std::getenv("ACFLY_CORNER_TRANSITION_ONLY")) {
             avoidance_rejoin_regression();
             visual_curve_approach_regression();
@@ -3222,6 +3296,7 @@ int main(int argc, char** argv)
         home_virtual_boundary_drift_regression();
         home_straight_descent_regression();
         if (std::getenv("ACFLY_HOME_APPROACH_ONLY")) { rclcpp::shutdown(); return 0; }
+        obstacle_mapping_starts_on_arming();
         malformed_cloud_does_not_terminate_node();
         recorded_xy_handoffs();
         cruise_drift_compensation_is_checked();
