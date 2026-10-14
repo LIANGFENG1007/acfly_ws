@@ -1314,6 +1314,68 @@ void path_failure_keeps_safe_braking()
             "unavailable recovery must diagnose and reject physical overlap");
 }
 
+void vision_range_uses_exploration_fov()
+{
+    char directory[] = "/tmp/acfly-vision-range-XXXXXX";
+    require(::mkdtemp(directory) != nullptr, "create range filter fixture");
+    struct Cleanup { std::string path; ~Cleanup() { std::filesystem::remove_all(path); } } cleanup{directory};
+    for (bool delivery : {false, true}) {
+        ExplorationNode node;
+        node.timer_->cancel(); node.vision_reader_.reset();
+        reset(node, {2, 0}); node.has_pose_ = true; node.has_goal_ = false;
+        node.visual_drop_enabled_ = delivery;
+        const double range = node.gcfg_.fov_range;
+        require(range == node.get_parameter("fov_range").as_double(), "vision fixture lost shared parameter");
+        const std::string path = std::string(directory) + (delivery ? "/delivery" : "/legacy");
+        vision_shm::Writer writer(path);
+        node.vision_reader_ = std::make_unique<VisionShmReader>(path, .5, .02);
+        const auto receive = [&](const std::vector<vision_shm::Target>& targets) {
+            require(writer.publish(vision_shm::monotonic_now(), targets), "write range fixture frame");
+            node.poll_vision_shm();
+            require(node.vision_new_frame_.has_value(), "range filter discarded frame identity");
+        };
+        receive({{1, 2 + range, 0}, {2, 2, range}, {6, 2 + range + .001, 0},
+                 {1, 2 + .8 * range, .8 * range}});
+        require(node.vision_new_frame_->count == 2 && node.vision_new_frame_->targets[0].id == 1 &&
+                node.vision_new_frame_->targets[1].id == 2 && node.vision_range_dropped_ == 2,
+                "range gate failed exact boundary, mixed frame, or radial distance");
+        const auto seq = node.vision_new_frame_->seq;
+        receive({{1, 2 + range + .01, 0}});
+        require(node.vision_new_frame_->count == 0 && node.vision_new_frame_->seq > seq,
+                "all-far detections retained targets or replayed the previous frame");
+        node.has_pose_ = false; receive({{1, 2.1, 0}});
+        require(node.vision_new_frame_->count == 0, "missing aircraft pose admitted coordinates");
+        node.has_pose_ = true; node.pose_freshness_ = SensorFreshness{};
+        receive({{1, 2.1, 0}});
+        require(node.vision_new_frame_->count == 0, "stale aircraft pose admitted coordinates");
+        reset(node, {2, 0}); node.has_goal_ = true; node.homing_ = false;
+        for (int i = 0; i < 12; ++i) receive({{1, 2 + range + .01, 0}});
+        require(node.vision_candidates_->size() == 0 && node.vision_queue_->pending().empty() &&
+                !node.vision_queue_->active() && node.vision_hints_.empty(),
+                "far coordinate entered confirmation, queue, or revisit hints");
+        // The same target can be accepted once the aircraft actually approaches it.
+        node.px_ = 2.02;
+        receive({{1, 2 + range + .01, 0}});
+        require(node.vision_candidates_->size() == 1 && node.vision_new_frame_->count == 1,
+                "nearby reobservation was permanently blacklisted");
+        if (delivery) {
+            node.vision_candidates_->reset(); node.vision_queue_->reset(); node.coverage_closed_ = true;
+            node.px_ = 2;
+            const double t = node.steady_seconds();
+            VisionVisitTarget target;
+            target.track_id = 99; target.coarse_position = target.position = {2 + range - .1, 0};
+            node.visual_drop_.begin(target, 0);
+            require(node.visual_drop_.start_sample({2, 0}, .8, 0, t), "start range sample fixture");
+            receive({{1, 2 + range + .1, 0}});
+            require(node.visual_drop_.samples() == 0 && node.vision_last_frame_.count == 0,
+                    "far observation leaked into delivery sampling");
+            receive({{1, 2 + range - .1, 0}});
+            require(node.visual_drop_.samples() == 1, "range gate rejected nearby delivery sample");
+        }
+    }
+    std::cout << "vision range: shared fov parameter, boundary, mixed/empty frames, pose validity, queue/hints and sampling passed\n";
+}
+
 void obstacle_mapping_starts_on_arming()
 {
     ExplorationNode node;
@@ -3259,6 +3321,10 @@ int main(int argc, char** argv)
     rclcpp::init(argc, argv, options);
     int result = 0;
     try {
+        if (std::getenv("ACFLY_VISION_RANGE_ONLY")) {
+            vision_range_uses_exploration_fov();
+            rclcpp::shutdown(); return 0;
+        }
         if (std::getenv("ACFLY_ARMED_MAPPING_ONLY")) {
             obstacle_mapping_starts_on_arming();
             corridor_registered_cloud_regression();
@@ -3296,6 +3362,7 @@ int main(int argc, char** argv)
         home_virtual_boundary_drift_regression();
         home_straight_descent_regression();
         if (std::getenv("ACFLY_HOME_APPROACH_ONLY")) { rclcpp::shutdown(); return 0; }
+        vision_range_uses_exploration_fov();
         obstacle_mapping_starts_on_arming();
         malformed_cloud_does_not_terminate_node();
         recorded_xy_handoffs();

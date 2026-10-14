@@ -150,6 +150,15 @@ if(BUILD_TESTING)
     RUN_SERIAL TRUE
     TIMEOUT 60
   )
+  foreach(vision_test_range IN ITEMS 3.0 2.0)
+    add_test(NAME vision_range_${vision_test_range}_test COMMAND required_node_test
+      --ros-args -p viz:=false -p corridor_enabled:=false -p exploration_enabled:=true
+      -p fov_range:=${vision_test_range})
+    set_tests_properties(vision_range_${vision_test_range}_test PROPERTIES
+      ENVIRONMENT "ACFLY_VISION_RANGE_ONLY=1;ROS_DOMAIN_ID=203;ROS_LOCALHOST_ONLY=1;ROS_LOG_DIR=/tmp/acfly-required-node-ctest-logs"
+      RUN_SERIAL TRUE
+      TIMEOUT 60)
+  endforeach()
   add_test(NAME armed_obstacle_mapping_test COMMAND required_node_test
     --ros-args -p visual_drop_enabled:=false -p viz:=false -p corridor_enabled:=false -p exploration_enabled:=true
     -p field_min_x:=0.0 -p field_min_y:=-5.0 -p field_max_x:=7.5 -p field_max_y:=5.0

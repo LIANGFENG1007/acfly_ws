@@ -215,7 +215,7 @@ inline constexpr double COVERAGE_THRESH = 0.90;   // 大格完成阈值（占比
 //   当前 100° → 半开角 ±50°
 // ---------------------------------------------------------------------------
 inline constexpr double FOV_DEG   = 100.0;   // 总开角 (度)
-inline constexpr double FOV_RANGE = 3.0;     // 可视半径 (m)
+inline constexpr double FOV_RANGE = 3.0;     // 可视半径及视觉坐标接收的最大水平距离(m)，共用 ROS 参数 fov_range
 inline constexpr double SCAN_DWELL_S = 0.5; // 小格累计在视野内满此时长(s)才算已扫：视觉远距确认要连续 10 帧，掠视一拍不算看过。0=扫到即算(旧)
 inline constexpr double SCAN_NEAR_RANGE_M = 2.0; // 此距离内在视时间全额计入 SCAN_DWELL_S，更远只计一半(远处检测断续/易认错)。0=不区分
 inline constexpr int SCAN_HINT_DWELL_FACTOR = 3; // 视觉线索区的格要近处累计看满 SCAN_DWELL_S×此倍数(1.5 s)才算扫过，让飞机在疑似目标前多看一会儿凑满确认帧(差相机压力测试 r223)

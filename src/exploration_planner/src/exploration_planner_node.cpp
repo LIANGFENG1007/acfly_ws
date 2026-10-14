@@ -268,6 +268,8 @@ public:
         gcfg_.coverage_thresh = dd("coverage_thresh", params::COVERAGE_THRESH);
         gcfg_.fov_deg         = dd("fov_deg", params::FOV_DEG);
         gcfg_.fov_range       = dd("fov_range", params::FOV_RANGE);
+        if (!std::isfinite(gcfg_.fov_range) || gcfg_.fov_range <= 0)
+            throw std::invalid_argument("fov_range must be finite and positive");
         gcfg_.scan_dwell_ticks = static_cast<int>(std::clamp(std::round(
             dd("scan_dwell_s", params::SCAN_DWELL_S) * 1000.0 / params::TIMER_PERIOD_MS), 1.0, 127.0));
         gcfg_.scan_near_range = std::max(0.0, dd("scan_near_range_m", params::SCAN_NEAR_RANGE_M));
@@ -4122,6 +4124,21 @@ private:
         vision_new_frame_ = vision_reader_->poll(current_time);
         // ID 黑名单：在所有下游(远距确认/排队/近距投票/投放采样)之前剔除，飞机不会飞向这些目标。
         if (vision_new_frame_) vision_ids_dropped_ += drop_blacklisted_ids(*vision_new_frame_, vision_id_blacklist_);
+        // 与探索可视半径共用 fov_range；先过滤，再确认/排队/生成线索/投放采样。
+        // 全部超距时保留新帧的 seq/stamp 和空目标列表，让下游中断连续确认。
+        if (vision_new_frame_) {
+            auto& frame = *vision_new_frame_;
+            const bool pose_valid = has_pose_ && std::isfinite(px_) && std::isfinite(py_) &&
+                pose_freshness_.fresh(current_time, vision_pose_timeout_);
+            size_t kept = 0;
+            for (size_t i = 0; i < frame.count; ++i) {
+                const auto target = frame.targets[i];
+                if (pose_valid && std::hypot(target.x - px_, target.y - py_) <= gcfg_.fov_range)
+                    frame.targets[kept++] = target;
+            }
+            vision_range_dropped_ += frame.count - kept;
+            frame.count = kept;
+        }
         if (visual_drop_enabled_) {
             if (vision_new_frame_) vision_last_frame_ = *vision_new_frame_;
             if (vision_collection_active_) {
@@ -4772,6 +4789,8 @@ private:
                 number("vision_capacity_drops", vision_stats.capacity_drops);
                 number("vision_invalid_detections", vision_stats.invalid_detections);
                 number("vision_id_blacklist_dropped", vision_ids_dropped_);
+                number("vision_range_dropped", vision_range_dropped_);
+                number("vision_accept_range_m", gcfg_.fov_range);
                 number("vision_hints", vision_hints_.size());
                 for (const auto& candidate : vision_candidates_->snapshot()) {
                     const auto prefix = "vision_region_" + std::to_string(candidate.track_id) + "_";
@@ -5050,6 +5069,7 @@ private:
     std::vector<int> vision_hint_unmarks_;    // 每条线索已恢复未扫的次数(最多 2)
     int vision_hint_limit_ = params::VISION_HINT_LIMIT;
     std::uint64_t vision_ids_dropped_ = 0;
+    std::uint64_t vision_range_dropped_ = 0;  // 超可视半径或无新鲜位姿而忽略的视觉坐标数
     double vision_hover_s_ = params::VISION_HOVER_S;
     double vision_straight_approach_m_ = params::VISION_STRAIGHT_APPROACH_M;
     std::uint64_t vision_straight_track_ = 0;
