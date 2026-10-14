@@ -179,7 +179,11 @@ CorridorObservation CorridorController::averageGate(const CorridorObservation& p
     result.gap_width=std::max(0.0,std::min((1-w)*previous.gap_width+w*observed.gap_width,
         2*std::min(center-observed.gap_right,observed.gap_left-center)));
     result.gap_left=center+result.gap_width*.5;result.gap_right=center-result.gap_width*.5;
-    result.gate_depth=observed.gate_depth+2*std::abs(result.gate_s-observed.gate_s);
+    // 深度也要沿用同一帧间平滑。单帧点云的前后簇长度会随高度切片和稀疏回波
+    // 抖动；直接替换深度会让 front/back 每拍移动，反复改变“已清门”与刹停曲线。
+    result.gate_depth=std::max(cfg_.perception.cell_size,
+        (1-w)*previous.gate_depth+w*observed.gate_depth+
+        2*std::abs(result.gate_s-observed.gate_s));
     result.gate_center=perception_.toWorld(result.gate_s,center);
     return result;
 }
@@ -870,7 +874,26 @@ Vec2 CorridorController::measuredBrakeTarget(const Vec2& position,const Vec2& ta
         lower=std::clamp(lower,geometric_lower,geometric_upper);
         upper=std::clamp(upper,geometric_lower,geometric_upper);
         if(lower<=upper) {
-            const double old_t=perception_.lateral(destination),new_t=std::clamp(old_t,lower,upper);
+            const double old_t=perception_.lateral(destination);
+            double new_t=std::clamp(old_t,lower,upper);
+            // 门框两侧的动量制动不能在相邻拍把参考点从门中心一侧甩到另一侧。
+            // 录包中横向速度换向时，这个跳变把安全目标交替推向左右墙，形成
+            // “刹停—反向—再刹停”。仅在几何放行尚未成立、且门宽已确认可通过时
+            // 收回门中心；正常的连续对中目标保留给已放行的几何路径，最后仍由
+            // 严格 safe()/recovery 检查整段机体扫掠。
+            if(gate_locked_ && position_gate_approach_) {
+                const double gate_front=locked_gate_.gate_s-locked_gate_.gate_depth*.5-
+                    cfg_.approach_distance;
+                const double gate_back=locked_gate_.gate_s+locked_gate_.gate_depth*.5+
+                    cfg_.exit_distance;
+                if(s>=gate_front && s<=gate_back) {
+                    const double gate_t=.5*(locked_gate_.gap_left+locked_gate_.gap_right);
+                    if(!gate_geometry_admitted_ &&
+                       locked_gate_.gap_width >= cfg_.perception.robot_width +
+                           cfg_.perception.minimum_gap_extra)
+                        new_t=gate_t;
+                }
+            }
             if(std::abs(new_t-old_t)>1e-9) {
                 destination.x+=normal.x*(new_t-old_t);destination.y+=normal.y*(new_t-old_t);
                 position_measured_braking_=true;position_wall_normal_limited_=true;
