@@ -94,6 +94,7 @@ void CorridorController::start(const Vec2& red, double now)
     passed_s_=last_gate_back_=-1e9;gates_passed_=0;
     entrance_plan_={};entrance_candidate_={};entrance_locked_=entrance_staged_=false;
     entry_blended_=false;position_lateral_limited_=false;
+    entry_direct_=false;gate_geometry_admitted_=false;
     entrance_confirmations_=0;entrance_sequence_=0;entrance_time_=-1e9;planned_path_.clear();
     if(cfg_.wall_entry && configured_) {entry_=red;perception_.setFrame(entry_,h_);}
     last_update_ = now;
@@ -308,6 +309,7 @@ CorridorCommand CorridorController::hold(const Vec2& position, const std::string
         position_intent_=position_reference_;
         position_brake_input_=position_brake_target_=position_reference_;position_wall_normal_limited_=false;
         position_lateral_limited_=false;
+        gate_geometry_admitted_=false;
         position_limit_reason_.clear();
         position_gate_admission_=0.0;position_reference_stop_time_=0.0;position_measured_braking_=false;
         CorridorCommand cmd;cmd.position_control=true;cmd.target=position_reference_;
@@ -355,6 +357,26 @@ CorridorCommand CorridorController::rotateAt(PositionHold& hold, const Vec2& pos
     return cmd;
 }
 
+bool CorridorController::canEnterDirect(const Vec2& position) const
+{
+    if(!cfg_.wall_entry || !position_active_ || !entrance_locked_)return false;
+    const auto a=entrance_plan_.axis;
+    const double radius=cfg_.perception.robot_width*.5+cfg_.perception.cell_size;
+    const auto outside=[&](const Vec2& p) {
+        return (p.x-entrance_plan_.wall_end.x)*a.x+(p.y-entrance_plan_.wall_end.y)*a.y<=-radius;
+    };
+    const Vec2 predicted{position.x+filtered_velocity_.x*cfg_.position_brake_time,
+                         position.y+filtered_velocity_.y*cfg_.position_brake_time};
+    // 已在墙端开口外侧且直达入口的机体扫掠安全时，不为横墙外的精确暂驻点先停一次。
+    // 仅允许原point_tol范围内的接续；点云新鲜度和入口独立帧确认由外层保留。
+    return std::abs(perception_.longitudinal(position))<=cfg_.point_tolerance &&
+           outside(position) && outside(position_reference_) && outside(predicted) &&
+           CorridorPerception::pathClear(points_,position,entry_,radius) &&
+           CorridorPerception::pathClear(points_,position_reference_,entry_,radius) &&
+           CorridorPerception::pathClear(points_,position,predicted,radius) &&
+           CorridorPerception::pathClear(points_,predicted,entry_,radius);
+}
+
 bool CorridorController::canBlendEntry(const Vec2& position) const
 {
     if(!cfg_.wall_entry || !position_active_ || !entrance_locked_ || !entrance_staged_ ||
@@ -365,7 +387,7 @@ bool CorridorController::canBlendEntry(const Vec2& position) const
     };
     const double radius=cfg_.perception.robot_width*.5;
     const double margin=cfg_.perception.cell_size;
-    // 只在机身及参考均已进入横墙内侧时接下一段；墙外8cm对准要求不变。
+    // 只在机身及参考均已进入横墙内侧时接下一段；墙外已对准或通过安全直达检查。
     const Vec2 predicted{position.x+filtered_velocity_.x*cfg_.position_brake_time,
                          position.y+filtered_velocity_.y*cfg_.position_brake_time};
     if(std::min({depth(position),depth(position_reference_),depth(predicted)})<radius+margin)return false;
@@ -386,9 +408,12 @@ CorridorCommand CorridorController::enter(const Vec2& position, double yaw,
 {
     if(cfg_.wall_entry) {
         if(!entrance_locked_)return hold(position,"Entry: "+entrance_plan_.reason);
-        // 必须实际到达墙外的对准位置，不能因参考点已到就提前斜切进入。
+        // 精确墙外对准或实机/参考/动量均安全的直达接续；不能只凭参考到点斜切。
         if(!entrance_staged_ && distance(position,entrance_plan_.staging)<=std::min(.08,cfg_.point_tolerance))
             entrance_staged_=true;
+        if(!entrance_staged_ && canEnterDirect(position)) {
+            entrance_staged_=true;entry_direct_=true;
+        }
         if(!entrance_staged_) {
             planned_path_={position,entrance_plan_.staging,entry_};
             auto cmd=translate(position,yaw,entrance_plan_.staging,cfg_.entry_speed,vf,vl,dt);
@@ -535,11 +560,42 @@ CorridorCommand CorridorController::translate(const Vec2& position, double yaw,
 
 // 隧道里往前走：纵向恒定 cruise_speed(不低于 min_forward_speed)，只在快到 H 时减速停到 H；
 // 旧速度横向目标：平时是原行进线(t=0)，门前 approach_distance 内对中；位置接口可提前斜向对中。
-// 旧速度接口保持连续前进；位置接口还要求新鲜点云/扫掠路径可通行，并在门前先对中。
+// 位置接口在完整机体扫掠与动量检查允许时边走边对中，不能只因当前中心误差停车。
 // 门的确认/锁定/通过计数两种接口共用。
+bool CorridorController::continuousGateTarget(const Vec2& position,double through,double lateral,Vec2& target) const
+{
+    const double radius=cfg_.perception.robot_width*.5+cfg_.perception.cell_size;
+    const Vec2 predicted{position.x+filtered_velocity_.x*cfg_.position_brake_time,
+                         position.y+filtered_velocity_.y*cfg_.position_brake_time};
+    if(!CorridorPerception::pathClear(points_,position,predicted,radius))return false;
+    // 与positionCommand的普通横向软限幅一致，不能用一个之后会被改向的远端点放行。
+    const double t=perception_.lateral(position),lead=std::min(cfg_.position_lead,cfg_.position_lateral_lead);
+    lateral=std::clamp(lateral,t-lead,t+lead);
+    const auto clear=[&](double s) {
+        const Vec2 p=perception_.toWorld(s,lateral);
+        return CorridorPerception::pathClear(points_,position,p,radius) &&
+               CorridorPerception::pathClear(points_,position_reference_,p,radius) &&
+               CorridorPerception::pathClear(points_,predicted,p,radius);
+    };
+    double lo=std::max(perception_.longitudinal(position),perception_.longitudinal(position_reference_));
+    double hi=std::max(lo,through);
+    if(clear(hi))lo=hi;
+    else {
+        if(!clear(lo))return false;
+        // 每个保留端点都通过完整扫掠；非单调障碍分布最多少走，不会将未检查区当作可通行。
+        for(int i=0;i<8;++i) {
+            const double mid=.5*(lo+hi);
+            if(clear(mid))lo=mid;else hi=mid;
+        }
+    }
+    if(lo<=perception_.longitudinal(position)+cfg_.perception.cell_size*.5)return false;
+    target=perception_.toWorld(lo,lateral);return true;
+}
+
 CorridorCommand CorridorController::forwardCorridor(const Vec2& position, double yaw, double vf, double vl, double dt)
 {
     position_gate_admission_=1.0;
+    gate_geometry_admitted_=false;
     const double s = perception_.longitudinal(position);
     const double radius = cfg_.perception.robot_width * 0.5;
     const double resolution = cfg_.perception.cell_size;
@@ -589,6 +645,8 @@ CorridorCommand CorridorController::forwardCorridor(const Vec2& position, double
     }
     // 3. 横向目标：平时原行进线(t=0)；锁定门后离门前沿 approach_distance 内对门中心
     double t_ref = 0.0;
+    if(position_active_ && observation_.walls_observed)
+        t_ref=.5*(observation_.left_wall+observation_.right_wall);
     CorridorPhase phase = CorridorPhase::Search;
     std::string status = "Forward: holding travel line";
     if (gate_locked_) {
@@ -661,9 +719,22 @@ CorridorCommand CorridorController::forwardCorridor(const Vec2& position, double
             position_gate_limit_s_=staging+position_gate_admission_*(through-staging);
             target=perception_.toWorld(through,center-extra);
             route_target=perception_.toWorld(position_gate_limit_s_,center);
+            if(!body_clear) {
+                Vec2 continuous;
+                if(continuousGateTarget(position,through,center-extra,continuous) ||
+                   continuousGateTarget(position,through,center,continuous)) {
+                    // 斜向对中的整条机体路径可通行时，允许边走边对中；不再仅因
+                    // 当前厘米级中心误差就停在旧暂驻点。实测动量/刹停曲线仍随后检查。
+                    target=route_target=continuous;
+                    position_gate_limit_s_=perception_.longitudinal(continuous);
+                    position_gate_admission_=std::clamp((position_gate_limit_s_-s)/moving_ahead,0.0,1.0);
+                    gate_geometry_admitted_=true;
+                }
+            }
             status=body_clear ? "Position: clearing passed doorway" :
                 position_gate_aligned_ ? "Position: crossing door" :
-                (in_alignment_zone ? "Position: aligning before door" : "Position: diagonally approaching door");
+                (gate_geometry_admitted_ ? "Position: continuously aligning through measured opening" :
+                 (in_alignment_zone ? "Position: aligning before door" : "Position: diagonally approaching door"));
         }
     }
     if (near_h && !gate_locked_) {
@@ -935,6 +1006,17 @@ CorridorCommand CorridorController::positionCommand(const Vec2& position,const V
         if(gate_locked_ && position_gate_approach_ && !position_recovering_) {
             const double advance=std::max(0.0,position_gate_limit_s_-perception_.longitudinal(position_reference_));
             along=std::min(along,advance/approach_time);
+            if(gate_geometry_admitted_) {
+                const double center=.5*(locked_gate_.gap_left+locked_gate_.gap_right);
+                const double lateral=perception_.lateral(position);
+                const double cross_speed=filtered_velocity_.x*normal.x+filtered_velocity_.y*normal.y;
+                const double risk=std::max(std::abs(lateral-center),
+                    std::abs(lateral+cfg_.position_brake_time*cross_speed-center));
+                const double room=std::max(.01,(locked_gate_.gap_width-cfg_.perception.robot_width)*.5-.02);
+                // 安全斜线也不能用巡航速度追门框：横向偏差/动量较大时连续减速，
+                // 同时保留独立横向修正；不把中心误差变成非零即停车的开关。
+                along=std::min(along,speed*std::clamp(room/std::max(room,risk),.25,1.0));
+            }
             // 门前几厘米摆动只让虚拟参考减速/暂停，不倒退重拉。领先圆边界
             // 换侧需要小幅收纵向距离时仍允许；动量制动/碰撞恢复也不受此限制。
             if(!reposition && !position_measured_braking_)along=std::max(0.0,along);

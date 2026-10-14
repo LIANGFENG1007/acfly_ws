@@ -4938,6 +4938,8 @@ private:
                 number("corridor_position_lateral_limited",corridor_->positionLateralLimited());
                 number("corridor_position_lateral_lead_limit_m",ccfg_.position_lateral_lead);
                 number("corridor_entry_blended",corridor_->entryBlended());
+                number("corridor_entry_direct",corridor_->entryDirect());
+                number("corridor_gate_geometry_admitted",corridor_->gateGeometryAdmitted());
                 value("corridor_reference_limit_reason",corridor_->positionLimitReason());
                 number("gate_depth",gate.gate_depth);
                 number("corridor_axis_x",corridor_->axis().x);number("corridor_axis_y",corridor_->axis().y);

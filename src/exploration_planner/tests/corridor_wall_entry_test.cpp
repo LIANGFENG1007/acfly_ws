@@ -43,6 +43,14 @@ void flight(){CorridorConfig cfg;cfg.position_control=true;cfg.wall_entry=true;c
   auto cmd=c.update(p,0,v.x,v.y,t,true);if(c.entranceReady())require(dist(c.entry(),{-.6,.75})<.06,"locked entrance moved");
   if(c.phase()==CorridorPhase::Entry && c.entranceReady()) {
    if(dist(p,c.entrancePlan().staging)<=.08)saw_alignment=true;
+   if(c.entryDirect() && !saw_alignment) {
+    const auto a=c.entrancePlan().axis,w=c.entrancePlan().wall_end;
+    require((p.x-w.x)*a.x+(p.y-w.y)*a.y<=-cfg.perception.robot_width*.5-cfg.perception.cell_size,
+            "direct entry cut across wall end");
+    require(CorridorPerception::pathClear(cloud,p,c.entry(),cfg.perception.robot_width*.5+cfg.perception.cell_size),
+            "direct entry lacks full swept clearance");
+    saw_alignment=true;
+   }
    if(cmd.target.y>-.98) {require(saw_alignment,"entered before actual XY aligned outside wall");saw_entry=true;}
   }
   require(cmd.forward==0 && cmd.lateral==0,"auto entry changed position interface");

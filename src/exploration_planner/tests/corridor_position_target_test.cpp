@@ -138,7 +138,7 @@ void noGateTargetWithdrawal() {
     for(double side:{-1.,1.}) {
         CorridorController c(config());const Vec2 p{side*.07,-1.4};seed(c,p,true);
         // The existing reference is safe through the opening. Small side error exceeds
-        // the admission threshold; it must stop advancing, not retreat behind the door.
+        // the old scalar threshold; a clear swept route may advance, without withdrawal.
         c.position_reference_={0,-2.05};
         require(CorridorPerception::pathClear(c.points_,p,c.position_reference_,.32),"invalid test geometry");
         double prior_s=2.05;
@@ -146,12 +146,12 @@ void noGateTargetWithdrawal() {
             const auto cmd=c.forwardCorridor(p,0,0,0,dt);
             const double s=-cmd.target.y;
             require(s>=prior_s-1e-9,"centering gate withdrew existing safe forward reference");
-            require(s<=2.05+1e-8,"unadmitted gate reference kept advancing");
             require(CorridorPerception::pathClear(c.points_,p,cmd.target,.32),"retained target crossed door frame");
             prior_s=s;
         }
+        require(prior_s>2.07,"clear diagonal path still stopped on scalar centering threshold");
     }
-    std::cout<<"gate admission pauses advancement without withdrawing safe reference\n";
+    std::cout<<"geometry admits forward alignment without withdrawing safe reference\n";
 }
 void wallNormalBraking() {
     // A wall must not turn a long tangential goal into a large sideways reversal.
@@ -244,8 +244,12 @@ void revokeCrossing() {
     CorridorCommand cmd;
     for(int i=0;i<300;++i)cmd=c.forwardCorridor({.12,-1.3},0,0,0,dt);
     require(!c.position_gate_aligned_,"12cm drift kept crossing latched");
-    const double staging=2-.02-.32-config().continuous_center_reserve;
-    require(-cmd.target.y<=staging+.01,"off-center request advanced past door staging limit");
+    require(CorridorPerception::pathClear(c.points_,{.12,-1.3},cmd.target,.32),
+            "off-center request cut door frame instead of safely aligning diagonally");
+    c.gate_blocked_=true;
+    cmd=c.forwardCorridor({.12,-1.3},0,0,0,dt);
+    require(!c.gateGeometryAdmitted() && c.positionGateAdmission()==0.,
+            "current blocked measurement failed to revoke geometric crossing");
     std::cout<<"crossing permission revoked before unsafe drift continued forward\n";
 }
 void completeDoorExitWithoutOldAlignmentLimit() {
@@ -265,7 +269,8 @@ void completeDoorExitWithoutOldAlignmentLimit() {
         // Re-entering the slab revokes permission again; body-clear is not a permanent latch.
         p.y=-(body_clear_s-.01);
         c.forwardCorridor(p,0,0,0,dt);
-        require(c.positionGateAdmission()==0.,"backward drift kept body-clear permission latched");
+        require(c.positionGateAdmission()==0. || c.gateGeometryAdmitted(),
+                "backward drift kept permission without fresh geometric approval");
         // Existing normal door handoff still occurs only at the configured exit distance.
         p.y=-(2+.04*.5+cfg.exit_distance+.01);
         c.forwardCorridor(p,0,0,0,dt);

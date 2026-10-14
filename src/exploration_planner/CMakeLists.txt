@@ -251,6 +251,10 @@ if(BUILD_TESTING)
     src/corridor_controller.cpp src/corridor_perception.cpp)
   target_compile_features(corridor_entry_blend_test PRIVATE cxx_std_17)
   add_test(NAME corridor_entry_blend_test COMMAND corridor_entry_blend_test)
+  add_executable(corridor_continuous_position_test tests/corridor_continuous_position_test.cpp
+    src/corridor_controller.cpp src/corridor_perception.cpp)
+  target_compile_features(corridor_continuous_position_test PRIVATE cxx_std_17)
+  add_test(NAME corridor_continuous_position_test COMMAND corridor_continuous_position_test)
   add_executable(corridor_wall_entry_test tests/corridor_wall_entry_test.cpp
     src/corridor_controller.cpp src/corridor_perception.cpp)
   target_compile_features(corridor_wall_entry_test PRIVATE cxx_std_17)

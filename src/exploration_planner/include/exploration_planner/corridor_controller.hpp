@@ -124,6 +124,8 @@ public:
     bool positionWallNormalLimited() const { return position_wall_normal_limited_; }
     bool positionLateralLimited() const { return position_lateral_limited_; }
     bool entryBlended() const { return entry_blended_; }
+    bool entryDirect() const { return entry_direct_; }
+    bool gateGeometryAdmitted() const { return gate_geometry_admitted_; }
     const std::string& positionLimitReason() const { return position_limit_reason_; }
     Vec2 measuredVelocity() const { return filtered_velocity_; }
     Vec2 referenceVelocity() const { return position_reference_velocity_; }
@@ -139,6 +141,7 @@ private:
     CorridorEntrance entrance_plan_, entrance_candidate_;
     bool entrance_locked_=false, entrance_staged_=false;
     bool entry_blended_=false;
+    bool entry_direct_=false, gate_geometry_admitted_=false;
     int entrance_confirmations_=0;
     unsigned long entrance_sequence_=0;
     double entrance_time_=-1e9;
@@ -198,6 +201,8 @@ private:
                              double vf, double vl, double dt);
     CorridorCommand enter(const Vec2& position, double yaw, double vf, double vl, double dt);
     bool canBlendEntry(const Vec2& position) const;
+    bool canEnterDirect(const Vec2& position) const;
+    bool continuousGateTarget(const Vec2& position, double through, double lateral, Vec2& target) const;
     CorridorCommand translate(const Vec2& position, double yaw, const Vec2& target,
                               double speed, double vf, double vl, double dt,
                               double longitudinal_limit = -1.0, double min_forward = 0.0);
