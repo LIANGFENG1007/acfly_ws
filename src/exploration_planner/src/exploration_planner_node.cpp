@@ -181,6 +181,7 @@ public:
         corridor_enabled_ = declare_parameter<bool>("corridor_enabled", params::CORRIDOR_ENABLED);
         ccfg_.position_control=declare_parameter<bool>("corridor_position_control",params::CORRIDOR_POSITION_CONTROL);
         ccfg_.position_lead=dd("corridor_position_lead_m",params::CORRIDOR_POSITION_LEAD_M);
+        ccfg_.position_lateral_lead=dd("corridor_position_lateral_lead_m",params::CORRIDOR_POSITION_LATERAL_LEAD_M);
         ccfg_.position_acceleration=dd("corridor_position_acceleration",params::CORRIDOR_POSITION_ACCEL_MPS2);
         ccfg_.position_lateral_gain=dd("corridor_position_lateral_gain",params::CORRIDOR_POSITION_LATERAL_GAIN);
         ccfg_.position_lateral_max=dd("corridor_position_lateral_max_m",params::CORRIDOR_POSITION_LATERAL_MAX_M);
@@ -4934,6 +4935,9 @@ private:
                 number("corridor_brake_input_x",brake_input.x);number("corridor_brake_input_y",brake_input.y);
                 number("corridor_brake_target_x",brake_target.x);number("corridor_brake_target_y",brake_target.y);
                 number("corridor_wall_normal_limited",corridor_->positionWallNormalLimited());
+                number("corridor_position_lateral_limited",corridor_->positionLateralLimited());
+                number("corridor_position_lateral_lead_limit_m",ccfg_.position_lateral_lead);
+                number("corridor_entry_blended",corridor_->entryBlended());
                 value("corridor_reference_limit_reason",corridor_->positionLimitReason());
                 number("gate_depth",gate.gate_depth);
                 number("corridor_axis_x",corridor_->axis().x);number("corridor_axis_y",corridor_->axis().y);

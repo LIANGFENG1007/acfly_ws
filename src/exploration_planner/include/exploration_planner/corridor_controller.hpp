@@ -16,6 +16,7 @@ struct CorridorConfig {
     bool wall_entry = false; // 主节点默认开启；入口由横墙墙端生成，旧入口坐标只兼容历史模式
     double wall_entry_offset = .60; // 雷达中心从横墙入口端向外留出的距离(m)
     double position_lead = 1.00;
+    double position_lateral_lead = .25; // 普通横向引导相对实机的最大位置差；紧急制动/脱离仍独立检查
     double position_acceleration = .60; // 位置参考的加速度上限；不用于飞控速度/PID接口
     double position_lateral_gain = 1.5; // 额外横向补偿的零点增益；随后平滑趋近当前可用上限
     double position_lateral_max = .18; // 额外横向位置补偿上限，另受门洞机体余量限制
@@ -121,6 +122,8 @@ public:
     Vec2 positionBrakeInput() const { return position_brake_input_; }
     Vec2 positionBrakeTarget() const { return position_brake_target_; }
     bool positionWallNormalLimited() const { return position_wall_normal_limited_; }
+    bool positionLateralLimited() const { return position_lateral_limited_; }
+    bool entryBlended() const { return entry_blended_; }
     const std::string& positionLimitReason() const { return position_limit_reason_; }
     Vec2 measuredVelocity() const { return filtered_velocity_; }
     Vec2 referenceVelocity() const { return position_reference_velocity_; }
@@ -135,6 +138,7 @@ private:
     Vec2 entry_, h_, red_;
     CorridorEntrance entrance_plan_, entrance_candidate_;
     bool entrance_locked_=false, entrance_staged_=false;
+    bool entry_blended_=false;
     int entrance_confirmations_=0;
     unsigned long entrance_sequence_=0;
     double entrance_time_=-1e9;
@@ -155,6 +159,7 @@ private:
     Vec2 position_intent_; // 拉伸后的几何目标，尚未经过实测动量/机体净空守卫
     Vec2 position_brake_input_, position_brake_target_; // 门前范围约束后/动量制动后，便于区分引导与保护
     bool position_wall_normal_limited_ = false;
+    bool position_lateral_limited_ = false;
     std::string position_limit_reason_;
     Vec2 position_reference_;
     Vec2 position_reference_velocity_; // 仅用于生成连续切向的位置点，不作为速度指令发送
@@ -192,6 +197,7 @@ private:
     CorridorCommand rotateAt(PositionHold& hold, const Vec2& position, double yaw,
                              double vf, double vl, double dt);
     CorridorCommand enter(const Vec2& position, double yaw, double vf, double vl, double dt);
+    bool canBlendEntry(const Vec2& position) const;
     CorridorCommand translate(const Vec2& position, double yaw, const Vec2& target,
                               double speed, double vf, double vl, double dt,
                               double longitudinal_limit = -1.0, double min_forward = 0.0);

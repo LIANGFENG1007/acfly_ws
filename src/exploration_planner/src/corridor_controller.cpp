@@ -28,7 +28,7 @@ CorridorController::CorridorController(const CorridorConfig& config)
                    cfg_.position_kp, cfg_.velocity_kd, cfg_.velocity_filter_tau, cfg_.arrival_hysteresis,
                    cfg_.heading_tolerance, cfg_.heading_stop, cfg_.point_tolerance,
                    cfg_.stop_speed, cfg_.lookahead, cfg_.approach_distance, cfg_.exit_distance,
-                   cfg_.moving_lookahead, cfg_.center_prediction_time, cfg_.position_lead, cfg_.position_acceleration,
+                   cfg_.moving_lookahead, cfg_.center_prediction_time, cfg_.position_lead, cfg_.position_lateral_lead, cfg_.position_acceleration,
                    cfg_.position_lateral_response,cfg_.position_brake_time,cfg_.gate_track_timeout,cfg_.detection_new_weight,cfg_.wall_entry_offset,
                    cfg_.center_tolerance, cfg_.gate_association, cfg_.cloud_timeout,
                    cfg_.pose_timeout, p.corridor_width, p.robot_width, p.cell_size, p.lookahead,
@@ -93,6 +93,7 @@ void CorridorController::start(const Vec2& red, double now)
     gate_locked_=gate_blocked_=candidate_blocked_=false;locked_gate_={};
     passed_s_=last_gate_back_=-1e9;gates_passed_=0;
     entrance_plan_={};entrance_candidate_={};entrance_locked_=entrance_staged_=false;
+    entry_blended_=false;position_lateral_limited_=false;
     entrance_confirmations_=0;entrance_sequence_=0;entrance_time_=-1e9;planned_path_.clear();
     if(cfg_.wall_entry && configured_) {entry_=red;perception_.setFrame(entry_,h_);}
     last_update_ = now;
@@ -306,6 +307,7 @@ CorridorCommand CorridorController::hold(const Vec2& position, const std::string
         position_reference_velocity_={}; // 定位/交接/高度异常时立即保持，不继续执行旧曲线
         position_intent_=position_reference_;
         position_brake_input_=position_brake_target_=position_reference_;position_wall_normal_limited_=false;
+        position_lateral_limited_=false;
         position_limit_reason_.clear();
         position_gate_admission_=0.0;position_reference_stop_time_=0.0;position_measured_braking_=false;
         CorridorCommand cmd;cmd.position_control=true;cmd.target=position_reference_;
@@ -351,6 +353,32 @@ CorridorCommand CorridorController::rotateAt(PositionHold& hold, const Vec2& pos
     previous_yaw_rate_ = cmd.yaw_rate;
     previous_velocity_ = {c * cmd.forward - s * cmd.lateral, s * cmd.forward + c * cmd.lateral};
     return cmd;
+}
+
+bool CorridorController::canBlendEntry(const Vec2& position) const
+{
+    if(!cfg_.wall_entry || !position_active_ || !entrance_locked_ || !entrance_staged_ ||
+       !observation_.walls_observed)return false;
+    const auto& inward=entrance_plan_.inward;
+    const auto depth=[&](const Vec2& p) {
+        return (p.x-entrance_plan_.wall_end.x)*inward.x+(p.y-entrance_plan_.wall_end.y)*inward.y;
+    };
+    const double radius=cfg_.perception.robot_width*.5;
+    const double margin=cfg_.perception.cell_size;
+    // 只在机身及参考均已进入横墙内侧时接下一段；墙外8cm对准要求不变。
+    const Vec2 predicted{position.x+filtered_velocity_.x*cfg_.position_brake_time,
+                         position.y+filtered_velocity_.y*cfg_.position_brake_time};
+    if(std::min({depth(position),depth(position_reference_),depth(predicted)})<radius+margin)return false;
+    const double cross=std::abs((position.x-entry_.x)*inward.x+(position.y-entry_.y)*inward.y);
+    const double room=std::max(0.0,(cfg_.perception.corridor_width-cfg_.perception.robot_width)*.5-margin);
+    const double s=perception_.longitudinal(position);
+    if(cross>std::min(cfg_.point_tolerance,room) || s < -std::min(.08,cfg_.point_tolerance))return false;
+    const double next_s=std::max(0.0,s)+std::max(cfg_.lookahead,cfg_.perception.min_observed_ahead);
+    if(observation_.observed_until<next_s)return false;
+    const Vec2 next=perception_.toWorld(next_s,0);
+    // 实际机体和已发参考的两条转向线都要清空；后续参考及刹停曲线照常检查。
+    return CorridorPerception::pathClear(points_,position,next,radius+margin) &&
+           CorridorPerception::pathClear(points_,position_reference_,next,radius+margin);
 }
 
 CorridorCommand CorridorController::enter(const Vec2& position, double yaw,
@@ -785,6 +813,7 @@ CorridorCommand CorridorController::positionCommand(const Vec2& position,const V
 {
     position_intent_=target;
     position_measured_braking_=false;position_wall_normal_limited_=false;
+    position_lateral_limited_=false;
     position_limit_reason_.clear();
     const double radius=cfg_.perception.robot_width*.5;
     const bool corridor_forward=phase_==CorridorPhase::Search || phase_==CorridorPhase::Approach || phase_==CorridorPhase::Cross;
@@ -798,6 +827,15 @@ CorridorCommand CorridorController::positionCommand(const Vec2& position,const V
     position_reference_stop_time_=referenceStopTime(position_reference_velocity_,corridor_forward,lateral_reference_accel);
     const bool overlapping=!CorridorPerception::pathClear(points_,position,position,radius);
     Vec2 destination=target;
+    if(corridor_forward) {
+        // 纵向1m前瞻不能同时变成横向的大拉力。先限制普通引导的位置差，
+        // 再交给门前范围、实测动量和机体保护；紧急脱离不受此软限幅削弱。
+        const double cross=(destination.x-position.x)*normal.x+(destination.y-position.y)*normal.y;
+        const double limit=std::min(cfg_.position_lead,cfg_.position_lateral_lead);
+        const double limited=std::clamp(cross,-limit,limit);
+        destination.x+=normal.x*(limited-cross);destination.y+=normal.y*(limited-cross);
+        position_lateral_limited_=std::abs(limited-cross)>1e-9;
+    }
     if(corridor_forward && gate_locked_ && position_gate_approach_) {
         // 门前推进范围必须先作用于几何目标，再进入动量制动。否则明明尚未
         // 放行，保护器却拿门后1米多的远端目标做斜向投影，凭空放大横向反拉。
@@ -824,8 +862,18 @@ CorridorCommand CorridorController::positionCommand(const Vec2& position,const V
     if(!corridor_forward && !position_recovering_) {
         // 入口/最终定点必须按实机动量提前制动，不能只让虚拟参考点减速。
         // 仍是位置接口：提前把目标收向来向，飞控位置PID执行制动。
-        destination.x-=cfg_.position_brake_time*filtered_velocity_.x;
-        destination.y-=cfg_.position_brake_time*filtered_velocity_.y;
+        if(phase_==CorridorPhase::Entry && cfg_.wall_entry && entrance_locked_ && entrance_staged_) {
+            // 入口是直进后转弯的中间点。只收进入方向的领先，不因另一轴
+            // 的漂移生成反向远端目标；普通收点不越过实机，实测墙保护仍可反刹。
+            const auto n=entrance_plan_.inward;
+            const double remaining=std::max(0.0,(target.x-position.x)*n.x+(target.y-position.y)*n.y);
+            const double closing=std::max(0.0,filtered_velocity_.x*n.x+filtered_velocity_.y*n.y);
+            const double pull=std::min(remaining,cfg_.position_brake_time*closing);
+            destination.x-=n.x*pull;destination.y-=n.y*pull;
+        } else {
+            destination.x-=cfg_.position_brake_time*filtered_velocity_.x;
+            destination.y-=cfg_.position_brake_time*filtered_velocity_.y;
+        }
     }
     position_brake_input_=destination;
     if(!position_recovering_)destination=measuredBrakeTarget(position,destination,corridor_forward,lateral_reference_accel);
@@ -1167,8 +1215,13 @@ CorridorCommand CorridorController::updateMotion(const Vec2& position, double ya
     // Intermediate waypoints are passed within this tick; only H has a dwell.
     for (int handoff = 0; handoff < 5; ++handoff) {
         if (phase_ == CorridorPhase::Entry) {
-            if(cfg_.wall_entry && (!entrance_locked_ || !entrance_staged_ ||
-                distance(position,entry_)>std::min(.08,cfg_.point_tolerance)))return enter(position,yaw,vf,vl,dt);
+            if(cfg_.wall_entry) {
+                if(!entrance_locked_ || !entrance_staged_)return enter(position,yaw,vf,vl,dt);
+                if(distance(position,entry_)>std::min(.08,cfg_.point_tolerance)) {
+                    if(!canBlendEntry(position))return enter(position,yaw,vf,vl,dt);
+                    entry_blended_=true;
+                }
+            }
             if (!cfg_.wall_entry && distance(position, entry_) > cfg_.point_tolerance) return enter(position, yaw, vf, vl, dt);
             transition(CorridorPhase::Search);
         }

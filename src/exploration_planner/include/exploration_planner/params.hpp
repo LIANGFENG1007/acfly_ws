@@ -15,7 +15,7 @@ namespace params {
 //   true  = 先探索，覆盖率达标后去探索终点，再执行通道任务。
 //   false = 跳过探索和视觉/插点访问，起飞后直接去探索终点，再执行通道任务。
 //   直达终点仍使用原有避障与场地安全检查；场地边界请填写实际范围。
-inline constexpr bool EXPLORATION_ENABLED = false;
+inline constexpr bool EXPLORATION_ENABLED = false; 
 
 // 探索终点到配置边界的最小距离(m)。0 = 终点中心可到边界，不能越界。
 // 只放宽前往探索终点的末段；普通探索/视觉目标仍使用原安全边距。
@@ -112,6 +112,7 @@ inline constexpr bool CORRIDOR_POSITION_CONTROL = true; // 降高和转正完成
 inline constexpr bool CORRIDOR_WALL_ENTRY = true; // 由入口横墙墙端定位入口，不依赖场地左墙或预设第一个进入点
 inline constexpr double CORRIDOR_WALL_ENTRY_OFFSET_M = 0.60; // 雷达中心在横墙入口端外侧的距离(m)；进入后到墙向内半个通道宽度的中线
 inline constexpr double CORRIDOR_POSITION_LEAD_M = 1.00; // 动态位置目标最大XY领先距离(m)，为低响应飞控保留前进拉力；墙/门会进一步限制
+inline constexpr double CORRIDOR_POSITION_LATERAL_LEAD_M = 0.25; // 普通横向引导相对实机的位置差上限(m)；不削弱紧急贴墙制动/脱离
 inline constexpr double CORRIDOR_POSITION_ACCEL_MPS2 = 0.60; // 入口/定点及通道纵向位置参考加速度(m/s²)；侧向参考按下方响应时间独立收敛，不是飞控PID
 inline constexpr double CORRIDOR_POSITION_LATERAL_GAIN = 1.50; // 额外侧向补偿的零点增益；右偏4cm静止时普通行进约向左延伸5.8cm，门内按余量平滑收紧
 inline constexpr double CORRIDOR_POSITION_LATERAL_MAX_M = 0.18; // 上述额外侧向补偿上限(m)，实际还会收紧到门宽减机宽后的余量
@@ -215,7 +216,7 @@ inline constexpr double COVERAGE_THRESH = 0.90;   // 大格完成阈值（占比
 //   当前 100° → 半开角 ±50°
 // ---------------------------------------------------------------------------
 inline constexpr double FOV_DEG   = 100.0;   // 总开角 (度)
-inline constexpr double FOV_RANGE = 3.0;     // 可视半径及视觉坐标接收的最大水平距离(m)，共用 ROS 参数 fov_range
+inline constexpr double FOV_RANGE = 3.6;     // 可视半径及视觉坐标接收的最大水平距离(m)，共用 ROS 参数 fov_range
 inline constexpr double SCAN_DWELL_S = 0.5; // 小格累计在视野内满此时长(s)才算已扫：视觉远距确认要连续 10 帧，掠视一拍不算看过。0=扫到即算(旧)
 inline constexpr double SCAN_NEAR_RANGE_M = 2.0; // 此距离内在视时间全额计入 SCAN_DWELL_S，更远只计一半(远处检测断续/易认错)。0=不区分
 inline constexpr int SCAN_HINT_DWELL_FACTOR = 3; // 视觉线索区的格要近处累计看满 SCAN_DWELL_S×此倍数(1.5 s)才算扫过，让飞机在疑似目标前多看一会儿凑满确认帧(差相机压力测试 r223)

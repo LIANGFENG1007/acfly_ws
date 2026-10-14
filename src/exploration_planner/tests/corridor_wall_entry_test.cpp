@@ -46,7 +46,15 @@ void flight(){CorridorConfig cfg;cfg.position_control=true;cfg.wall_entry=true;c
    if(cmd.target.y>-.98) {require(saw_alignment,"entered before actual XY aligned outside wall");saw_entry=true;}
   }
   require(cmd.forward==0 && cmd.lateral==0,"auto entry changed position interface");
-  if(c.phase()!=CorridorPhase::Entry && c.phase()!=CorridorPhase::Rotate){if(!saw_center)require(dist(p,{-.6,.75})<.10,"entered corridor before reaching measured center");saw_center=true;}
+  if(c.phase()!=CorridorPhase::Entry && c.phase()!=CorridorPhase::Rotate){
+   if(!saw_center) {
+    require(std::abs(p.y-.75)<=cfg.point_tolerance,"entry blended too far from travel line");
+    require(p.y>=cfg.perception.robot_width*.5+cfg.perception.cell_size,"turned before body cleared entrance wall");
+    require(CorridorPerception::pathClear(cloud,p,{-.25,.75},cfg.perception.robot_width*.5),
+            "entry blended through wall-end body envelope");
+   }
+   saw_center=true;
+  }
   Vec2 desired{1.2*(cmd.target.x-p.x),1.2*(cmd.target.y-p.y)};const double a=1-std::exp(-.02/.5);v.x+=a*(desired.x-v.x);v.y+=a*(desired.y-v.y);p.x+=v.x*.02;p.y+=v.y*.02;
   for(auto q:cloud)clearance=std::min(clearance,dist(p,q));
   if(cmd.finished){done=true;std::cout<<"wall entry + two doors complete "<<t<<"s clearance="<<clearance<<'\n';break;}
