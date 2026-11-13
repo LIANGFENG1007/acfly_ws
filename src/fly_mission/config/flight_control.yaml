@@ -1,0 +1,19 @@
+/**:
+  ros__parameters:
+    control_period_ms: 20
+    offboard_preheat: true
+    # 位置差分速度的低通系数，及保持当前位置的 PD 参数。
+    velocity_filter_alpha: 0.3
+    kp_xy: 0.8
+    kd_xy: 0.20
+    kp_z: 0.6
+    kd_z: 0.20
+    kp_yaw: 0.7
+    # 水平速度、起飞爬升、测绘高度修正、悬停修正的上限 (m/s)。
+    max_speed_xy_mps: 0.8
+    max_climb_mps: 0.6
+    max_level_correction_mps: 0.1
+    max_hold_xy_mps: 0.2
+    max_yaw_rate_radps: 0.8
+    tolerance_xy_m: 0.15
+    tolerance_z_m: 0.10

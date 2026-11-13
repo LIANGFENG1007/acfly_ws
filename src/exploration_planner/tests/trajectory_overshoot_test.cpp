@@ -1,5 +1,5 @@
 #include "exploration_planner/trajectory_tracker.hpp"
-#include "exploration_planner/params.hpp"
+#include "reference_gains.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -37,7 +37,7 @@ exploration::TrackerGains gains(bool production)
     result.forward_only = true;
     result.dt = kDt;
     if (production) {
-        namespace p = exploration::params;
+        namespace p = exploration::test_reference;
         result.v_max = p::V_MAX;
         result.v_min = p::V_MIN;
         result.k_curv = p::CARLIKE_K_CURV;
@@ -184,8 +184,8 @@ Result run(const Scenario& scenario, bool production)
                 const double source_dt = (tick - previous_sample_tick) * kDt;
                 const double raw_yaw_rate = wrap(observed_yaw - previous_sample_yaw) / source_dt;
                 const double previous_rate = std::isfinite(measured_yaw_rate) ? measured_yaw_rate : 0.0;
-                measured_yaw_rate = exploration::params::V_EST_ALPHA * raw_yaw_rate +
-                    (1.0 - exploration::params::V_EST_ALPHA) * previous_rate;
+                measured_yaw_rate = exploration::test_reference::V_EST_ALPHA * raw_yaw_rate +
+                    (1.0 - exploration::test_reference::V_EST_ALPHA) * previous_rate;
             }
             previous_sample_yaw = observed_yaw;
             previous_sample_tick = tick;

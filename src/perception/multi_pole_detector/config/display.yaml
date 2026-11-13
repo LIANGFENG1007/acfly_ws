@@ -1,0 +1,11 @@
+# Marker 尺寸单位 m；颜色为 [红, 绿, 蓝, 透明度]，通道范围 0 到 1。
+/**:
+  ros__parameters:
+    cropped_cloud_topic: /multi_pole_detector/cropped_cloud
+    marker_topic: /multi_pole_detector/marker
+    display_queue_depth: 5
+    center_diameter: 0.12
+    label_offset: 0.25
+    label_height: 0.2
+    center_color: [1.0, 0.0, 0.0, 1.0]
+    label_color: [1.0, 1.0, 1.0, 1.0]

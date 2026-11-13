@@ -1,0 +1,13 @@
+# 采样与诊断：点云/位姿断流将停止探索和覆盖记账。
+/**:
+  ros__parameters:
+    timer_period_ms: 20  # 规划控制周期 (ms)
+    diagnostics_period_ticks: 10  # 每隔多少个控制周期发布覆盖与诊断
+    pose_timeout_s: 0.30  # 有效定位最长接收间隔 (s)
+    cloud_timeout_s: 1.0  # 有效点云最长接收间隔 (s)
+    imu_timeout_s: 0.10  # 雷达 IMU 角速度最大可用时长 (s)
+    imu_topic: "/livox/imu"  # 只订阅雷达 IMU；可留空退回里程计航向差分
+    cruise_vertical_limit: 0.1  # 巡航定高的竖直速度限制 (m/s)
+    clock_domain_gap_s: 60.0  # 点云时间与 ROS 时钟相差超过此值，认定为不同时域（秒）
+    clock_timeout_s: 0.5  # 用于确定解锁门限的 /clock 最大接收间隔（秒）
+    clock_cloud_gap_s: 1.0  # /clock 与点云时间允许的最大差（秒）

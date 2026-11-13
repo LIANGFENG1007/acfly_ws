@@ -1,0 +1,9 @@
+# 输入点云和里程计必须属于 frame_id。队列深度按消息条数，日志间隔按 ms。
+/**:
+  ros__parameters:
+    cloud_topic: /cloud_registered
+    odom_topic: /aft_mapped_to_init
+    frame_id: camera_init
+    center_topic: /multi_pole_detector/center
+    measurement_queue_depth: 10
+    log_interval_ms: 2000

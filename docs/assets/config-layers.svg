@@ -1,0 +1,65 @@
+<!-- Editable source: config-layers.mmd; regenerate with tools/render_diagrams.sh. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="560" viewBox="0 0 1200 560" role="img" aria-labelledby="title desc">
+  <title id="title">ACFly 参数配置分层</title>
+  <desc id="desc">展示根目录 config 索引、各包分类 YAML、节点声明和运行时覆盖的关系。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#356d9e"/>
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .title { font: 700 28px sans-serif; fill: #172334; }
+      .label { font: 700 17px sans-serif; fill: #172334; text-anchor: middle; }
+      .body { font: 14px sans-serif; fill: #31435b; text-anchor: middle; }
+      .index { fill: #e8eef7; stroke: #6f8fb4; stroke-width: 2; }
+      .yaml { fill: #fff3dc; stroke: #c68a2c; stroke-width: 2; }
+      .node { fill: #e8f4ee; stroke: #4f9b73; stroke-width: 2; }
+      .override { fill: #f0e8fa; stroke: #8965b5; stroke-width: 2; }
+      .line { stroke: #356d9e; stroke-width: 2.5; fill: none; marker-end: url(#arrow); }
+      .small { font: 13px sans-serif; fill: #52657d; text-anchor: middle; }
+    </style>
+  </defs>
+  <rect class="bg" x="0" y="0" width="1200" height="560" rx="18"/>
+  <text class="title" x="48" y="54">运行参数配置分层</text>
+  <text class="small" x="600" y="88">默认值按功能归属保存，启动时加载，用户覆盖必须保持参数类型一致</text>
+
+  <rect class="index" x="55" y="170" width="220" height="160" rx="14"/>
+  <text class="label" x="165" y="210">config/</text>
+  <text class="body" x="165" y="242">根目录索引</text>
+  <text class="body" x="165" y="267">相对符号链接</text>
+  <text class="body" x="165" y="292">按包和用途查找</text>
+
+  <rect class="yaml" x="350" y="125" width="240" height="250" rx="14"/>
+  <text class="label" x="470" y="165">分类 YAML</text>
+  <text class="body" x="470" y="200">mission.yaml</text>
+  <text class="body" x="470" y="226">flight_control.yaml</text>
+  <text class="body" x="470" y="252">mapping.yaml</text>
+  <text class="body" x="470" y="278">coverage.yaml</text>
+  <text class="body" x="470" y="304">input / region / detection</text>
+  <text class="body" x="470" y="330">/ display.yaml</text>
+
+  <rect class="node" x="665" y="125" width="240" height="250" rx="14"/>
+  <text class="label" x="785" y="165">节点声明</text>
+  <text class="body" x="785" y="202">acfly_config::Defaults</text>
+  <text class="body" x="785" y="229">参数类型校验</text>
+  <text class="body" x="785" y="256">范围与几何检查</text>
+  <text class="body" x="785" y="283">未知参数报错</text>
+  <text class="body" x="785" y="310">启动期只读</text>
+
+  <rect class="override" x="980" y="170" width="165" height="160" rx="14"/>
+  <text class="label" x="1062" y="210">运行覆盖</text>
+  <text class="body" x="1062" y="242">--params-file</text>
+  <text class="body" x="1062" y="267">-p name:=value</text>
+  <text class="body" x="1062" y="292">同名同类型</text>
+
+  <path class="line" d="M275 250 H350"/>
+  <path class="line" d="M590 250 H665"/>
+  <path class="line" d="M905 250 H980"/>
+  <text class="small" x="312" y="239">定位文件</text>
+  <text class="small" x="627" y="239">加载并校验</text>
+  <text class="small" x="942" y="239">启动时覆盖</text>
+
+  <rect class="index" x="350" y="430" width="555" height="70" rx="14"/>
+  <text class="body" x="627" y="458">编辑源码 YAML 后，使用 --symlink-install 或重新构建安装空间</text>
+  <text class="small" x="627" y="482">运行中的节点不会动态读取文件改动</text>
+</svg>

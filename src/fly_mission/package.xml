@@ -2,24 +2,20 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>fly_mission</name>
-  <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <version>0.2.0</version>
+  <description>Manual takeoff authorization, coverage survey handoff and terminal landing.</description>
   <maintainer email="yk@todo.todo">yk</maintainer>
-  <license>TODO: License declaration</license>
+  <license>LicenseRef-Unspecified</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <depend>acfly_config</depend>
   <depend>rclcpp</depend>
   <depend>acfly_interfaces</depend>
   <depend>geometry_msgs</depend>
   <depend>mavros_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>std_msgs</depend>
-  <depend>tf2</depend>
-  <depend>nlohmann_json</depend>
-
-  <test_depend>ament_lint_auto</test_depend>
-  <test_depend>ament_lint_common</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

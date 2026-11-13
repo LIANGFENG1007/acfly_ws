@@ -1,0 +1,11 @@
+/**:
+  ros__parameters:
+    # 起飞高度相对本次人工放行时的里程计高度；返航点是 camera_init 的绝对 XY。
+    takeoff_height_m: 1.2
+    explore_goal_x: 0.0
+    explore_goal_y: 0.0
+    takeoff_settle_s: 0.3
+    takeoff_hover_s: 0.5
+    landed_height_m: 0.10
+    # 开启后还须收到 /mission/start 的 Int32(1)，不能代替人工解锁或切模式。
+    require_start_signal: false

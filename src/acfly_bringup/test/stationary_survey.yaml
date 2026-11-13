@@ -1,0 +1,4 @@
+# Integration fixture: the first scan covers enough cells to finish at the launch point.
+/exploration_planner_node:
+  ros__parameters:
+    search_coverage: 0.001

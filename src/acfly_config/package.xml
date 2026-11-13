@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>acfly_config</name>
+  <version>0.1.0</version>
+  <description>Shared ROS parameter file loading for ACFly nodes.</description>
+  <maintainer email="yk@todo.todo">yk</maintainer>
+  <license>LicenseRef-Unspecified</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>ament_index_cpp</depend>
+  <depend>rclcpp</depend>
+  <depend>rcl</depend>
+  <depend>rcl_yaml_param_parser</depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

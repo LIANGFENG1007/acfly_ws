@@ -1,5 +1,5 @@
 #include "exploration_planner/trajectory_tracker.hpp"
-#include "exploration_planner/params.hpp"
+#include "reference_gains.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -20,7 +20,7 @@ double wrap(double value)
 
 exploration::TrackerGains gains(bool production)
 {
-    namespace p = exploration::params;
+    namespace p = exploration::test_reference;
     exploration::TrackerGains result{};
     result.v_max = production ? p::V_MAX : 0.4;
     result.v_min = production ? p::V_MIN : 0.08;
@@ -130,8 +130,8 @@ bool run(const Scenario& scenario, bool production)
             if (previous_sample_tick >= 0) {
                 const double source_dt = (tick - previous_sample_tick) * kDt;
                 const double raw_rate = wrap(observed_yaw - previous_sample_yaw) / source_dt;
-                measured_yaw_rate = exploration::params::V_EST_ALPHA * raw_rate +
-                    (1.0 - exploration::params::V_EST_ALPHA) * measured_yaw_rate;
+                measured_yaw_rate = exploration::test_reference::V_EST_ALPHA * raw_rate +
+                    (1.0 - exploration::test_reference::V_EST_ALPHA) * measured_yaw_rate;
             }
             previous_sample_yaw = observed_yaw;
             previous_sample_tick = tick;

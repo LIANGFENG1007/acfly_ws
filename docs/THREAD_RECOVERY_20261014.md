@@ -7,13 +7,13 @@
 - 原标题：查找项目聊天记录。
 - 原线程 ID：`01a0a49e-ad94-7252-b4f3-68a09097cac2`。
 - 当前接手线程 ID：`01a13788-240a-71c0-a22f-05c6ed371bcf`。
-- 原聊天文件：`/home/yk/.saiai/desktop/codex/sessions/2026/09/15/rollout-2026-09-15T03-30-57-01a0a49e-ad94-7252-b4f3-68a09097cac2.jsonl`。
+- 原聊天文件：`<local-session-file>`。
 - 索引与数据库均能定位原线程，聊天文件可逐行解析；因此不能归因为本地会话 ID 丢失。
 - 原日志 2026-10-14 04:53:16（北京时间）记录远端压缩失败：`409 Conflict`，`codex turn state cannot be verified for the selected account; start a fresh conversation`。
 - 随后续跑、两次 ping 和最后一条用户消息均失败，错误为 `function_call_output requires call_id or previous_response_id; if relying on history, ensure store=true and reuse previous_response_id`。
 - 这些错误支持“历史工具调用关联/远端状态异常”的诊断，但不能仅凭本地日志确定服务端具体原因。没有修改聊天 JSONL、伪造 call_id 或改写数据库来宣称恢复。
 
-原始错误时间、行号、最后用户指令、旧子任务最终消息和相关产物哈希见 [恢复证据](/home/yk/acfly_ws/build/speed-tuning-20261013/thread_recovery/recovery_evidence.json)。原聊天文件保持原样。
+原始错误时间、行号、最后用户指令、旧子任务最终消息和相关产物哈希见 [恢复证据](../build/speed-tuning-20261013/thread_recovery/recovery_evidence.json)。原聊天文件保持原样。
 
 ## 本次已完成的收尾
 
@@ -27,13 +27,13 @@
 
 | 工作 | 已保存的结论 | 证据 |
 |---|---|---|
-| HOME 保护重入继承反刹 | 六对原参数结果收益混合，平均更慢，归档不采用 | [独立报告](/home/yk/acfly_ws/build/speed-tuning-20261013/cruise_agent_home_guard_seed_report.md) |
-| 完整物理 Wait 观测 | 七对新旧运行轨迹及旧结果字段相同；独立审计 JSON 有 234 项检查、失败为空。可用于后续离线验收，不能替代飞行安全验证 | [审计报告](/home/yk/acfly_ws/build/speed-tuning-20261013/safety_agent_physical_window_report.md)、[验证索引](/home/yk/acfly_ws/build/speed-tuning-20261013/drop_agent_release_physical_validate.json) |
-| arrival_assist v3 | 已有 16 条结果记录，局部契约修正后已知弱 X 卡死仍存在；不采用 | [结果](/home/yk/acfly_ws/build/speed-tuning-20261013/arrival_assist_v3_results.json)、[测速与卡死分析](/home/yk/acfly_ws/build/speed-tuning-20261013/safety_agent_arrival_assist_noise_report.md) |
-| 固定入口净进展判据 | 只读回放有研究价值，但不能判断低速，且受噪声影响；尚无新闭环控制候选验证 | [只读报告](/home/yk/acfly_ws/build/speed-tuning-20261013/drop_agent_arrival_progress_report.md) |
-| 条件提前释放 | 收益不稳定、旧弱 X 反例仍有投放误差退化；不采用 | [审查报告](/home/yk/acfly_ws/build/speed-tuning-20261013/drop_agent_conditional_settle_review.md) |
+| HOME 保护重入继承反刹 | 六对原参数结果收益混合，平均更慢，归档不采用 | [独立报告](../build/speed-tuning-20261013/cruise_agent_home_guard_seed_report.md) |
+| 完整物理 Wait 观测 | 七对新旧运行轨迹及旧结果字段相同；独立审计 JSON 有 234 项检查、失败为空。可用于后续离线验收，不能替代飞行安全验证 | [审计报告](../build/speed-tuning-20261013/safety_agent_physical_window_report.md)、[验证索引](../build/speed-tuning-20261013/drop_agent_release_physical_validate.json) |
+| arrival_assist v3 | 已有 16 条结果记录，局部契约修正后已知弱 X 卡死仍存在；不采用 | [结果](../build/speed-tuning-20261013/arrival_assist_v3_results.json)、[测速与卡死分析](../build/speed-tuning-20261013/safety_agent_arrival_assist_noise_report.md) |
+| 固定入口净进展判据 | 只读回放有研究价值，但不能判断低速，且受噪声影响；尚无新闭环控制候选验证 | [只读报告](../build/speed-tuning-20261013/drop_agent_arrival_progress_report.md) |
+| 条件提前释放 | 收益不稳定、旧弱 X 反例仍有投放误差退化；不采用 | [审查报告](../build/speed-tuning-20261013/drop_agent_conditional_settle_review.md) |
 
-最终仍没有可宣称可靠提速一倍的方案。速度参数保持原值；已写本机源码的改动以 [applied_changes.json](/home/yk/acfly_ws/build/speed-tuning-20261013/applied_changes.json) 和实际 diff 为准，尚未编译部署。测试次数不是实机可靠性证明。
+最终仍没有可宣称可靠提速一倍的方案。速度参数保持原值；已写本机源码的改动以 [applied_changes.json](../build/speed-tuning-20261013/applied_changes.json) 和实际 diff 为准，尚未编译部署。测试次数不是实机可靠性证明。
 
 ## 若后续继续优化
 

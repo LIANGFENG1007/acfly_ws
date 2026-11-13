@@ -1,0 +1,15 @@
+# Marker 尺寸单位 m；颜色为 [红, 绿, 蓝, 透明度]，通道范围 0 到 1。
+/**:
+  ros__parameters:
+    cropped_cloud_topic: /ring_detector/cropped_cloud
+    marker_topic: /ring_detector/marker
+    display_queue_depth: 5
+    center_diameter: 0.12
+    line_width: 0.02
+    circle_segments: 48
+    shaft_diameter: 0.03
+    head_diameter: 0.08
+    normal_length: 0.6
+    center_color: [1.0, 0.0, 0.0, 1.0]
+    circle_color: [0.0, 1.0, 0.0, 1.0]
+    normal_color: [0.0, 0.0, 1.0, 1.0]

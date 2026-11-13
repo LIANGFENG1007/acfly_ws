@@ -1,0 +1,9 @@
+/**:
+  ros__parameters:
+    odometry_timeout_s: 0.30
+    # MAVROS State 通常比里程计慢。超时停止发送运动指令。
+    fcu_state_timeout_s: 3.0
+    control_timeout_s: 0.5
+    future_stamp_tolerance_s: 0.05
+    takeover_debounce_s: 0.5
+    landing_retry_s: 1.0

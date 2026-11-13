@@ -1,0 +1,39 @@
+# 场地与感知：camera_init 世界坐标，长度 m；改变分辨率会改变地图大小。
+/**:
+  ros__parameters:
+
+    # 世界坐标边界与覆盖栅格
+    field_min_x: -1.0
+    field_min_y: -1.0
+    field_max_x: 19.0
+    field_max_y: 19.0
+    big_cell: 0.5  # 大格边长 (m)
+    small_cell: 0.05  # 小格边长 (m)
+    coverage_thresh: 0.9  # 单个大格的完成比例，不是任务归航阈值
+    fov_deg: 100.0  # 水平总视场 (度)
+    fov_range: 3.6  # 覆盖可视半径 (m)
+    scan_dwell_s: 0.5  # 近距离小格累计被看见的最短时长（秒）
+    scan_near_range_m: 2.0  # 全额累积在视时长的近距界线（米）
+
+    # 点云高度、自身回波与占据栅格
+    ground_z: 0.6  # 进入障碍地图的最低世界高度 (m)
+    obs_z_max: 1.6  # 最高世界高度 (m)
+    obs_skip_yaw_rate: 0.6  # 超过此航向角速度时舍弃拖影点云（rad/s）
+    obs_self_margin: 0.15  # 去除机身回波时额外扩展的半径（米）
+    obs_cell: 0.15  # 占据栅格边长（米）
+    obs_edge_ignore: 0.1  # 距场界太近的点不进入聚类（米）
+    obs_hit_thresh: 8  # 栅格判定占据的累计分数门槛
+    obs_hit_inc: 5  # 一帧命中的加分
+    obs_hit_max: 50  # 累计命中分数上限
+    obs_hit_decay: 1  # 一帧未命中的减分
+    obs_min_cells: 1  # 形成一个聚类的最少格数
+    obs_min_r: 0.03  # 拟合圆最小半径（米）
+    obs_max_r: 0.5  # 拟合圆最大半径（米）
+    obs_r_inflate: 0.1  # 拟合后圆半径的额外余量（米）
+
+    # 跨帧关联与回收
+    obs_track_alpha: 0.3  # 中心和半径的更新比例（0 至 1）
+    obs_track_assoc_dist: 0.6  # 同一障碍物关联距离门槛（米）
+    obs_track_max_misses: 15  # 删除未关联障碍所需的连续漏检帧数
+    obs_ghost_clear_frames: 25  # 清除旧占据格需要的有效无遮挡空闲证据帧数
+    robot_radius: 0.4  # 飞行器水平外廓半径 (m)

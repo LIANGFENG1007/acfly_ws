@@ -1,0 +1,6 @@
+# 距离/半径单位 m；数量单位点或帧。
+/**:
+  ros__parameters:
+    min_points: 15
+    accum_frames: 30
+    min_radius: 0.001

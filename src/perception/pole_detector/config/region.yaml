@@ -1,0 +1,9 @@
+# 已配准世界坐标系中的裁剪范围，单位 m。边界上的点保留。
+/**:
+  ros__parameters:
+    box_min_x: -0.5
+    box_max_x: 4.5
+    box_min_y: -0.5
+    box_max_y: 4.5
+    box_min_z: 0.3
+    box_max_z: 2.0

@@ -1,0 +1,50 @@
+# 区域覆盖：前沿候选、选点优先级、重规划和退回已走路线。
+/**:
+  ros__parameters:
+
+    # 任务结束条件与原路后退
+    search_coverage: 0.95  # 全场大格覆盖比例达到此值后返航，0 < 值 ≤ 1
+    explore_backtrack_after_s: 5.0  # 连续无路超过多少秒开始检查来路
+    explore_backtrack_m: 1.5  # 一次后退沿来路最多取多少米
+
+    # 条带、前沿候选与选点评分
+    wall_margin: 1.0  # 覆盖选点离边界的距离 (m)
+    frontier_near_w: 2.4  # 接近距离的评分权重
+    frontier_turn_pen: 1.5  # 转向代价权重
+    frontier_cluster_w: 0.8  # 相邻未知格数量的权重
+    frontier_cluster_cap: 6  # 区域密度奖励最多计入的邻格数
+    explore_horizon_m: 8.0  # 串联前沿的规划视距（米）
+    chain_gap_m: 1.0  # 串联目标之间的最短距离（米）
+    band_width: 8.0  # 按 y 轴分带的带宽（米）
+    band_tol: 0.4  # 条带边缘向两侧扩展的距离（米）
+    along_bonus: 0.5  # 沿扫描方向的评分奖励
+    band_clear_cnt: 12  # 带内剩余大格不多于此数时转下一带
+    frontier_observation_enabled: true  # 使用视野增益选取可观察的安全位置
+    frontier_small_region_cells: 8  # 小区域的大格数上限
+    frontier_small_region_penalty: 2.0  # 小区域优先级惩罚
+    frontier_observation_standoff: 1.3  # 观察点与候选区域的理想间距（米）
+    frontier_preferred_clearance: 0.95  # 选点时偏好的障碍净空（米）
+    frontier_gain_weight: 0.5  # 预期可见未知格数量的权重
+    frontier_clearance_weight: 1.0  # 净空不足的惩罚权重
+    frontier_observation_min_distance: 1.5  # 观察候选点的期望最小前进距离（米）
+    frontier_continuity_turn_pen: 1.0  # 偏离当前路线航向的代价权重
+    frontier_goal_detour_w: 1.0  # 接近收尾时偏离返航方向的权重
+    frontier_goal_detour_start: 0.7  # 启用收尾权重的覆盖比例
+    frontier_continuity_lookahead_m: 1.0  # 评估现有路线朝向的前视距离（米）
+
+    # 重规划与切换现有路径
+    replan_period_s: 0.2  # 重规划检查周期 (s)
+    replan_dev_m: 0.1  # 触发额外路线检查的偏差（米）
+    replan_candidate_period_s: 0.6  # 两次候选替代路线检查的最小间隔（秒）
+    target_stale_r: 1.0  # 判断目标周围是否还有未知格的半径（米）
+    commit_target_tol: 0.6  # 已采纳目标改变超过此距离才重新比较（米）
+    explore_target_min_dist: 1.5  # 规划探索路径时的期望目标距离下限（米）
+    path_switch_safety_gain: 0.5  # 换路所需相对净空改善，0.5 表示 50%
+    path_switch_time_gain: 0.2  # 换路所需的相对路径缩短比例
+    path_switch_require_both: true  # 是否要求净空与路径长度同时改善
+    unreach_block_r: 0.8  # 暂不重试不可达格的邻域半径（米）
+    unreach_clear_step: 0.05  # 覆盖率增加此比例后清理暂不可达记录
+    trail_spacing_m: 0.15  # 两次记录来路位置的最短间距（米）
+    trail_capacity: 60  # 最多保存多少个来路位置
+    backtrack_tolerance_m: 0.12  # 后退时判定已经过某个来路位置的距离（米）
+    backtrack_timeout_s: 8.0  # 单次沿来路退出的时限（秒）

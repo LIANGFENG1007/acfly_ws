@@ -37,13 +37,16 @@ def main():
         if not path.is_file() or sha(path) != old:
             production_changes.append(rel)
     old = constants((root / 'original_params.hpp').read_text())
-    new = constants((workspace / 'src/exploration_planner/include/exploration_planner/params.hpp').read_text())
+    # This is a comparison against the 2026-10 C++ layout. The survey workspace
+    # uses classified YAML; absence is a recorded mismatch, never a passing value.
+    legacy_header = workspace / 'src/exploration_planner/include/exploration_planner/params.hpp'
+    new = constants(legacy_header.read_text()) if legacy_header.is_file() else {}
     fixed = {k for k in old if k.startswith('CORRIDOR_')} | {
         'HOME_APPROACH_V', 'HOME_GOAL_WALL_MARGIN', 'HOME_SLOW_V',
         'VISUAL_DROP_SAMPLE_S', 'VISUAL_DROP_RELEASE_WAIT_S', 'VISUAL_DROP_XY_TOL_M',
         'VISUAL_DROP_DESCEND_MPS', 'VISUAL_DROP_CLIMB_MPS'}
     frozen_changes = {k: {'old': old.get(k), 'current': new.get(k)}
-                      for k in sorted(fixed) if old.get(k) != new.get(k)}
+                      for k in sorted(fixed) if legacy_header.is_file() and old.get(k) != new.get(k)}
     frozen_code_changes = [p for p in production_changes if
                            '/fly_mission/' in p or '/acfly_interfaces/' in p or
                            'corridor_' in Path(p).name]
@@ -62,7 +65,9 @@ def main():
         if path.is_file():
             evidence[rel].update(sha256=sha(path), bytes=path.stat().st_size)
     baseline = {}
-    errors = []
+    errors = [] if legacy_header.is_file() else [
+        'historical params.hpp is absent in the current layout; old freeze checks do not validate survey YAML'
+    ]
     applied_changes = []
     applied_file = root / 'applied_changes.json'
     if applied_file.is_file():

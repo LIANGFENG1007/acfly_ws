@@ -2,8 +2,8 @@
 
 ## 每次新会话、压缩恢复或接续任务时
 
-1. 先读 `docs/EXPLORATION_SPEED_TUNING_MEMORY.md`，再读当前任务目录的 `NIGHT_RUN.md` 与 `current_state.json`。本轮目录是 `build/speed-tuning-20261013/`。
-2. 运行 `python3 tools/audit_tuning_memory.py` 核对源码和证据。若脚本/证据不存在，如实报告缺失；不要凭记忆补造数值或重写用户代码。
+1. 先读 `docs/EXPLORATION_SPEED_TUNING_MEMORY.md`，再读当前任务目录的 `NIGHT_RUN.md` 与 `current_state.json`。当前目录是 `build/workspace-reorganization-20261112/`；旧调参目录 `build/speed-tuning-20261013/` 只作为历史证据。
+2. 当前结构先运行 `python3 tools/check_workspace.py`。运行 `python3 tools/audit_tuning_memory.py` 核对历史源码和证据；它的旧冻结布局已不适用于新测绘源码，返回非零须如实说明，不能自动回滚。若脚本/证据不存在，如实报告缺失；不要凭记忆补造数值或重写用户代码。
 3. 检查 `git status --short`、实际 agent 状态和残留测试进程。文档中的“运行中”只是当时快照，须重新核对。
 4. 区分原始事实、模型内验证、推测、待验证与已部署。隔离副本通过不等于生产已修改，离线通过不等于实机安全。
 

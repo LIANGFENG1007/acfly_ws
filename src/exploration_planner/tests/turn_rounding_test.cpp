@@ -1,6 +1,6 @@
 #include "exploration_planner/bezier.hpp"
 #include "exploration_planner/global_planner.hpp"
-#include "exploration_planner/params.hpp"
+#include "reference_gains.hpp"
 #include "exploration_planner/trajectory_tracker.hpp"
 
 #include <algorithm>
@@ -45,7 +45,7 @@ Path2 round(const Path2& path, const Obstacles& obstacles = {}, const GlobalConf
 
 TrackerGains gains()
 {
-    namespace p = exploration::params;
+    namespace p = exploration::test_reference;
     TrackerGains g{};
     g.v_max = p::V_MAX; g.v_min = p::V_MIN;
     g.k_curv = p::CARLIKE_K_CURV; g.lookahead = p::CARLIKE_LOOKAHEAD;
@@ -264,9 +264,9 @@ void drift_at_sharp_corner()
     for (const int side : {-1, 1}) {
         auto g = gains();
         g.compensate_lateral_drift = true;
-        g.kp_lat = params::KP_LAT; g.max_v_lat = params::MAX_V_LAT;
-        g.smith_time = params::CARLIKE_SMITH_S;
-        g.smith_yaw_time = params::CARLIKE_SMITH_YAW_S;
+        g.kp_lat = test_reference::KP_LAT; g.max_v_lat = test_reference::MAX_V_LAT;
+        g.smith_time = test_reference::CARLIKE_SMITH_S;
+        g.smith_yaw_time = test_reference::CARLIKE_SMITH_YAW_S;
         const auto path = trajectory_from_polyline({{0, 0}, {2, 0}, {2, 2.0*side}}, .05, g.corner_stop_rad);
         TrajectoryTracker tracker(g);
         tracker.set_trajectory(path);

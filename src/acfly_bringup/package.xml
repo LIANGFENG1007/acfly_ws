@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>acfly_bringup</name>
+  <version>0.1.0</version>
+  <description>Launch the ACFly regional coverage survey.</description>
+  <maintainer email="yk@todo.todo">yk</maintainer>
+  <license>LicenseRef-Unspecified</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <exec_depend>exploration_planner</exec_depend>
+  <exec_depend>fly_mission</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <test_depend>ament_index_python</test_depend>
+  <test_depend>launch_testing_ament_cmake</test_depend>
+  <test_depend>rclpy</test_depend>
+  <test_depend>mavros_msgs</test_depend>
+  <test_depend>nav_msgs</test_depend>
+  <test_depend>sensor_msgs_py</test_depend>
+  <test_depend>sensor_msgs</test_depend>
+  <test_depend>std_msgs</test_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

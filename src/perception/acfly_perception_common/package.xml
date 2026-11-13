@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>acfly_perception_common</name>
+  <version>0.1.0</version>
+  <description>Shared point cloud filtering, pole fitting and ROS detector input.</description>
+  <maintainer email="yk@todo.todo">yk</maintainer>
+  <license>LicenseRef-Unspecified</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>acfly_config</depend>
+  <depend>eigen</depend>
+  <depend>nav_msgs</depend>
+  <depend>rcl_interfaces</depend>
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

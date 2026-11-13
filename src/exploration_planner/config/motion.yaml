@@ -1,0 +1,95 @@
+# 跟踪控制：速度 m/s、加速度 m/s²；显式带 deg 的角度为度，其余角速度为 rad/s。
+/**:
+  ros__parameters:
+
+    # 轨迹采样、前视与误差反馈
+    exploration_carlike_mode: true
+    arc_sample_ds: 0.05  # 路径按弧长采样的间隔（米）
+    v_max: 0.8  # 探索前进速度上限 (m/s)
+    v_min: 0.0
+    k_curv: 1.0
+    lookahead: 0.5  # 基本前视距离（米）
+    endpoint_slow_r: 0.5
+    endpoint_slow_speed: 0.5
+    carlike_lookahead_time: 1.1
+    carlike_lookahead_max: 0.9
+    kp_yaw: 1.6
+    kd_yaw: 0.5
+    max_yaw_rate: 1.1  # 航向角速度上限（rad/s）
+    kp_lat: 0.8
+    kd_lat: 0.04
+    max_v_lat: 0.2  # 最大横向纠偏速度（m/s）
+    heading_gate_deg: 18.0
+    carlike_drift_kd: 0.6  # 侧滑速度阻尼系数
+    xy_brake_accel: 0.8
+
+    # 平移与转向的速度/加速度限制、惯性预测
+    carlike_max_accel: 0.3  # 水平加速斜坡（m/s²）
+    carlike_max_decel: 0.6  # 水平减速斜坡（m/s²）
+    carlike_curvature_ff: 1.0  # 曲率前馈权重
+    carlike_creep_speed: 0.12
+    carlike_handoff_brake_speed: 0.15
+    carlike_handoff_brake_angle_deg: 45.0
+    carlike_max_yaw_accel: 1.6
+    carlike_yaw_filter_s: 0.12
+    carlike_prediction_s: 0.2
+    carlike_lateral_prediction_s: 0.55
+    carlike_align_resume_deg: 25.0
+    carlike_align_stop_speed: 0.06
+    carlike_align_stop_yaw_rate: 0.12
+    carlike_align_settle_s: 0.06
+    carlike_stop_align_deg: 75.0
+    carlike_corner_stop_deg: 20.0
+    carlike_max_lateral_accel: 0.35
+    carlike_smith_s: 0.3
+    carlike_smith_yaw_s: 0.4
+    carlike_command_filter_s: 0.2
+    carlike_lateral_slow_gain: 3.0
+    carlike_lateral_slow_deadband: 0.02
+    carlike_lateral_slow_tau: 0.3
+    carlike_stop_anchor_latency_s: 0.35
+    carlike_stop_anchor_max_m: 0.35
+
+    # 转角拼接和探索路线交接
+    carlike_turn_blend_m: 0.8
+    carlike_turn_blend_angle_deg: 15.0
+    turn_blend_max_angle_deg: 120.0
+    carlike_cone_hook_deg: 70.0
+    carlike_cone_hook_window_m: 1.2
+    carlike_cone_hook_kappa: 4.0  # 判断起步急弯的曲率门槛（1/m）
+    carlike_turn_blend_samples: 12  # 圆滑转接使用的采样点数
+    turn_round_min_m: 0.25
+    turn_round_max_curvature: 5.0
+    v_est_alpha: 0.3  # 里程计差分速度低通系数，0 < 值 ≤ 1
+    explore_guide_min_segment_m: 0.1
+    explore_guide_max_deviation_m: 0.02
+    explore_plan_reserve_m: 0.08
+    explore_handoff_m: 1.2
+
+    # 卡住时的脱困与回线
+    retreat_trigger: 0.55
+    retreat_step: 0.5
+    retreat_max_dist: 1.2
+    retreat_v_max: 0.35
+    route_rejoin_v_max: 0.6
+    route_rejoin_min_mps: 0.35
+    retreat_timeout_s: 2.0
+
+    # 全局避障距离及原地转向搜索
+    global_cell: 0.04  # 全局 A* 栅格边长（米）
+    global_margin: 0.1  # 障碍规划余量 (m)，另计机身半径
+    explore_guard_inflate: 0.03
+    global_wall_margin: 0.6  # 路径规划时距场地边界余量 (m)
+    global_head_cone_deg: 22.0
+    global_head_cone_radius: 0.8
+    turn_solve_yaw_rate: 1.2
+    turn_solve_research_every: 10  # 原地转向时每多少控制周期重搜一次
+    turn_solve_max_rev: 1.0  # 重新寻找出路最多旋转的圈数
+    turn_solve_timeout_s: 20.0  # 原地搜索时限（秒）
+
+    # 转向时的位置保持与刹停估计；测绘和返航共用
+    stop_anchor_decel_mps2: 0.80  # 推算刹停点使用的减速度（米/秒²）
+    yaw_damping_command_weight: 0.0  # 航向阻尼中上一拍指令的权重，0 表示只用实测值
+    turn_hold_kp: 0.8  # 定点转向时水平位置误差增益
+    turn_hold_kd: 0.35  # 定点转向时水平速度阻尼
+    turn_hold_speed_mps: 0.20  # 转向期间位置保持的水平限速（米/秒）

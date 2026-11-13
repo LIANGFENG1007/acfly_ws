@@ -2,7 +2,6 @@
 build/
 install/
 logs/
-.claude/
 
 # acfly_mavros 不上传(自带独立 .git、体积大)
 src/acfly_mavros/
@@ -22,3 +21,9 @@ __pycache__/
 .DS_Store
 log/
 sim_runs/
+
+# 本机编辑器、测试缓存和 ROS 2 录包
+.vscode/
+.pytest_cache/
+compile_commands.json
+*.mcap

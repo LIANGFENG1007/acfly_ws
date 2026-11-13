@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>acfly_interfaces</name>
-  <version>0.1.0</version>
-  <description>Mission-scoped exploration control and payload delivery messages.</description>
+  <version>0.2.0</version>
+  <description>Messages for mission-scoped coverage surveying.</description>
   <maintainer email="yk@todo.todo">yk</maintainer>
   <license>Apache-2.0</license>
   <buildtool_depend>ament_cmake</buildtool_depend>

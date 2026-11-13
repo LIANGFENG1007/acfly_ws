@@ -1,6 +1,6 @@
 # 夜间探索提速：代码收尾与实际收益
 
-本文“当前源码”指本次夜间收尾保存的历史快照。之后用户另行要求“解锁后才开始探索建图”，新改动与验证见 [ARMED_OBSTACLE_MAPPING.md](/home/yk/acfly_ws/docs/ARMED_OBSTACLE_MAPPING.md)；下述飞行用时没有在该新改动上重新测量。
+本文“当前源码”指本次夜间收尾保存的历史快照。之后用户另行要求“解锁后才开始探索建图”，新改动与验证见 [ARMED_OBSTACLE_MAPPING.md](ARMED_OBSTACLE_MAPPING.md)；下述飞行用时没有在该新改动上重新测量。
 
 当前源码已完成隔离构建和定向回归，没有发现本轮三处改动引入的新失败；没有为“收尾”强行合入不可靠的提速候选。速度参数与开工时逐字相同。实机提速幅度尚未测得，未达到可靠提速一倍的目标。
 
@@ -10,7 +10,7 @@
 2. `src/exploration_planner/include/exploration_planner/drop_approach.hpp`：普通网格边的代价已不可能改善时，在重复几何检查之前返回；终点特殊分支仍按原逻辑处理。
 3. 同一头文件：精确零长度且零余量时，原来三次相同距离比较合并成一次；其它输入仍用原公式。
 
-两项几何优化不改变原输入的选点/路径结果。它们减少计算开销，不能直接换算成飞行秒数。改动沿用已有证据，详见 [原应用记录](/home/yk/acfly_ws/build/speed-tuning-20261013/applied_changes.json)。本次收尾没有新增控制源码改动。
+两项几何优化不改变原输入的选点/路径结果。它们减少计算开销，不能直接换算成飞行秒数。改动沿用已有证据，详见 [原应用记录](../build/speed-tuning-20261013/applied_changes.json)。本次收尾没有新增控制源码改动。
 
 ## 本次重新验证
 
@@ -21,7 +21,7 @@
 - 本批当前版成功运行的最大完整 Wait 包裹投影误差为 **6.01 cm**，按 0.40m 机体外廓计算的最小余量为 **16.39 cm**。仅适用于这些已测试输入。
 - `git diff --check` 通过，探索参数与 `original_params.hpp` 逐字相同，审计无未记录源码变更或冻结项变化。
 
-[本次验证汇总](/home/yk/acfly_ws/build/speed-tuning-20261013/closeout_current_20261014/summary.json) · [源码与隔离构建清单](/home/yk/acfly_ws/build/speed-tuning-20261013/closeout_current_20261014/manifest.json) · [测试二进制/对象哈希及编译链接命令](/home/yk/acfly_ws/build/speed-tuning-20261013/closeout_current_20261014/verification_manifest.json) · [现有测试结果](/home/yk/acfly_ws/build/speed-tuning-20261013/closeout_current_20261014/unit/results.json)。
+[本次验证汇总](../build/speed-tuning-20261013/closeout_current_20261014/summary.json) · [源码与隔离构建清单](../build/speed-tuning-20261013/closeout_current_20261014/manifest.json) · [测试二进制/对象哈希及编译链接命令](../build/speed-tuning-20261013/closeout_current_20261014/verification_manifest.json) · [现有测试结果](../build/speed-tuning-20261013/closeout_current_20261014/unit/results.json)。
 
 原始测试器不记录新物理 Wait 字段，因此三个 `current_standard` 辅助运行的严格全窗资格为 false；它们只承担轨迹等价检查。正式精度判断使用同场景 `current` 物理窗口版本，不能把缺观测误读为新增控制失败。
 
@@ -40,13 +40,13 @@
 | 交接附近朝障碍推扰 | 97.66 | 93.20 | 省 4.46 秒（4.57%） |
 | 交接附近反向推扰 | 93.76 | 94.10 | 慢 0.34 秒（0.36%） |
 
-[完整配对数据与每次运行路径](/home/yk/acfly_ws/build/speed-tuning-20261013/closeout_current_20261014/paired_results.json)。每个目录保存 scenario、result、trace、日志及二进制哈希。
+[完整配对数据与每次运行路径](../build/speed-tuning-20261013/closeout_current_20261014/paired_results.json)。每个目录保存 scenario、result、trace、日志及二进制哈希。
 
 因此：初始三个标准场景的飞行用时收益是 **0%**；在确实触发航段交接修复的错列场景，省 **4.10s / 4.32%**。推扰案例既有快4.46s，也有慢0.34s，不能把最快场景当成普遍提升，更不能把这组定向回归的均值外推到实机110s。当前没有新的实机部署与前后对照，无法说实机已经从110s降到了某个数值。
 
-整晚另有特定实验组合从360s未完成恢复到94.66s完成的卡死复现，但该组合包含未采用的横向补偿；它证明衔接修复的作用，不代表当前原参数全场普遍节省265秒。详见 [交接修复原始报告](/home/yk/acfly_ws/build/speed-tuning-20261013/drop_agent_waypoint_handoff_report.md)。
+整晚另有特定实验组合从360s未完成恢复到94.66s完成的卡死复现，但该组合包含未采用的横向补偿；它证明衔接修复的作用，不代表当前原参数全场普遍节省265秒。详见 [交接修复原始报告](../build/speed-tuning-20261013/drop_agent_waypoint_handoff_report.md)。
 
-计算性能已有历史配对结果：普通边提前返回把一个错列场景的归航入口最慢调用约 **31.59ms降到11.12ms**；零长度优化在后续重复计时中再减少约 **1.4ms**。这些是桌面特定调用的 CPU 时间，不是 NX 测量，也不是整场飞行提速百分比。[第一项结果](/home/yk/acfly_ws/build/speed-tuning-20261013/cruise_agent_timing_relax_results.json)、[第二项报告](/home/yk/acfly_ws/build/speed-tuning-20261013/root_point_geometry_report.md)。
+计算性能已有历史配对结果：普通边提前返回把一个错列场景的归航入口最慢调用约 **31.59ms降到11.12ms**；零长度优化在后续重复计时中再减少约 **1.4ms**。这些是桌面特定调用的 CPU 时间，不是 NX 测量，也不是整场飞行提速百分比。[第一项结果](../build/speed-tuning-20261013/cruise_agent_timing_relax_results.json)、[第二项报告](../build/speed-tuning-20261013/root_point_geometry_report.md)。
 
 ## 整晚做了什么
 
@@ -59,7 +59,7 @@
 | 测试器可信度 | 精确相变与真目标包裹误差、0.40m外廓净空、实际最窄位置推扰、反馈延迟初始化、分维度比较 | 修正了只看passed、错用累计净空、错误参数名、释放窗漏测尾部等问题，失败记录均保留 |
 | 最终落到源码 | 航段交接修复、两项等价计算优化 | 保留三处已记录小改动；速度参数未改 |
 
-本次收尾前审计记录 **7,524 个结果目录**，其中包含不同模型、参数、seed、故障以及用于验证的重复输入，不能称为7,524个独立方案或实飞次数。另有跟踪台架、C++局部验证与实机录制回放，统计口径不同，未相加制造总数。[逐轮记录](/home/yk/acfly_ws/build/speed-tuning-20261013/NIGHT_RUN.md)。
+本次收尾前审计记录 **7,524 个结果目录**，其中包含不同模型、参数、seed、故障以及用于验证的重复输入，不能称为7,524个独立方案或实飞次数。另有跟踪台架、C++局部验证与实机录制回放，统计口径不同，未相加制造总数。[逐轮记录](../build/speed-tuning-20261013/NIGHT_RUN.md)。
 
 ## 收尾边界与剩余问题
 

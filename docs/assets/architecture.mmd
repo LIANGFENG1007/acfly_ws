@@ -1,0 +1,31 @@
+%% ACFly 模块架构
+%% 编辑本文件后，可用 tools/render_diagrams.sh 重新生成 architecture.svg。
+flowchart LR
+    ext["外部系统\nMAVROS / PX4\nPoint-LIO / 点云\n定位、飞控状态、/clock"]
+    mission["fly_mission\n单次任务状态机\n起飞 / 高度保持 / 降落"]
+    planner["exploration_planner\n建图 / 覆盖 / 避障 / 返航"]
+    perception["perception\n公共点云处理\n杆体与圆环检测"]
+    interfaces["acfly_interfaces\n任务消息与协议"]
+    config["acfly_config\n分类 YAML 默认值\n类型与范围校验"]
+    bringup["acfly_bringup\n统一启动入口"]
+
+    ext -->|"状态、里程计"| mission
+    ext -->|"点云、时钟"| planner
+    ext -->|"点云、里程计"| perception
+    mission <-->|"任务 goal / context / control / finished"| planner
+    interfaces -.->|"编译期消息依赖"| mission
+    interfaces -.->|"编译期消息依赖"| planner
+    config -.->|"运行默认值"| mission
+    config -.->|"运行默认值"| planner
+    config -.->|"运行默认值"| perception
+    bringup -.->|"launch"| mission
+    bringup -.->|"launch"| planner
+
+    classDef external fill:#e7eef7,stroke:#6f8fb4,color:#172334,stroke-width:2px;
+    classDef core fill:#e8f4ee,stroke:#4f9b73,color:#172334,stroke-width:2px;
+    classDef support fill:#fff3dc,stroke:#c68a2c,color:#172334,stroke-width:2px;
+    classDef interface fill:#f0e8fa,stroke:#8965b5,color:#172334,stroke-width:2px;
+    class ext external;
+    class mission,planner core;
+    class perception,bringup support;
+    class interfaces,config interface;

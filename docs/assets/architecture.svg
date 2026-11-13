@@ -1,0 +1,78 @@
+<!-- Editable source: architecture.mmd; regenerate with tools/render_diagrams.sh. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">ACFly 区域测绘工作空间架构</title>
+  <desc id="desc">展示外部定位与飞控输入、主控、探索规划、感知节点和配置层之间的关系。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#356d9e"/>
+    </marker>
+    <style>
+      .bg { fill: #f6f8fb; }
+      .title { font: 700 28px sans-serif; fill: #172334; }
+      .label { font: 700 18px sans-serif; fill: #172334; }
+      .body { font: 15px sans-serif; fill: #31435b; }
+      .small { font: 13px sans-serif; fill: #52657d; }
+      .external { fill: #e7eef7; stroke: #6f8fb4; }
+      .core { fill: #e8f4ee; stroke: #4f9b73; }
+      .support { fill: #fff3dc; stroke: #c68a2c; }
+      .interface { fill: #f0e8fa; stroke: #8965b5; }
+      .line { stroke: #356d9e; stroke-width: 2.5; fill: none; marker-end: url(#arrow); }
+      .dashed { stroke: #7b8796; stroke-width: 2; stroke-dasharray: 8 7; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect class="bg" x="0" y="0" width="1200" height="760" rx="18"/>
+  <text class="title" x="48" y="54">ACFly 区域测绘工作空间</text>
+  <text class="small" x="48" y="82">模块职责、通信边界和配置归属</text>
+
+  <rect class="external" x="48" y="132" width="250" height="160" rx="14"/>
+  <text class="label" x="72" y="166">外部系统</text>
+  <text class="body" x="72" y="198">MAVROS / PX4</text>
+  <text class="body" x="72" y="225">Point-LIO / 点云</text>
+  <text class="body" x="72" y="252">定位、飞控状态、/clock</text>
+  <text class="small" x="72" y="276">由项目外部启动和维护</text>
+
+  <rect class="core" x="375" y="120" width="330" height="205" rx="14"/>
+  <text class="label" x="400" y="158">fly_mission</text>
+  <text class="body" x="400" y="190">单次任务状态机</text>
+  <text class="body" x="400" y="217">起飞控制 / 高度保持</text>
+  <text class="body" x="400" y="244">探索交接 / AUTO.LAND</text>
+  <text class="body" x="400" y="271">人工接管 / 生命周期</text>
+  <text class="small" x="400" y="300">ros2 run fly_mission fly_mission_node</text>
+
+  <rect class="core" x="375" y="390" width="330" height="220" rx="14"/>
+  <text class="label" x="400" y="428">exploration_planner</text>
+  <text class="body" x="400" y="460">障碍地图 / 覆盖率</text>
+  <text class="body" x="400" y="487">前沿选点 / A* / 轨迹跟随</text>
+  <text class="body" x="400" y="514">避障 / 脱困 / 安全返航</text>
+  <text class="body" x="400" y="541">终点停稳 / 完成回执</text>
+  <text class="small" x="400" y="578">ros2 run exploration_planner exploration_planner_node</text>
+
+  <rect class="support" x="785" y="120" width="330" height="205" rx="14"/>
+  <text class="label" x="810" y="158">perception</text>
+  <text class="body" x="810" y="190">acfly_perception_common</text>
+  <text class="body" x="810" y="217">pole_detector</text>
+  <text class="body" x="810" y="244">multi_pole_detector</text>
+  <text class="body" x="810" y="271">ring_detector</text>
+  <text class="small" x="810" y="300">独立消费已配准点云</text>
+
+  <rect class="interface" x="785" y="390" width="330" height="220" rx="14"/>
+  <text class="label" x="810" y="428">公共基础层</text>
+  <text class="body" x="810" y="460">acfly_interfaces</text>
+  <text class="body" x="810" y="487">任务 Header / 速度 / 高度</text>
+  <text class="body" x="810" y="514">acfly_config</text>
+  <text class="body" x="810" y="541">分类 YAML / 类型检查</text>
+  <text class="small" x="810" y="578">acfly_bringup 负责统一启动</text>
+
+  <path class="line" d="M298 185 C330 185 340 185 375 185"/>
+  <path class="line" d="M298 245 C330 245 340 470 375 470"/>
+  <path class="line" d="M705 218 C744 218 754 218 785 218"/>
+  <path class="line" d="M705 468 C744 468 754 468 785 468"/>
+  <path class="line" d="M705 548 C744 548 754 548 785 548"/>
+  <path class="dashed" d="M540 325 C540 350 540 365 540 390"/>
+  <path class="dashed" d="M950 325 C950 350 950 365 950 390"/>
+  <text class="small" x="312" y="174">状态 / 里程计</text>
+  <text class="small" x="308" y="331">任务握手</text>
+  <text class="small" x="714" y="208">PointCloud2</text>
+  <text class="small" x="714" y="458">消息接口</text>
+  <text class="small" x="714" y="538">运行参数</text>
+</svg>

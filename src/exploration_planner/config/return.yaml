@@ -1,0 +1,34 @@
+# 返航：末段接近已知终点，只在巡航高度给水平指令。
+/**:
+  ros__parameters:
+
+    # 返航到点与停止判定
+    goal_tol_xy: 0.1  # 水平到点半径 (m)
+    goal_stop_v: 0.05  # 交接降落的实测水平速度上限 (m/s)
+    kp_goal: 1.2  # 水平到点控制的位置比例增益
+    kd_goal: 0.8  # 水平到点控制的速度阻尼
+    v_goal_max: 0.75  # 归航水平速度上限（m/s）
+
+    # 路线规划与运动检查
+    required_plan_reserve_m: 0.08  # 新路径搜索时预留的额外距离（米）
+    global_lookahead: 0.6  # 跟踪返航路线的前视距离（米）
+    home_goal_wall_margin: 0.0  # 精确终点距场界的允许余量（米）
+    required_connector_length: 1.0  # 最后一段进入终点边界余量的最大连接长度（米）
+    required_motion_inflate: 0.0  # 短时运动预测使用的额外避障余量（米）
+    required_path_exec_inflate: 0.0  # 已采纳路径复核时的额外避障余量（米）
+    required_blocked_replan_s: 0.5  # 持续刹停多少秒后要求重新规划
+
+    # 跟踪、减速与末段入口
+    required_drift_kd: 0.8  # 横漂速度补偿增益
+    required_slow_speed: 0.6  # 必达路径进入减速区时的速度（m/s）
+    required_slow_radius_m: 1.2  # 必达路径末端的减速区半径（米）
+    home_slow_radius_m: 1.5  # 返航终点的减速区半径（米）
+    home_slow_speed: 0.45  # 进入返航减速区时的参考速度（m/s）
+    home_straight_approach_m: 1.0  # 接近终点前的安全入口半径 (m)；0 使用普通必达点路径
+    home_approach_speed: 0.4  # 已核准末段的水平限速 (m/s)
+    max_home_retreats: 3  # 终点附近无可行路径时，允许的后退尝试总次数
+
+    # 返航跟踪器的横漂与刹停估计
+    return_lateral_slow_gain: 3.0  # 横漂速度越大时，降低纵向速度的增益
+    return_stop_anchor_latency_s: 0.10  # 返航刹停点估计使用的延迟（秒）
+    return_stop_anchor_max_m: 0.20  # 刹停点相对当前位姿的最大距离（米）
