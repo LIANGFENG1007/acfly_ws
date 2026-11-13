@@ -9,7 +9,7 @@
 
 ## 编辑和导出
 
-Mermaid 源文件是纯文本，适合 Git diff、代码审查和后续批量修改。安装了 Mermaid CLI 后，在仓库根目录运行：
+安装 Mermaid CLI 后，在仓库根目录运行：
 
 ```bash
 tools/render_diagrams.sh

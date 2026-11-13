@@ -1,23 +1,5 @@
 # ACFly 项目概览
 
-## 文件导览（纯文本）
-
-先按文本树从外到内定位文件职责，再看模块图。完整逐文件说明在 [FILE_GUIDE.md](FILE_GUIDE.md)，它覆盖根目录、每个 ROS 包、配置、源码、测试和配图源文件。
-
-```text
-acfly_ws/
-├── config/                    各包 YAML 的统一编辑入口
-├── src/                       ROS 2 源码
-│   ├── acfly_interfaces/      消息协议
-│   ├── acfly_config/          参数声明与校验
-│   ├── acfly_bringup/         统一启动
-│   ├── fly_mission/           单次任务主控
-│   ├── exploration_planner/   区域探索与返航
-│   └── perception/            公共库与三个检测器
-├── docs/                      说明、历史证据和可编辑图表源
-└── tools/                     检查、隔离验证、仿真和图表导出
-```
-
 ACFly 是一个基于 ROS 2 Humble 的无人机区域测绘工作空间。项目把飞行任务、区域探索、点云几何检测、消息接口和运行参数拆成独立模块，方便新成员理解代码、定位问题和替换单个功能。
 
 项目默认由 fly_mission 和 exploration_planner 协作完成一次区域测绘。主控负责地面自检、人工放行、起飞、巡航高度保持、探索交接和降落。探索规划器负责障碍地图、覆盖率统计、前沿选点、避障、轨迹跟随和安全返航。三个感知节点从已配准点云中提取静态杆体或圆环测量值。PX4、MAVROS、Point-LIO、雷达驱动和相机驱动属于外部系统，由现场环境单独启动。
@@ -49,7 +31,7 @@ acfly_ws/
 
 每个 ROS 包都有自己的 package.xml 和 CMakeLists.txt。包内源代码只负责本包职责，跨包通信通过 acfly_interfaces 中的消息完成。acfly_config 只负责加载和检查默认参数，不包含任务算法。
 
-更细的文件职责、故障定位路径和修改约定见 [维护手册](MAINTENANCE.md)。参数编辑入口见 [配置索引](../config/README.md)。
+[逐文件说明](../README.md#文件导览) · [故障定位](MAINTENANCE.md) · [参数索引](../config/README.md)
 
 ## 模块职责
 
