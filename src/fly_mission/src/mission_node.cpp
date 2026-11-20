@@ -9,6 +9,10 @@ const char *stage_name(Stage stage) {
     return "preflight";
   case Stage::Takeoff:
     return "takeoff";
+  case Stage::Orbit:
+    return "orbit";
+  case Stage::OrbitHold:
+    return "orbit_hold";
   case Stage::Survey:
     return "exploration";
   case Stage::Landing:
@@ -23,7 +27,9 @@ const char *stage_name(Stage stage) {
 
 MissionNode::MissionNode(const rclcpp::NodeOptions &options)
     : Node("fly_mission_node", options), config_(load_config(*this)), vehicle_(*this, config_),
-      explorer_(*this, config_) {
+      orbit_(config_) {
+  if (config_.action == MissionAction::Survey)
+    explorer_.emplace(*this, config_);
   stage_pub_ =
       create_publisher<std_msgs::msg::String>("/mission/state", rclcpp::QoS(1).transient_local());
   if (config_.require_start_signal) {
@@ -44,8 +50,8 @@ void MissionNode::transition(Stage next) {
   event.data = stage_name(next);
   stage_pub_->publish(event);
   RCLCPP_INFO(get_logger(), "任务状态: %s", event.data.c_str());
-  if (next == Stage::Landing || ended())
-    explorer_.stop();
+  if (explorer_ && (next == Stage::Landing || ended()))
+    explorer_->stop();
   if (ended())
     timer_->cancel();
 }
@@ -56,10 +62,14 @@ bool MissionNode::pilot_authorizes_flight(double time) const {
 
 void MissionNode::tick() {
   const double time = steady_seconds();
-  if (stage_ == Stage::Takeoff || stage_ == Stage::Survey) {
+  if (stage_ == Stage::Takeoff || stage_ == Stage::Orbit || stage_ == Stage::OrbitHold ||
+      stage_ == Stage::Survey) {
     if (!pilot_authorizes_flight(time)) {
       // 疑似接管时立即停发运动输出，去抖只影响终止判定。
-      explorer_.invalidate_velocity();
+      if (explorer_)
+        explorer_->invalidate_velocity();
+      if (stage_ == Stage::Orbit)
+        orbit_.interrupt("绕圈期间飞控授权中断");
       in_tolerance_.reset();
       if (!lost_authority_)
         lost_authority_ = time;
@@ -77,6 +87,10 @@ void MissionNode::tick() {
     break;
   case Stage::Takeoff:
     takeoff(time);
+    break;
+  case Stage::Orbit:
+  case Stage::OrbitHold:
+    orbit(time);
     break;
   case Stage::Survey:
     survey(time);

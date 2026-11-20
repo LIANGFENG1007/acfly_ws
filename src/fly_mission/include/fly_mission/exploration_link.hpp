@@ -6,6 +6,7 @@
 #include <geometry_msgs/msg/point_stamped.hpp>
 #include <optional>
 #include <std_msgs/msg/header.hpp>
+#include <string>
 
 namespace fly_mission {
 
@@ -18,7 +19,7 @@ struct SurveyMotion {
 class ExplorationLink {
 public:
   ExplorationLink(rclcpp::Node &node, const Config &config);
-  bool peers_ready() const;
+  std::string unmatched_peers() const;
   void start(const Pose &home, const Pose &cruise);
   bool finished() const {
     return active_ && finished_;

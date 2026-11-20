@@ -2,17 +2,17 @@
 %% 编辑本文件后，可用 tools/render_diagrams.sh 重新生成 architecture.svg。
 flowchart LR
     ext["外部系统\nMAVROS / PX4\nPoint-LIO / 点云\n定位、飞控状态、/clock"]
-    mission["fly_mission\n单次任务状态机\n起飞 / 高度保持 / 降落"]
+    mission["fly_mission\n单次任务状态机\n自检 / 起飞 / 绕圈 / 降落"]
     planner["exploration_planner\n建图 / 覆盖 / 避障 / 返航"]
     perception["perception\n公共点云处理\n杆体与圆环检测"]
     interfaces["acfly_interfaces\n任务消息与协议"]
     config["acfly_config\n分类 YAML 默认值\n类型与范围校验"]
-    bringup["acfly_bringup\n统一启动入口"]
+    bringup["acfly_bringup\n可选启动封装"]
 
     ext -->|"状态、里程计"| mission
     ext -->|"点云、时钟"| planner
     ext -->|"点云、里程计"| perception
-    mission <-->|"任务 goal / context / control / finished"| planner
+    mission <-->|"测绘模式：目标 / 上下文 / 控制 / 完成"| planner
     interfaces -.->|"编译期消息依赖"| mission
     interfaces -.->|"编译期消息依赖"| planner
     config -.->|"运行默认值"| mission

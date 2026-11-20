@@ -1,0 +1,19 @@
+/**:
+  ros__parameters:
+    # 圆心与半径按仿真场地设定，圆周、入圈路线和终点均需留出净空。
+    orbit_center_x_m: 2.0  # 圆心 X（米，camera_init 绝对坐标）
+    orbit_center_y_m: 0.0  # 圆心 Y（米，camera_init 绝对坐标）
+    orbit_radius_m: 1.0  # 圆心到飞行圆周的水平距离（米）
+    # 俯视：正值逆时针，负值顺时针，360.0 为一圈。
+    orbit_angle_deg: 360.0
+    orbit_speed_mps: 0.5  # 入圈和绕圈的水平速度上限（米/秒），终点前自动减速
+    orbit_accel_mps2: 0.35  # 水平速度指令每秒最多变化多少（米/秒²）
+    # true 面向圆心，false 保持起飞稳定后的航向。
+    orbit_face_center: false
+    orbit_radius_tolerance_m: 0.08  # 入圈和完成时允许的水平偏差（米），必须小于半径的一半
+    orbit_angle_tolerance_deg: 3.0  # 完成时累计角度允许的误差（度），必须小于目标角度的绝对值
+    orbit_yaw_tolerance_deg: 10.0  # 面向圆心时，入圈和完成所允许的机头误差（度）
+    orbit_stop_speed_mps: 0.08  # 入圈和结束判定的实测水平速度上限（米/秒）
+    orbit_settle_s: 0.25  # 进入容差后必须持续稳定的时长（秒）
+    # 包括到达圆周、绕圈和停稳。超时会保持位置，等待飞手处置。
+    orbit_timeout_s: 90.0

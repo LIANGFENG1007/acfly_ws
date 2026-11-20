@@ -1,7 +1,10 @@
 /**:
   ros__parameters:
-    # 起飞高度相对本次人工放行时的里程计高度；返航点是 camera_init 的绝对 XY。
+    # orbit：起飞、绕圈、降落。survey：起飞、探索、返航、降落。
+    mission_action: orbit
+    # 起飞高度相对本次人工放行时的里程计高度。
     takeoff_height_m: 1.2
+    # 仅 survey 使用，返航点是 camera_init 的绝对 XY。
     explore_goal_x: 0.0
     explore_goal_y: 0.0
     takeoff_settle_s: 0.3

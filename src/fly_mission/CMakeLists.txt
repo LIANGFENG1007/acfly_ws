@@ -17,7 +17,9 @@ add_library(mission_core STATIC
   src/landing.cpp
   src/mavros_link.cpp
   src/mission_node.cpp
+  src/orbit.cpp
   src/position_hold.cpp
+  src/preflight.cpp
   src/survey.cpp
   src/takeoff.cpp
 )

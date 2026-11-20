@@ -5,18 +5,18 @@ void MissionNode::survey(double time) {
   const auto &feedback = vehicle_.feedback();
   if (!feedback.fresh(time)) {
     vehicle_.publish_velocity({});
-    explorer_.invalidate_velocity();
+    explorer_->invalidate_velocity();
     holding_ = false; // 恢复定位时重新锁定当前位置，不追赶断流前的点。
     return;
   }
   const auto &p = feedback.pose();
-  if (explorer_.finished()) {
+  if (explorer_->finished()) {
     landing_point_ = p;
     transition(Stage::Landing);
     land(time);
     return;
   }
-  if (auto command = explorer_.motion(time, p.yaw)) {
+  if (auto command = explorer_->motion(time, p.yaw)) {
     command->velocity.z =
         vehicle_.hold(cruise_, config_.max_hold_xy_mps, command->height_correction_limit).z;
     vehicle_.publish_velocity(command->velocity);

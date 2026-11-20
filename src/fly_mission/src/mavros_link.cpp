@@ -19,7 +19,7 @@ MavrosLink::MavrosLink(rclcpp::Node &node, const Config &config)
   using ExtendedState = mavros_msgs::msg::ExtendedState;
   extended_state_sub_ = node_.create_subscription<ExtendedState>(
       "/mavros/extended_state", rclcpp::SensorDataQoS(), [this](ExtendedState::ConstSharedPtr msg) {
-        on_ground_ = msg->landed_state == ExtendedState::LANDED_STATE_ON_GROUND;
+        landed_state_ = msg->landed_state;
         last_ground_state_ = steady_seconds();
       });
   odom_sub_ = node_.create_subscription<nav_msgs::msg::Odometry>(
@@ -33,12 +33,41 @@ MavrosLink::MavrosLink(rclcpp::Node &node, const Config &config)
 }
 
 bool MavrosLink::state_fresh(double time) const {
-  return state_.connected && last_state_ && time - *last_state_ <= config_.fcu_state_timeout_s;
+  return state_wait_reason(time) == nullptr;
 }
 
 bool MavrosLink::on_ground(double time) const {
-  return on_ground_ && last_ground_state_ &&
-         time - *last_ground_state_ <= config_.fcu_state_timeout_s;
+  return ground_wait_reason(time) == nullptr;
+}
+
+const char *MavrosLink::state_wait_reason(double time) const {
+  if (!last_state_)
+    return "未收到 /mavros/state";
+  if (time - *last_state_ > config_.fcu_state_timeout_s)
+    return "/mavros/state 更新超时";
+  if (!state_.connected)
+    return "MAVROS 已发布状态，但飞控未连接 (connected=false)";
+  return nullptr;
+}
+
+const char *MavrosLink::ground_wait_reason(double time) const {
+  if (!last_ground_state_)
+    return "未收到 /mavros/extended_state";
+  if (time - *last_ground_state_ > config_.fcu_state_timeout_s)
+    return "/mavros/extended_state 更新超时";
+  using Ext = mavros_msgs::msg::ExtendedState;
+  switch (landed_state_) {
+  case Ext::LANDED_STATE_ON_GROUND:
+    return nullptr;
+  case Ext::LANDED_STATE_IN_AIR:
+    return "飞控报告在空中 (IN_AIR)";
+  case Ext::LANDED_STATE_TAKEOFF:
+    return "飞控报告正在起飞 (TAKEOFF)";
+  case Ext::LANDED_STATE_LANDING:
+    return "飞控报告正在降落 (LANDING)";
+  default:
+    return "飞控尚未确认在地面 (landed_state 未知)";
+  }
 }
 
 void MavrosLink::publish_velocity(Velocity cmd) {

@@ -34,7 +34,7 @@
   <rect class="core" x="375" y="120" width="330" height="205" rx="14"/>
   <text class="label" x="400" y="158">fly_mission</text>
   <text class="body" x="400" y="190">单次任务状态机</text>
-  <text class="body" x="400" y="217">起飞控制 / 高度保持</text>
+  <text class="body" x="400" y="217">自检 / 起飞 / 速度环绕圈</text>
   <text class="body" x="400" y="244">探索交接 / AUTO.LAND</text>
   <text class="body" x="400" y="271">人工接管 / 生命周期</text>
   <text class="small" x="400" y="300">ros2 run fly_mission fly_mission_node</text>
@@ -61,7 +61,7 @@
   <text class="body" x="810" y="487">任务 Header / 速度 / 高度</text>
   <text class="body" x="810" y="514">acfly_config</text>
   <text class="body" x="810" y="541">分类 YAML / 类型检查</text>
-  <text class="small" x="810" y="578">acfly_bringup 负责统一启动</text>
+  <text class="small" x="810" y="578">acfly_bringup 可选启动封装</text>
 
   <path class="line" d="M298 185 C330 185 340 185 375 185"/>
   <path class="line" d="M298 245 C330 245 340 470 375 470"/>

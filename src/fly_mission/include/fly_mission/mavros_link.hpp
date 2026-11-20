@@ -6,6 +6,7 @@
 #include <mavros_msgs/msg/state.hpp>
 #include <mavros_msgs/srv/set_mode.hpp>
 #include <optional>
+#include <string>
 
 namespace fly_mission {
 
@@ -16,6 +17,11 @@ public:
   MavrosLink(rclcpp::Node &node, const Config &config);
   bool state_fresh(double time) const;
   bool on_ground(double time) const;
+  const char *state_wait_reason(double time) const;
+  const char *ground_wait_reason(double time) const;
+  const std::string &mode() const {
+    return state_.mode;
+  }
   bool is_offboard() const {
     return state_.mode == "OFFBOARD";
   }
@@ -37,7 +43,7 @@ private:
   const Config &config_;
   FlightFeedback feedback_;
   mavros_msgs::msg::State state_;
-  bool on_ground_ = false;
+  std::uint8_t landed_state_ = mavros_msgs::msg::ExtendedState::LANDED_STATE_UNDEFINED;
   std::optional<double> last_state_, last_ground_state_, last_request_;
   std::optional<int64_t> pending_request_;
   rclcpp::Subscription<mavros_msgs::msg::ExtendedState>::SharedPtr extended_state_sub_;

@@ -7,3 +7,4 @@
     future_stamp_tolerance_s: 0.05
     takeover_debounce_s: 0.5
     landing_retry_s: 1.0
+    preflight_log_period_s: 3.0  # 自检原因不变时重复提示的间隔（秒），原因变化时立即提示

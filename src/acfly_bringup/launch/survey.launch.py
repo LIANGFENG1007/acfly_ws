@@ -18,6 +18,8 @@ def survey_nodes(context):
             if not path.is_file():
                 raise RuntimeError(f"{option}: parameter file does not exist: {path}")
             files.append(str(path))
+        if package == "fly_mission":
+            files.append({"mission_action": "survey"})
         nodes.append(Node(package=package, executable=package + "_node",
                           parameters=files, output="screen",
                           on_exit=[Shutdown(reason="Single survey mission process exited")]

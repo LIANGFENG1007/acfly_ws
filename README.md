@@ -28,7 +28,8 @@
         <summary><code>mission/</code> → <code>../src/fly_mission/config</code></summary>
         <ul>
           <li><code>flight_control.yaml</code> — 控制周期、速度上限、位置保持和容差</li>
-          <li><code>mission.yaml</code> — 起飞高度、返回点和任务放行选项</li>
+          <li><code>mission.yaml</code> — 默认任务、起飞高度、测绘返回点和放行选项</li>
+          <li><code>orbit.yaml</code> — 圆心、半径、角度、速度、朝向与停稳判据</li>
           <li><code>watchdogs.yaml</code> — 定位、飞控、指令和降落请求有效期</li>
         </ul>
       </details></li>
@@ -98,12 +99,13 @@
     <summary><code>src/</code> ROS 2 功能包、公共库和消息定义</summary>
     <ul>
       <li><details>
-        <summary><code>acfly_bringup/</code> 主控与探索的统一启动入口</summary>
+        <summary><code>acfly_bringup/</code> 绕圈与区域测绘的启动入口</summary>
         <ul>
           <li><details>
             <summary><code>launch/</code> ROS 2 启动文件</summary>
             <ul>
-              <li><code>survey.launch.py</code> — 启动主控和规划器，分别传入各自的参数覆盖文件</li>
+              <li><code>orbit.launch.py</code> — 可选封装，可传入绕圈参数覆盖文件</li>
+              <li><code>survey.launch.py</code> — 启动主控和规划器，执行区域测绘任务</li>
             </ul>
           </details></li>
           <li><details>
@@ -262,13 +264,14 @@
         </ul>
       </details></li>
       <li><details>
-        <summary><code>fly_mission/</code> 起飞、探索交接、降落的单次任务主控</summary>
+        <summary><code>fly_mission/</code> 起飞、绕圈或区域测绘、降落的单次任务主控</summary>
         <ul>
           <li><details>
             <summary><code>config/</code> 按功能拆分的节点默认参数</summary>
             <ul>
               <li><code>flight_control.yaml</code> — 控制周期、速度上限、位置保持和容差</li>
-              <li><code>mission.yaml</code> — 起飞高度、返回点和任务放行选项</li>
+              <li><code>mission.yaml</code> — 默认任务、起飞高度、测绘返回点和放行选项</li>
+              <li><code>orbit.yaml</code> — 圆心、半径、角度、速度、朝向与停稳判据</li>
               <li><code>watchdogs.yaml</code> — 定位、飞控、指令和降落请求有效期</li>
             </ul>
           </details></li>
@@ -284,6 +287,7 @@
                   <li><code>flight_feedback.hpp</code> — 定义位姿、速度及里程计反馈的读取接口</li>
                   <li><code>mavros_link.hpp</code> — MAVROS 状态和控制输出接口</li>
                   <li><code>mission_node.hpp</code> — 主控状态机声明</li>
+                  <li><code>orbit_action.hpp</code> — 绕圈动作接口和内部状态</li>
                 </ul>
               </details></li>
             </ul>
@@ -291,22 +295,24 @@
           <li><details>
             <summary><code>src/</code> 算法和节点实现</summary>
             <ul>
-              <li><code>config.cpp</code> — 读取三类 YAML 并校验参数</li>
+              <li><code>config.cpp</code> — 读取分类 YAML 并校验参数</li>
               <li><code>exploration_link.cpp</code> — 与探索规划器交换任务消息</li>
               <li><code>flight_feedback.cpp</code> — 校验里程计时间戳和位姿，估算平滑速度并判断定位是否过期</li>
               <li><code>landing.cpp</code> — 完成回执后的降落、上锁和退出</li>
               <li><code>main.cpp</code> — 创建节点并启动单次任务</li>
               <li><code>mavros_link.cpp</code> — 接收飞控状态和里程计，发布速度指令并请求降落模式</li>
               <li><code>mission_node.cpp</code> — 状态切换、接管和生命周期</li>
+              <li><code>orbit.cpp</code> — 入圈、圆周跟踪、角度累计和降落交接</li>
               <li><code>position_hold.cpp</code> — 根据位置、高度和航向误差计算保持指令，限制速度幅度</li>
+              <li><code>preflight.cpp</code> — 起飞前检查、放行条件和等待原因</li>
               <li><code>survey.cpp</code> — 探索交接和巡航高度保持</li>
-              <li><code>takeoff.cpp</code> — 地面自检、人工放行和起飞段</li>
+              <li><code>takeoff.cpp</code> — 爬升、停稳和任务交接</li>
             </ul>
           </details></li>
           <li><details>
             <summary><code>tests/</code> 回归测试</summary>
             <ul>
-              <li><code>mission_lifecycle_test.cpp</code> — 起飞、探索、降落、接管和正常退出回归</li>
+              <li><code>mission_lifecycle_test.cpp</code> — 起飞、绕圈、测绘、降落和接管回归</li>
             </ul>
           </details></li>
           <li><code>CMakeLists.txt</code> — 编译主控、安装 YAML、注册测试</li>
@@ -499,13 +505,13 @@
 
 ## 项目简介
 
-ACFly 是一个基于 ROS 2 Humble 的无人机区域测绘项目。它把主控、区域探索、点云检测、消息接口和运行参数拆成独立 ROS 包，便于新成员理解代码、定位故障和替换单个功能。
+ACFly 是一个基于 ROS 2 Humble 的无人机任务与区域测绘工作空间。飞行主控、区域探索、点云检测、消息接口和运行参数按功能独立维护。
 
-默认任务由主控和探索规划器协作完成。主控负责地面自检、人工放行、起飞、巡航高度保持、探索交接和降落。探索规划器负责障碍地图、区域覆盖、路径跟随、避障和返航。任务完成后主控请求 AUTO.LAND，上锁后进程结束。
+默认任务在人工放行后起飞，按设定的圆心、半径和角度绕行，停稳后在圆弧终点降落。绕圈参数集中在 [orbit.yaml](src/fly_mission/config/orbit.yaml)。区域测绘通过单独的启动入口运行。
 
 ![ACFly 模块架构](docs/assets/architecture.svg)
 
-图表的可编辑源文件是 [architecture.mmd](docs/assets/architecture.mmd)；配置图的源文件是 [config-layers.mmd](docs/assets/config-layers.mmd)。修改图时编辑 `.mmd`，再运行 `tools/render_diagrams.sh` 更新 SVG 预览。
+配图源文件可直接编辑，使用 `tools/render_diagrams.sh` 导出 SVG。[模块架构源文件](docs/assets/architecture.mmd) · [配置图源文件](docs/assets/config-layers.mmd)
 
 ## 从这里开始
 
@@ -520,12 +526,12 @@ ACFly 是一个基于 ROS 2 Humble 的无人机区域测绘项目。它把主控
 
 | 路径 | 职责 |
 | --- | --- |
-| src/fly_mission | 单次任务主控、飞控桥、人工接管和降落生命周期 |
+| src/fly_mission | 自检、起飞、速度环绕圈、测绘交接、人工接管和降落 |
 | src/exploration_planner | 点云建图、覆盖规划、避障、轨迹跟随和安全返航 |
 | src/perception | 单杆、多杆、圆环检测和公共点云处理库 |
 | src/acfly_interfaces | 主控和探索之间的 ROS 消息 |
 | src/acfly_config | 分类 YAML 加载、参数类型和未知参数检查 |
-| src/acfly_bringup | 主控与探索的统一启动入口 |
+| src/acfly_bringup | 绕圈与区域测绘的启动入口 |
 | config | 各包配置文件的编辑索引 |
 | docs | 项目概览、维护手册、仿真说明和历史记录 |
 | tools | 结构检查、隔离构建和现场准备工具 |
@@ -536,24 +542,39 @@ ACFly 是一个基于 ROS 2 Humble 的无人机区域测绘项目。它把主控
 cd ~/acfly_ws
 source /opt/ros/humble/setup.bash
 
-CMAKE_BUILD_PARALLEL_LEVEL=2 colcon build \
-  --base-paths src \
-  --build-base build/survey \
-  --install-base install/survey \
-  --log-base log/survey \
-  --symlink-install \
-  --executor sequential
-
-source install/survey/setup.bash
-ros2 launch acfly_bringup survey.launch.py
+colcon build --symlink-install
+source install/setup.bash
 ~~~
 
-外部定位、飞控和传感器需要先按现场环境启动。统一入口负责主控和探索节点。场景参数可以通过两个独立的启动参数覆盖。
+## 启动主控
+
+启动 PX4、MAVROS 和 Point-LIO 后，在已加载工作空间环境的终端运行主控。
 
 ~~~bash
-ros2 launch acfly_bringup survey.launch.py \
-  planner_params:=/absolute/path/planner_override.yaml \
-  mission_params:=/absolute/path/mission_override.yaml
+ros2 run fly_mission fly_mission_node
+~~~
+
+主控自检会列出当前等待的条件。它先确认飞控连接、有效里程计和地面上锁状态，再等待飞手解锁并切入 `OFFBOARD`。默认绕圈只需要主控、定位和 MAVROS。`orbit.launch.py` 是接受参数文件的可选封装。
+
+### 绕圈调参
+
+修改 YAML 后重启主控。圆心坐标按 `/aft_mapped_to_init` 的坐标系填写，Point-LIO 默认使用 `camera_init`。圆周、入圈路线和落点在仿真中都需要留出无障碍空间。
+
+| 要调整的内容 | 参数 | 文件 |
+| --- | --- | --- |
+| 起飞相对高度 | `takeoff_height_m` | [mission.yaml](src/fly_mission/config/mission.yaml) |
+| 圆心和半径，单位米 | `orbit_center_x_m`、`orbit_center_y_m`、`orbit_radius_m` | [orbit.yaml](src/fly_mission/config/orbit.yaml) |
+| 角度与方向 | `orbit_angle_deg`，俯视时正值逆时针、负值顺时针 | 同上 |
+| 水平速度和指令加速度上限 | `orbit_speed_mps`、`orbit_accel_mps2` | 同上 |
+| 机头朝向 | `orbit_face_center: true` 面向圆心，`false` 保持起飞稳定后的航向 | 同上 |
+| 入圈、停稳与超时 | 容差、停稳速度、停稳时间和动作超时 | 同上 |
+
+### 区域测绘与点云检测
+
+区域测绘使用 `survey.launch.py` 联动启动主控和规划器。可选参数 `planner_params` 和 `mission_params` 分别覆盖对应节点的 YAML。
+
+~~~bash
+ros2 launch acfly_bringup survey.launch.py
 ~~~
 
 三个点云检测器可以独立启动。
@@ -577,4 +598,6 @@ tools/test_workspace.bash 会在临时工作区构建和测试，不会改动当
 
 ## 当前工作区状态
 
-源码结构已经完成本机整理，默认值已经归类到 YAML，主控默认任务是一次区域测绘任务。新接口需要主控和探索规划器一起构建。Git 提交、远程仓库发布和现场部署由项目维护者在审阅后执行。
+本机已完成 9 个 ROS 包的构建。默认绕圈任务已在 PX4/Gazebo 仿真中走完起飞、绕圈和降落，主控进入 `finished`。NX 和实机待验证。
+
+若主控提示 `未收到 /aft_mapped_to_init`，先确认 Point-LIO 仍在运行，再用 `ros2 topic info -v /aft_mapped_to_init` 核对发布端，用 `ros2 topic hz /aft_mapped_to_init` 检查是否持续出帧。重启 PX4/Gazebo 前先结束当前 Point-LIO 仿真启动进程，待仿真就绪后再启动一套。[故障定位手册](docs/MAINTENANCE.md)

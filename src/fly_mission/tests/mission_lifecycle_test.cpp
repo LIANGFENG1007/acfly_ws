@@ -24,7 +24,7 @@ void check(bool ok, const char *message) {
 
 class Fixture {
 public:
-  Fixture(std::string scope, bool require_start)
+  Fixture(std::string scope, bool require_start, double orbit_angle = 0.0, bool face_center = false)
       : prefix_("/acfly_test/" + scope), peer_(std::make_shared<rclcpp::Node>("peer_" + scope)) {
     std::vector<std::string> args{"--ros-args"};
     const std::vector<std::string> endpoints{"/mavros/extended_state",
@@ -43,11 +43,21 @@ public:
     rclcpp::NodeOptions options;
     options.use_global_arguments(false).arguments(args);
     // Speed up elapsed-time gates in this fixture; leave the MAVROS output controls at defaults.
-    options.parameter_overrides(
-        {rclcpp::Parameter("require_start_signal", require_start),
-         rclcpp::Parameter("takeoff_settle_s", 0.06), rclcpp::Parameter("takeoff_hover_s", 0.06),
-         rclcpp::Parameter("takeover_debounce_s", 0.12),
-         rclcpp::Parameter("control_timeout_s", 0.15), rclcpp::Parameter("landing_retry_s", 0.15)});
+    std::vector<rclcpp::Parameter> parameters{
+        {"require_start_signal", require_start},
+        {"takeoff_settle_s", 0.06}, {"takeoff_hover_s", 0.06},
+        {"takeover_debounce_s", 0.12}, {"control_timeout_s", 0.15}, {"landing_retry_s", 0.15}};
+    if (orbit_angle != 0.0) {
+      // Leave mission_action at its installed default and create no planner peers.
+      parameters.emplace_back("orbit_center_x_m", 2.2);
+      parameters.emplace_back("orbit_center_y_m", -0.7);
+      parameters.emplace_back("orbit_angle_deg", orbit_angle);
+      parameters.emplace_back("orbit_face_center", face_center);
+      parameters.emplace_back("orbit_settle_s", 0.08);
+    } else {
+      parameters.emplace_back("mission_action", std::string("survey"));
+    }
+    options.parameter_overrides(parameters);
     node_ = std::make_shared<MissionNode>(options);
     auto latched = rclcpp::QoS(1).transient_local();
     state_pub_ = peer_->create_publisher<mavros_msgs::msg::State>(prefix_ + "/mavros/state", 10);
@@ -56,15 +66,17 @@ public:
     pose_pub_ = peer_->create_publisher<nav_msgs::msg::Odometry>(prefix_ + "/aft_mapped_to_init",
                                                                  rclcpp::SensorDataQoS());
     start_pub_ = peer_->create_publisher<std_msgs::msg::Int32>(prefix_ + "/mission/start", 1);
-    control_pub_ = peer_->create_publisher<Command>(prefix_ + "/exploration/control", 1);
-    done_pub_ = peer_->create_publisher<std_msgs::msg::Header>(
-        prefix_ + "/exploration/finished_goal", latched);
-    goal_sub_ = peer_->create_subscription<geometry_msgs::msg::PointStamped>(
-        prefix_ + "/exploration/goal", latched,
-        [this](geometry_msgs::msg::PointStamped::ConstSharedPtr goal) { goal_ = *goal; });
-    context_sub_ = peer_->create_subscription<acfly_interfaces::msg::ExplorationContext>(
-        prefix_ + "/exploration/context", latched,
-        [this](acfly_interfaces::msg::ExplorationContext::ConstSharedPtr msg) { context_ = *msg; });
+    if (orbit_angle == 0.0) {
+      control_pub_ = peer_->create_publisher<Command>(prefix_ + "/exploration/control", 1);
+      done_pub_ = peer_->create_publisher<std_msgs::msg::Header>(
+          prefix_ + "/exploration/finished_goal", latched);
+      goal_sub_ = peer_->create_subscription<geometry_msgs::msg::PointStamped>(
+          prefix_ + "/exploration/goal", latched,
+          [this](geometry_msgs::msg::PointStamped::ConstSharedPtr goal) { goal_ = *goal; });
+      context_sub_ = peer_->create_subscription<acfly_interfaces::msg::ExplorationContext>(
+          prefix_ + "/exploration/context", latched,
+          [this](acfly_interfaces::msg::ExplorationContext::ConstSharedPtr msg) { context_ = *msg; });
+    }
     output_sub_ = peer_->create_subscription<Target>(prefix_ + "/mavros/setpoint_raw/local", 10,
                                                      [this](Target::ConstSharedPtr output) {
                                                        last_ = *output;
@@ -235,7 +247,78 @@ public:
           "Pilot takeover not respected");
   }
 
+  void reach_orbit(bool face_center) {
+    authorize();
+    pump(90ms);
+    check(node_->stage() == Stage::Takeoff && last_.velocity.z > 0,
+          "Orbit mission did not take off independently of the planner");
+    ground_.landed_state = mavros_msgs::msg::ExtendedState::LANDED_STATE_IN_AIR;
+    pose_.pose.pose.position.z += node_->get_parameter("takeoff_height_m").as_double();
+    pump(290ms);
+    check(node_->stage() == Stage::Orbit, "Takeoff did not transition to orbit");
+    if (face_center) {
+      check(last_.yaw_rate < -0.1 && std::abs(last_.velocity.y) < 0.01,
+            "Orbit started before facing the center");
+      set_yaw(0.0);
+    } else {
+      check(std::abs(last_.yaw_rate) < 0.01, "Fixed-heading orbit requested a yaw turn");
+    }
+    pump(480ms);
+  }
+
+  void orbit_flight(double sweep_deg, bool face_center) {
+    reach_orbit(face_center);
+    check(last_.velocity.y * sweep_deg < 0.0 && land_requests_ == 0,
+          "Tangential command had the wrong direction or landed before advancing");
+    if (face_center)
+      check(last_.yaw_rate < -0.1, "Facing the center did not follow the clockwise tangent");
+
+    // Follow synthetic odometry samples across the atan2 branch cut. A full
+    // circle ends at the entry, so arrival requires accumulated angular motion.
+    const double pi = std::acos(-1.0);
+    constexpr int samples = 24;
+    for (int i = 1; i <= samples; ++i) {
+      const double bearing = pi + sweep_deg * pi / 180.0 * i / samples;
+      pose_.pose.pose.position.x = 2.2 + std::cos(bearing);
+      pose_.pose.pose.position.y = -0.7 + std::sin(bearing);
+      if (face_center)
+        set_yaw(bearing + pi);
+      pump(45ms);
+      if (i < samples)
+        check(node_->stage() == Stage::Orbit && land_requests_ == 0, "Orbit landed before its angle");
+    }
+    pump(1150ms);
+    check(node_->stage() == Stage::Landing && land_requests_ > 0,
+          "Completed and settled orbit did not request landing");
+    state_.mode = "AUTO.LAND";
+    pump(85ms);
+    const auto count = outputs_;
+    ground_.landed_state = mavros_msgs::msg::ExtendedState::LANDED_STATE_ON_GROUND;
+    state_.armed = false;
+    pose_.pose.pose.position.z = 0.3;
+    pump(90ms);
+    check(node_->stage() == Stage::Finished && outputs_ == count,
+          "Orbit continued output after the landing handoff");
+  }
+
+  void orbit_localization_loss() {
+    reach_orbit(false);
+    pump(420ms, false);
+    check(node_->stage() == Stage::OrbitHold && last_.velocity.x == 0 && last_.velocity.y == 0 &&
+              last_.velocity.z == 0 && last_.yaw_rate == 0 && land_requests_ == 0,
+          "Stale orbit localization did not stop motion");
+    pump(145ms);
+    check(node_->stage() == Stage::OrbitHold && std::hypot(last_.velocity.x, last_.velocity.y) < .01 &&
+              land_requests_ == 0,
+          "Orbit resumed automatically after losing localization");
+  }
+
 private:
+  void set_yaw(double radians) {
+    pose_.pose.pose.orientation.z = std::sin(radians / 2.0);
+    pose_.pose.pose.orientation.w = std::cos(radians / 2.0);
+  }
+
   std::string prefix_;
   rclcpp::Node::SharedPtr peer_;
   std::shared_ptr<MissionNode> node_;
@@ -268,6 +351,9 @@ int main(int argc, char **argv) {
     Fixture("restart", false).airborne_restart();
     Fixture("survey", true).full_flight();
     Fixture("takeover", false).pilot_takeover();
+    Fixture("orbit_ccw", false, 360.0).orbit_flight(360.0, false);
+    Fixture("orbit_cw", false, -90.0, true).orbit_flight(-90.0, true);
+    Fixture("orbit_stale", false, 90.0).orbit_localization_loss();
     rclcpp::shutdown();
     return 0;
   } catch (const std::exception &e) {

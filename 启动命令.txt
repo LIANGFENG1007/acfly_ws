@@ -1,3 +1,6 @@
-当前测绘任务入口和环境准备：见 README.md。
+ros2 run fly_mission fly_mission_node
+
+默认任务是起飞、绕圈、降落。任务选择见 config/mission/mission.yaml，绕圈参数见 config/mission/orbit.yaml。
+构建和环境准备见 README.md。
 参数按功能分类：见 config/README.md。
 以前的个人启动笔记原样保存在 build/workspace-reorganization-20261112/legacy-local/operator-notes-20261112.txt；不适用于新版主控。

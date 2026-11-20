@@ -2,7 +2,7 @@
 
 ACFly 是一个基于 ROS 2 Humble 的无人机区域测绘工作空间。项目把飞行任务、区域探索、点云几何检测、消息接口和运行参数拆成独立模块，方便新成员理解代码、定位问题和替换单个功能。
 
-项目默认由 fly_mission 和 exploration_planner 协作完成一次区域测绘。主控负责地面自检、人工放行、起飞、巡航高度保持、探索交接和降落。探索规划器负责障碍地图、覆盖率统计、前沿选点、避障、轨迹跟随和安全返航。三个感知节点从已配准点云中提取静态杆体或圆环测量值。PX4、MAVROS、Point-LIO、雷达驱动和相机驱动属于外部系统，由现场环境单独启动。
+主控的默认任务是人工放行后起飞、绕圈、降落。区域测绘模式由主控和探索规划器协作完成。探索规划器负责障碍地图、覆盖率统计、前沿选点、避障、轨迹跟随和安全返航。三个感知节点从已配准点云中提取静态杆体或圆环测量值。PX4、MAVROS、Point-LIO、雷达驱动和相机驱动属于外部系统，由现场环境单独启动。
 
 ![ACFly 模块架构](assets/architecture.svg)
 
@@ -37,7 +37,7 @@ acfly_ws/
 
 | 模块 | 主要内容 | 运行入口 |
 | --- | --- | --- |
-| fly_mission | 地面自检、人工放行、起飞、巡航高度保持、探索交接、AUTO.LAND、上锁退出和飞手接管 | ros2 run fly_mission fly_mission_node |
+| fly_mission | 地面自检、人工放行、起飞、绕圈或区域测绘、降落和飞手接管 | ros2 run fly_mission fly_mission_node |
 | exploration_planner | 点云新鲜度、解锁后障碍累计、覆盖率、前沿搜索、路径规划、轨迹控制、脱困和返航 | ros2 run exploration_planner exploration_planner_node |
 | acfly_perception_common | 点云字段检查、坐标系校验、区域裁剪、滑窗和共享参数读取 | 由三个检测节点链接 |
 | pole_detector | 单个静态杆体的中心、半径和方向测量 | ros2 run pole_detector pole_detector_node |
@@ -45,7 +45,7 @@ acfly_ws/
 | ring_detector | 平面圆环拟合、中心、半径和法向量测量 | ros2 run ring_detector ring_detector_node |
 | acfly_interfaces | 主控和探索之间的任务目标、上下文和速度控制消息 | 编译期依赖 |
 | acfly_config | 默认 YAML 读取、类型检查、范围检查和未知参数检查 | 编译期依赖 |
-| acfly_bringup | 同时启动主控和探索节点，并接受两个独立覆盖文件 | ros2 launch acfly_bringup survey.launch.py |
+| acfly_bringup | 可选启动封装，测绘时可同时启动主控和探索节点 | `survey.launch.py` |
 
 ## 节点接口
 
@@ -62,7 +62,7 @@ acfly_ws/
 | /aft_mapped_to_init | Point-LIO | 主控、探索和感知节点 | 位姿、速度和航向 |
 | /cloud_registered | Point-LIO | 探索和感知节点 | 已配准点云 |
 
-任务 Header 会在 goal、context、control 和 finished_goal 之间传递。主控只有收到当前任务的完成标识后才进入降落交接。控制流使用易失 QoS，目标、上下文和完成标识使用瞬态本地 QoS。
+测绘模式的任务 Header 会在 goal、context、control 和 finished_goal 之间传递，主控收到匹配回执后进入降落交接。绕圈模式在圆弧终点停稳后进入降落交接。控制流使用易失 QoS，目标、上下文和完成标识使用瞬态本地 QoS。
 
 ## 配置分层
 
@@ -72,9 +72,10 @@ acfly_ws/
 
 配置图源文件为 [assets/config-layers.mmd](assets/config-layers.mmd)，后续新增参数层时只需修改源文件并重新导出。
 
-主控配置分为三组。
+主控配置分为四组。
 
-- mission.yaml 保存起飞高度、返回点和任务放行选项
+- mission.yaml 保存默认任务、起飞高度、测绘返回点和放行选项
+- orbit.yaml 保存圆心、半径、角度、朝向、速度、加速度和停稳判据
 - flight_control.yaml 保存控制周期、速度上限、位置保持和容差
 - watchdogs.yaml 保存定位、飞控、控制指令和降落请求的有效期
 
@@ -97,33 +98,9 @@ acfly_ws/
 
 ## 构建和启动
 
-下面的命令会使用新的构建、安装和日志目录。
+见 [首页构建命令](../README.md#快速构建)。仿真定位、飞控和 MAVROS 就绪后，使用 `ros2 run fly_mission fly_mission_node`。默认绕圈参数见 [orbit.yaml](../src/fly_mission/config/orbit.yaml)。
 
-~~~bash
-cd ~/acfly_ws
-source /opt/ros/humble/setup.bash
-
-CMAKE_BUILD_PARALLEL_LEVEL=2 colcon build \
-  --base-paths src \
-  --build-base build/survey \
-  --install-base install/survey \
-  --log-base log/survey \
-  --symlink-install \
-  --executor sequential
-
-source install/survey/setup.bash
-ros2 launch acfly_bringup survey.launch.py
-~~~
-
-已有 PX4、MAVROS 和 Point-LIO 环境时，可以分别覆盖主控和探索配置。
-
-~~~bash
-ros2 launch acfly_bringup survey.launch.py \
-  planner_params:=/absolute/path/planner_override.yaml \
-  mission_params:=/absolute/path/mission_override.yaml
-~~~
-
-外部传感器、MAVROS、PX4 和 Point-LIO 按现场启动流程运行。主控启动后需要看到新鲜定位、MAVROS 连接、ON_GROUND 状态、规划器通信端点和本进程内的地面上锁状态，才会接受人工放行。
+需要区域测绘时，使用 `ros2 launch acfly_bringup survey.launch.py`，可以分别传入 `planner_params` 和 `mission_params`。主控启动后须见到新鲜定位、MAVROS 连接和本进程内的地面上锁状态。测绘模式额外检查规划器的通信端点。
 
 ## 验证
 
@@ -149,4 +126,4 @@ tools/test_workspace.bash
 
 ## 当前验证边界
 
-当前工作区已经完成本机结构整理、隔离构建和离线测试。完整 Gazebo 闭环、真实雷达、飞行动力学和实飞结果需要在现场环境中单独验证。历史调参资料保存在 docs/ 和 build/ 的历史目录中，不能直接当作当前版本的运行参数或飞行结论。
+当前工作区已完成本机结构检查、构建和离线测试。默认绕圈任务已在本机 PX4/Gazebo 仿真中完成起飞、绕圈和降落。NX 部署、真实雷达和实机飞行待单独验证。历史调参资料保存在 `docs/` 和本机 `build/` 的历史目录中。

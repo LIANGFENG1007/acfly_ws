@@ -18,6 +18,7 @@ public:
   explicit FlightFeedback(const Config &config) : config_(config) {}
   void update(const nav_msgs::msg::Odometry &message, double receipt_s);
   bool fresh(double now_s) const;
+  const char *wait_reason(double now_s) const;
   const Pose &pose() const {
     return pose_;
   }
@@ -29,6 +30,7 @@ private:
   const Config &config_;
   std::optional<std::int64_t> stamp_;
   std::optional<double> receipt_;
+  const char *sample_issue_ = "未收到 /aft_mapped_to_init";
   Pose pose_;
   Velocity velocity_;
 };

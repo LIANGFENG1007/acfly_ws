@@ -21,10 +21,21 @@ ExplorationLink::ExplorationLink(rclcpp::Node &node, const Config &config)
       });
 }
 
-bool ExplorationLink::peers_ready() const {
+std::string ExplorationLink::unmatched_peers() const {
   // 使用 RMW 已匹配的对端数，话题名存在本身不代表类型与 QoS 匹配。
-  return goal_pub_->get_subscription_count() > 0 && context_pub_->get_subscription_count() > 0 &&
-         cmd_sub_->get_publisher_count() > 0 && finished_sub_->get_publisher_count() > 0;
+  std::string missing;
+  const auto add = [&](size_t count, const char *topic) {
+    if (count == 0) {
+      if (!missing.empty())
+        missing += "、";
+      missing += topic;
+    }
+  };
+  add(goal_pub_->get_subscription_count(), goal_pub_->get_topic_name());
+  add(context_pub_->get_subscription_count(), context_pub_->get_topic_name());
+  add(cmd_sub_->get_publisher_count(), cmd_sub_->get_topic_name());
+  add(finished_sub_->get_publisher_count(), finished_sub_->get_topic_name());
+  return missing;
 }
 
 void ExplorationLink::start(const Pose &home, const Pose &cruise) {

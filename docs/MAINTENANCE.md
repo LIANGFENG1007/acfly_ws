@@ -6,7 +6,9 @@
 
 | 现象 | 先核对 | 源码或配置 |
 |---|---|---|
-| 不进入起飞或中途退出 | /mission/state 与主控日志；/mavros/state 的连接/模式、/mavros/extended_state 是否报告 ON_GROUND、四个探索端点是否已连接、/aft_mapped_to_init 是否持续更新 | fly_mission/src/takeoff.cpp、mission_node.cpp，mission.yaml、watchdogs.yaml |
+| 不进入起飞或中途退出 | 主控日志逐项显示自检等待原因，包括缺少或超时的话题、飞控模式、地面状态与人工放行。用 /mission/state 确认阶段 | fly_mission/src/preflight.cpp、mission_node.cpp，mission.yaml、watchdogs.yaml |
+| 未收到 /aft_mapped_to_init | 核对 Point-LIO 是否仍在运行，以及 /lidar/points、/imu 和里程计是否持续出帧。仿真重启前先结束旧的 Point-LIO 及其桥接，避免重复发布和时间戳回退 | 外部 Point-LIO 仿真启动日志，fly_mission/src/flight_feedback.cpp |
+| 绕圈未开始或停在 orbit_hold | 核对入圈位置、定位新鲜度、超时和飞控模式。开启面向圆心时还需满足入圈朝向容差 | fly_mission/src/orbit.cpp，[orbit.yaml](../src/fly_mission/config/orbit.yaml) |
 | 有定位但不更新障碍图 | /cloud_registered 的坐标系、消息时间，是否已在解锁后收到新帧，仿真 /clock 是否与点云同域 | exploration_planner/src/node/sensors.cpp，mapping.yaml、runtime.yaml |
 | 覆盖率不涨或路径改变 | /exploration/coverage、/exploration/active_path、/exploration/diagnostics 和 /exploration/obstacle_cloud | exploration_planner/src/node/coverage_search.cpp、path_guard.cpp，coverage.yaml、motion.yaml |
 | 完成探索但不降落 | 是否到达返回点并停稳，/exploration/finished_goal 的 header 是否与 /exploration/goal 完全相同 | exploration_planner/src/node/home.cpp，fly_mission/src/exploration_link.cpp、landing.cpp |

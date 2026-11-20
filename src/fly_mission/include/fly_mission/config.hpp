@@ -5,8 +5,19 @@
 
 namespace fly_mission {
 
+enum class MissionAction { Orbit, Survey };
+
+struct OrbitConfig {
+  double center_x, center_y, radius_m, sweep_rad, speed_mps, accel_mps2;
+  double radius_tolerance_m, angle_tolerance_rad, yaw_tolerance_rad;
+  double stop_speed_mps, settle_s, timeout_s;
+  bool face_center;
+};
+
 // YAML 提供全部运行默认值。本结构只保存验证后的只读启动配置。
 struct Config {
+  MissionAction action;
+  OrbitConfig orbit;
   double takeoff_height_m, explore_goal_x, explore_goal_y;
   double takeoff_settle_s, takeoff_hover_s, landed_height_m;
   bool require_start_signal, offboard_preheat;
@@ -15,7 +26,7 @@ struct Config {
   double max_speed_xy_mps, max_climb_mps, max_level_correction_mps, max_hold_xy_mps;
   double max_yaw_rate_radps, tolerance_xy_m, tolerance_z_m;
   double odometry_timeout_s, fcu_state_timeout_s, control_timeout_s;
-  double future_stamp_tolerance_s, takeover_debounce_s, landing_retry_s;
+  double future_stamp_tolerance_s, takeover_debounce_s, landing_retry_s, preflight_log_period_s;
 };
 
 Config load_config(rclcpp::Node &node);

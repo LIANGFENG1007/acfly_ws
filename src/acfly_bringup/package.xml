@@ -2,7 +2,7 @@
 <package format="3">
   <name>acfly_bringup</name>
   <version>0.1.0</version>
-  <description>Launch the ACFly regional coverage survey.</description>
+  <description>Launch the ACFly orbit or regional coverage survey mission.</description>
   <maintainer email="yk@todo.todo">yk</maintainer>
   <license>LicenseRef-Unspecified</license>
   <buildtool_depend>ament_cmake</buildtool_depend>

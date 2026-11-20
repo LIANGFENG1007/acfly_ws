@@ -31,7 +31,7 @@
 
   <rect class="yaml" x="350" y="125" width="240" height="250" rx="14"/>
   <text class="label" x="470" y="165">分类 YAML</text>
-  <text class="body" x="470" y="200">mission.yaml</text>
+  <text class="body" x="470" y="200">mission.yaml / orbit.yaml</text>
   <text class="body" x="470" y="226">flight_control.yaml</text>
   <text class="body" x="470" y="252">mapping.yaml</text>
   <text class="body" x="470" y="278">coverage.yaml</text>
